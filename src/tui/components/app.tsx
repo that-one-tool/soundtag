@@ -8,13 +8,14 @@ import { getEntryStatus } from "../track-statuses.js";
 import type { TrackStatusStore } from "../track-status-store.js";
 import type { TuiServices } from "../tui-services.js";
 import { BrowserPane, type BrowserPaneProps } from "./browser-pane.js";
+import { Header } from "./header.js";
 import { LogPane } from "./log-pane.js";
 import { MetadataPanel, type MetadataPanelProps } from "./metadata-panel.js";
 import { StatusBar } from "./status-bar.js";
 
 const LOG_LINES = 6;
-// Log pane borders, status bar, browser borders, title and error line.
-const RESERVED_ROWS = LOG_LINES + 2 + 1 + 2 + 2;
+// Header, log pane borders, status bar, browser borders, title and error line.
+const RESERVED_ROWS = 1 + LOG_LINES + 2 + 1 + 2 + 2;
 const MIN_LIST_HEIGHT = 3;
 
 export interface AppProps {
@@ -66,7 +67,7 @@ function Workspace({
     height,
 }: WorkspaceProps) {
     return (
-        <Box flexGrow={1}>
+        <Box flexGrow={1} overflow="hidden">
             <BrowserPane state={state} statuses={statuses} height={height} />
             <MetadataPanel
                 entry={entry}
@@ -81,6 +82,7 @@ export function App(props: AppProps) {
     const state = useAppState(props);
     return (
         <Box flexDirection="column" height={state.rows}>
+            <Header statuses={state.statuses} />
             <Workspace
                 state={state.browser}
                 entry={state.hovered}

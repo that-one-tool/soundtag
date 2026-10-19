@@ -2,13 +2,19 @@ import * as path from "node:path";
 import { findAudioFiles, listSubfolders } from "../library/file.js";
 import { getErrorMessage } from "../shared/errors.js";
 import { getTagStore } from "../tags/audio-tags.js";
+import { readTrackDetails } from "../tags/track-details.js";
 import type { BrowserEntry, EntryDetails } from "./types.js";
 
 async function readFileDetails(file: string): Promise<EntryDetails> {
+    const [tags, track] = await Promise.all([
+        getTagStore(file).read(file),
+        readTrackDetails(file),
+    ]);
     return {
         kind: "file",
         format: path.extname(file).slice(1).toUpperCase(),
-        tags: await getTagStore(file).read(file),
+        tags,
+        track,
     };
 }
 

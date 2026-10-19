@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import {
     countFolderStatuses,
+    countStatuses,
     getEntryStatus,
     recordProcessedTrack,
 } from "../../src/tui/track-statuses.js";
@@ -114,6 +115,19 @@ test("countFolderStatuses counts each status inside a folder", () => {
         TAGGED: 2,
         SKIPPED: 0,
         FAILED: 1,
+    });
+});
+
+test("countStatuses counts each status of the session", () => {
+    const statuses = new Map([
+        [path.join(rock, "a.mp3"), "TAGGED" as const],
+        [path.join(root, "Jazz", "d.mp3"), "SKIPPED" as const],
+    ]);
+
+    assert.deepEqual(countStatuses(statuses), {
+        TAGGED: 1,
+        SKIPPED: 1,
+        FAILED: 0,
     });
 });
 

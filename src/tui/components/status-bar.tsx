@@ -1,8 +1,35 @@
 import { Box, Text } from "ink";
 import { describeQueue } from "../queue-summary.js";
+import { ACCENT } from "../theme.js";
 import type { QueueState } from "../types.js";
 
-const KEY_HELP = "↑↓ move  ⏎/→ open  ← up  t tag  a tag folder  s stop  q quit";
+type Hint = readonly [key: string, label: string];
+
+const KEY_HINTS: Hint[] = [
+    ["↑↓", "move"],
+    ["⏎/→", "open"],
+    ["←", "up"],
+    ["t", "tag"],
+    ["a", "tag folder"],
+    ["s", "stop"],
+    ["q", "quit"],
+];
+
+function KeyHints() {
+    return (
+        <Text wrap="truncate">
+            {KEY_HINTS.map(([key, label], index) => (
+                <Text key={key}>
+                    {index > 0 ? "  " : ""}
+                    <Text bold color={ACCENT}>
+                        {key}
+                    </Text>
+                    <Text dimColor>{` ${label}`}</Text>
+                </Text>
+            ))}
+        </Text>
+    );
+}
 
 export interface StatusBarProps {
     queueState: QueueState;
@@ -13,11 +40,11 @@ export function StatusBar({ queueState, quitting }: StatusBarProps) {
     return (
         <Box justifyContent="space-between" gap={2} paddingX={1}>
             <Box flexShrink={0}>
-                <Text color="cyan">{describeQueue(queueState, quitting)}</Text>
+                <Text color={ACCENT}>
+                    {describeQueue(queueState, quitting)}
+                </Text>
             </Box>
-            <Text dimColor wrap="truncate">
-                {KEY_HELP}
-            </Text>
+            <KeyHints />
         </Box>
     );
 }

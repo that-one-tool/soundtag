@@ -1,4 +1,4 @@
-import type { StoredTags } from "../tags/types.js";
+import type { StoredTags, TrackDetails } from "../tags/types.js";
 import type { TrackStatus } from "../processing/types.js";
 
 export type EntryKind = "parent" | "folder" | "file";
@@ -34,7 +34,12 @@ export interface QueueState {
 }
 
 export type EntryDetails =
-    | { kind: "file"; format: string; tags: StoredTags }
+    | {
+          kind: "file";
+          format: string;
+          tags: StoredTags;
+          track: TrackDetails;
+      }
     | { kind: "folder"; audioFileCount: number; subfolderCount: number }
     | { kind: "unreadable"; message: string }
     | { kind: "parent" };

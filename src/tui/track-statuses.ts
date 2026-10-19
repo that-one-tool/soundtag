@@ -2,7 +2,8 @@ import * as path from "node:path";
 import type { ProcessedTrack, TrackStatus } from "../processing/types.js";
 import type { BrowserEntry, EntryKind, TrackStatuses } from "./types.js";
 
-const STATUS_SEVERITY: TrackStatus[] = ["TAGGED", "SKIPPED", "FAILED"];
+// Ordered from least to most severe.
+export const STATUS_ORDER: TrackStatus[] = ["TAGGED", "SKIPPED", "FAILED"];
 
 export function recordProcessedTrack(
     statuses: TrackStatuses,
@@ -29,7 +30,7 @@ function getStatusesInside(
 }
 
 function getWorstStatus(found: TrackStatus[]): TrackStatus | undefined {
-    return STATUS_SEVERITY.findLast((status) => found.includes(status));
+    return STATUS_ORDER.findLast((status) => found.includes(status));
 }
 
 const STATUS_READERS: Record<
@@ -49,11 +50,7 @@ export function getEntryStatus(
     return STATUS_READERS[entry.kind](statuses, entry.path);
 }
 
-export function countFolderStatuses(
-    statuses: TrackStatuses,
-    folder: string
-): Record<TrackStatus, number> {
-    const found = getStatusesInside(statuses, folder);
+function countEachStatus(found: TrackStatus[]): Record<TrackStatus, number> {
     const count = (status: TrackStatus) =>
         found.filter((foundStatus) => foundStatus === status).length;
 
@@ -62,4 +59,17 @@ export function countFolderStatuses(
         SKIPPED: count("SKIPPED"),
         FAILED: count("FAILED"),
     };
+}
+
+export function countStatuses(
+    statuses: TrackStatuses
+): Record<TrackStatus, number> {
+    return countEachStatus([...statuses.values()]);
+}
+
+export function countFolderStatuses(
+    statuses: TrackStatuses,
+    folder: string
+): Record<TrackStatus, number> {
+    return countEachStatus(getStatusesInside(statuses, folder));
 }

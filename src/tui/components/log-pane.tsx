@@ -1,10 +1,11 @@
 import { Box, Text } from "ink";
 import { useStore } from "../hooks/use-store.js";
 import type { LogBuffer, LogLine } from "../log-buffer.js";
+import { ERROR_COLOR, PANE_COLOR } from "../theme.js";
 
 function LogLineText({ line }: { line: LogLine }) {
     return (
-        <Text color={line.isError ? "red" : undefined} wrap="truncate">
+        <Text color={line.isError ? ERROR_COLOR : undefined} wrap="truncate">
             {line.text}
         </Text>
     );
@@ -21,7 +22,9 @@ export function LogPane({ logBuffer, height }: LogPaneProps) {
         <Box
             flexDirection="column"
             height={height + 2}
+            flexShrink={0}
             borderStyle="round"
+            borderColor={PANE_COLOR.log}
             paddingX={1}
         >
             {lines.map((line, index) => (

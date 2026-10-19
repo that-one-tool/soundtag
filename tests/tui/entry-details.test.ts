@@ -35,6 +35,18 @@ test("readEntryDetails reads the stored tags of a file", async () => {
         kind: "file",
         format: "MP3",
         tags: { info, hasCover: true },
+        track: {
+            trackNumber: 0,
+            trackCount: 0,
+            discNumber: 0,
+            discCount: 0,
+            genre: "",
+            durationMilliseconds: 0,
+            bitrateKbps: 0,
+            sampleRateHz: 0,
+            channels: 0,
+            sizeBytes: (await fs.stat(source)).size,
+        },
     });
 });
 

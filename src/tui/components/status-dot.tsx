@@ -1,16 +1,11 @@
 import { Text } from "ink";
 import type { TrackStatus } from "../../processing/types.js";
-
-const STATUS_COLORS: Record<TrackStatus, string> = {
-    TAGGED: "green",
-    SKIPPED: "yellow",
-    FAILED: "red",
-};
+import { STATUS_COLOR, STATUS_GLYPH } from "../theme.js";
 
 export function StatusDot({ status }: { status: TrackStatus | undefined }) {
     if (!status) {
         return <Text> </Text>;
     }
 
-    return <Text color={STATUS_COLORS[status]}>●</Text>;
+    return <Text color={STATUS_COLOR[status]}>{STATUS_GLYPH}</Text>;
 }

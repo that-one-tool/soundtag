@@ -52,9 +52,10 @@ test("App lists the folder with the cursor on the first entry", async () => {
 
     const { lastFrame } = await renderApp(directory);
 
-    assert.match(findFrameLine(lastFrame, ".."), /›/);
+    assert.match(findFrameLine(lastFrame, ".."), /▸/);
     assert.match(findFrameLine(lastFrame, "Album"), /Album\//);
     assert.ok((lastFrame() ?? "").includes(directory));
+    assert.ok((lastFrame() ?? "").includes("♫ soundtag"));
 });
 
 test("App shows the stored tags of the hovered file", async () => {
@@ -65,9 +66,10 @@ test("App shows the stored tags of the hovered file", async () => {
     stdin.write(KEYS.down);
 
     await waitForFrame(lastFrame, "Black Sabbath");
-    assert.match(findFrameLine(lastFrame, "song.mp3"), /›/);
+    assert.match(findFrameLine(lastFrame, "song.mp3"), /▸/);
     assert.ok((lastFrame() ?? "").includes("1970"));
     assert.match(findFrameLine(lastFrame, "Cover"), /no/);
+    assert.match(findFrameLine(lastFrame, "MP3 ·"), /File\s+MP3 · 0 KB/);
 });
 
 test("App shows folder contents in the metadata panel", async () => {
@@ -91,7 +93,7 @@ test("App opens a folder and goes back to it", async () => {
     stdin.write(KEYS.left);
     await waitForFrame(lastFrame, "song.mp3");
 
-    assert.match(findFrameLine(lastFrame, "Album/"), /›/);
+    assert.match(findFrameLine(lastFrame, "Album/"), /▸/);
 });
 
 test("App queues the hovered file or folder for tagging", async () => {
