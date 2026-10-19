@@ -1,10 +1,10 @@
-import { consoleLogger } from "../../../src/shared/logger.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { YouTubeCoverProvider } from "../../../src/metadata/providers/youtube.js";
 import { captureConsole } from "../../helpers/console.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
 import { createRecordingLogger } from "../../helpers/logger.js";
+import { createProviderServices } from "../../helpers/metadata-chain.js";
 
 restoreFetchAfterEach();
 const output = captureConsole();
@@ -47,7 +47,7 @@ test("YouTubeCoverProvider downloads the largest available thumbnail", async () 
 
     const cover = await new YouTubeCoverProvider(
         "key",
-        consoleLogger
+        createProviderServices()
     ).findCover(search);
 
     assert.deepEqual(cover, Buffer.from("thumbnail"));
@@ -75,7 +75,10 @@ test("YouTubeCoverProvider prefers maxres, then standard thumbnails", async () =
         const requested: string[] = [];
         mockYouTube({ items: [{ snippet: { thumbnails } }] }, requested);
 
-        await new YouTubeCoverProvider("key", consoleLogger).findCover(search);
+        await new YouTubeCoverProvider(
+            "key",
+            createProviderServices()
+        ).findCover(search);
 
         assert.equal(requested[1], expected);
     }
@@ -87,9 +90,10 @@ test("YouTubeCoverProvider returns null when no video has a thumbnail", async ()
         mockYouTube(response, requested);
 
         assert.equal(
-            await new YouTubeCoverProvider("key", consoleLogger).findCover(
-                search
-            ),
+            await new YouTubeCoverProvider(
+                "key",
+                createProviderServices()
+            ).findCover(search),
             null
         );
         assert.equal(requested.length, 1);
@@ -100,7 +104,10 @@ test("YouTubeCoverProvider logs search failures", async () => {
     globalThis.fetch = async () => new Response(null, { status: 403 });
 
     assert.equal(
-        await new YouTubeCoverProvider("key", consoleLogger).findCover(search),
+        await new YouTubeCoverProvider(
+            "key",
+            createProviderServices()
+        ).findCover(search),
         null
     );
     assert.deepEqual(output.errors, [
@@ -112,7 +119,10 @@ test("YouTubeCoverProvider logs failures to the injected logger", async () => {
     const logger = createRecordingLogger();
     globalThis.fetch = async () => new Response(null, { status: 403 });
 
-    await new YouTubeCoverProvider("key", logger).findCover(search);
+    await new YouTubeCoverProvider(
+        "key",
+        createProviderServices({ logger })
+    ).findCover(search);
 
     assert.deepEqual(logger.errors, [
         "YouTube thumbnail search failed: YouTube Data API request failed: HTTP 403",

@@ -185,6 +185,7 @@ export async function processBatch(
         await shareFolderCoversUnlessStopped(batch);
     } finally {
         folderNames.clear();
+        run.context.metadataChain.clearCache();
     }
 }
 

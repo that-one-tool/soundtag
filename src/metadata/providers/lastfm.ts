@@ -1,19 +1,19 @@
 import { getErrorMessage } from "../../shared/errors.js";
+import type { ImageCache } from "../../shared/image-cache.js";
 import type { Logger } from "../../shared/logger.js";
 import {
-    downloadFirstImage,
     fetchWithTimeout,
     readJsonResponse,
     type ImageRequest,
 } from "../../shared/http.js";
 import {
     createRateLimiter,
-    type Clock,
     type RateLimiter,
 } from "../../shared/rate-limiter.js";
 import { extractYear, valueOrEmpty } from "../track-metadata.js";
 import type {
     MetadataProvider,
+    ProviderServices,
     TrackInfo,
     TrackMetadata,
     TrackSearch,
@@ -203,8 +203,11 @@ function getAlbumInfo(
     };
 }
 
-function downloadAlbumCover(album: LastFmAlbum = {}): Promise<Buffer | null> {
-    return downloadFirstImage(
+function downloadAlbumCover(
+    images: ImageCache,
+    album: LastFmAlbum = {}
+): Promise<Buffer | null> {
+    return images.downloadFirst(
         getCoverImageRequests(getCoverImages(album.image))
     );
 }
@@ -232,10 +235,12 @@ export class LastFmProvider implements MetadataProvider {
 
     constructor(
         private readonly settings: LastFmSettings,
-        clock: Clock,
-        private readonly logger: Logger
+        private readonly services: ProviderServices
     ) {
-        this.schedule = createRateLimiter(LASTFM_REQUEST_INTERVAL, clock);
+        this.schedule = createRateLimiter(
+            LASTFM_REQUEST_INTERVAL,
+            services.clock
+        );
     }
 
     async findMetadata(
@@ -245,7 +250,7 @@ export class LastFmProvider implements MetadataProvider {
         const match = await this.searchTrack(search);
 
         if (!match) {
-            logAlbumDetails({ album: "", year: "" }, this.logger);
+            logAlbumDetails({ album: "", year: "" }, this.services.logger);
             return null;
         }
 
@@ -259,17 +264,19 @@ export class LastFmProvider implements MetadataProvider {
         matched: Pick<TrackInfo, "title" | "artist">,
         needsCover: boolean
     ): Promise<TrackMetadata> {
-        logMatch(matched, this.logger);
+        logMatch(matched, this.services.logger);
         const track = await this.getTrackInfo(matched);
         const album = track?.album;
         const info = getAlbumInfo(matched, album);
-        const coverData = needsCover ? await downloadAlbumCover(album) : null;
-        logAlbumDetails(info, this.logger);
+        const coverData = needsCover
+            ? await downloadAlbumCover(this.services.images, album)
+            : null;
+        logAlbumDetails(info, this.services.logger);
         return { info, extras: {}, coverData };
     }
 
     private getUrlLogger(): Logger | null {
-        return this.settings.verbose ? this.logger : null;
+        return this.settings.verbose ? this.services.logger : null;
     }
 
     private request<T>(
@@ -290,7 +297,7 @@ export class LastFmProvider implements MetadataProvider {
             );
             return getFirstMatch(data);
         } catch (error) {
-            this.logger.error(
+            this.services.logger.error(
                 `Last.fm search failed: ${getErrorMessage(error)}`
             );
             return null;
@@ -307,7 +314,7 @@ export class LastFmProvider implements MetadataProvider {
             );
             return data.track ?? null;
         } catch (error) {
-            this.logger.error(
+            this.services.logger.error(
                 `Could not retrieve track information: ${getErrorMessage(error)}`
             );
             return null;

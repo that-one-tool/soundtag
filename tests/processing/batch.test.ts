@@ -14,7 +14,10 @@ import { consoleLogger } from "../../src/shared/logger.js";
 import type { ProcessedTrack } from "../../src/processing/types.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
-import { createTestChain } from "../helpers/metadata-chain.js";
+import {
+    createProviderServices,
+    createTestChain,
+} from "../helpers/metadata-chain.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 restoreFetchAfterEach();
@@ -48,6 +51,60 @@ test("countStatuses counts each status", () => {
         }),
         { ok: 1, skipped: 2, errors: 1, unprocessed: 1 }
     );
+});
+
+test("processBatch clears the metadata cache once the files are processed", async () => {
+    const directory = await createTemporaryDirectory();
+    const broken = path.join(directory, "broken.flac");
+    await fs.writeFile(broken, "not really flac");
+    const report = createReport([broken], directory);
+    const metadataChain = createTestChain();
+    const statusesAtClear: string[] = [];
+    metadataChain.clearCache = () => {
+        statusesAtClear.push(...Object.values(report.files));
+    };
+
+    await processBatch([broken], {
+        context: {
+            sourceRoot: directory,
+            metadataChain,
+            logger: consoleLogger,
+        },
+        report,
+        stopSignal: new AbortController().signal,
+        renameFiles: false,
+    });
+
+    assert.deepEqual(statusesAtClear, ["FAILED"]);
+});
+
+test("processBatch clears the metadata cache when processing throws", async () => {
+    const directory = await createTemporaryDirectory();
+    const broken = path.join(directory, "broken.flac");
+    await fs.writeFile(broken, "not really flac");
+    const metadataChain = createTestChain();
+    let clears = 0;
+    metadataChain.clearCache = () => {
+        clears += 1;
+    };
+
+    await assert.rejects(
+        processBatch([broken], {
+            context: {
+                sourceRoot: directory,
+                metadataChain,
+                logger: consoleLogger,
+            },
+            report: createReport([broken], directory),
+            stopSignal: new AbortController().signal,
+            renameFiles: false,
+            onTrackProcessed: () => {
+                throw new Error("listener failed");
+            },
+        }),
+        /listener failed/
+    );
+    assert.equal(clears, 1);
 });
 
 test("processBatch records each file status and logs its position", async () => {
@@ -107,7 +164,7 @@ test("processBatch stops before the next file once a stop is requested", async (
             },
         ],
         undefined,
-        consoleLogger
+        createProviderServices()
     );
     const report = createReport(files, directory);
 
@@ -188,7 +245,7 @@ test("processBatch renames newly tagged files but not tracks that were not found
             },
         ],
         undefined,
-        consoleLogger
+        createProviderServices()
     );
     const files = [found, notFound];
     const report = createReport(files, directory);
@@ -238,7 +295,7 @@ test("processBatch renames only the first of two files with the same tags", asyn
             metadataChain: new MetadataChain(
                 [{ name: "Fake", findMetadata: async () => null }],
                 undefined,
-                consoleLogger
+                createProviderServices()
             ),
             logger: consoleLogger,
         },
@@ -338,7 +395,7 @@ function createChainWithCoverFor(title: string): MetadataChain {
             },
         ],
         undefined,
-        consoleLogger
+        createProviderServices()
     );
 }
 
@@ -420,7 +477,7 @@ test("processBatch keeps a borrowed cover on a tagged track without announcing i
             },
         ],
         undefined,
-        consoleLogger
+        createProviderServices()
     );
     const report = createReport([tagged], directory);
     const results: ProcessedTrack[] = [];
@@ -468,7 +525,7 @@ test("processBatch does not share covers once a stop is requested", async () => 
             },
         ],
         undefined,
-        consoleLogger
+        createProviderServices()
     );
     const report = createReport([notFound], directory);
 

@@ -8,6 +8,7 @@ import { createRecordingLogger } from "../../helpers/logger.js";
 import { createFakeClock, instantClock } from "../../helpers/clock.js";
 import type { Clock } from "../../../src/shared/rate-limiter.js";
 import type { Logger } from "../../../src/shared/logger.js";
+import { createProviderServices } from "../../helpers/metadata-chain.js";
 
 restoreFetchAfterEach();
 const output = captureConsole();
@@ -22,7 +23,10 @@ function createLastFm(
         logger: consoleLogger,
         ...overrides,
     };
-    return new LastFmProvider({ apiKey: "key", verbose }, clock, logger);
+    return new LastFmProvider(
+        { apiKey: "key", verbose },
+        createProviderServices({ clock, logger })
+    );
 }
 
 function mockLastFmMatchWithCover(requestedHosts: string[]): void {

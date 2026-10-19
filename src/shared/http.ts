@@ -82,20 +82,6 @@ export async function downloadImage({
     return data;
 }
 
-export async function downloadFirstImage(
-    requests: ImageRequest[]
-): Promise<Buffer | null> {
-    for (const request of requests) {
-        const image = await downloadImage(request).catch(() => null);
-
-        if (image) {
-            return image;
-        }
-    }
-
-    return null;
-}
-
 export function getRetryAfterDelay(
     response: Response,
     fallbackDelay: number,

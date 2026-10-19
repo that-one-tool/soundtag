@@ -6,6 +6,7 @@ import { instantClock } from "../../helpers/clock.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
 import { createRecordingLogger } from "../../helpers/logger.js";
 import type { Clock } from "../../../src/shared/rate-limiter.js";
+import { createProviderServices } from "../../helpers/metadata-chain.js";
 
 restoreFetchAfterEach();
 
@@ -24,8 +25,7 @@ test("ItunesProvider skips the artwork download when no cover is needed", async 
     };
 
     const metadata = await new ItunesProvider(
-        instantClock,
-        consoleLogger
+        createProviderServices()
     ).findMetadata({ title: "Title", artist: "", album: "" }, false);
 
     assert.equal(metadata?.info.title, "Title");
@@ -45,7 +45,9 @@ test("iTunes searches are rate-limited when requests run concurrently", async ()
         requestCount++;
         return Response.json({ results: [] });
     };
-    const provider = new ItunesProvider(clock, consoleLogger);
+    const provider = new ItunesProvider(
+        createProviderServices({ clock, logger: consoleLogger })
+    );
     const search = { title: "title", artist: "artist", album: "" };
 
     await Promise.all([
@@ -61,10 +63,9 @@ test("ItunesProvider logs failures to the injected logger", async () => {
     const logger = createRecordingLogger();
     globalThis.fetch = async () => new Response(null, { status: 500 });
 
-    await new ItunesProvider(instantClock, logger).findMetadata(
-        { title: "Title", artist: "", album: "" },
-        false
-    );
+    await new ItunesProvider(
+        createProviderServices({ clock: instantClock, logger })
+    ).findMetadata({ title: "Title", artist: "", album: "" }, false);
 
     assert.deepEqual(logger.errors, [
         "iTunes Search failed: iTunes Search request failed: HTTP 500",
@@ -88,7 +89,7 @@ function findItunesExtras(
     artist = ""
 ) {
     globalThis.fetch = async () => Response.json({ results: [track] });
-    return new ItunesProvider(instantClock, consoleLogger)
+    return new ItunesProvider(createProviderServices())
         .findMetadata({ title: "Title", artist, album }, false)
         .then((metadata) => metadata?.extras);
 }

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-    downloadFirstImage,
     downloadImage,
     fetchWithTimeout,
     getRetryAfterDelay,
@@ -106,40 +105,6 @@ test("downloadImage enforces an exclusive byte limit", async () => {
         ).length,
         9
     );
-});
-
-test("downloadFirstImage returns the first image that downloads", async () => {
-    const requested: string[] = [];
-    globalThis.fetch = async (input) => {
-        requested.push(input.toString());
-        return input.toString().endsWith("first.jpg")
-            ? new Response(null, { status: 500 })
-            : imageResponse("second-image");
-    };
-
-    const image = await downloadFirstImage([
-        { url: "https://example.test/first.jpg" },
-        { url: "https://example.test/second.jpg" },
-        { url: "https://example.test/third.jpg" },
-    ]);
-
-    assert.deepEqual(image, Buffer.from("second-image"));
-    assert.deepEqual(requested, [
-        "https://example.test/first.jpg",
-        "https://example.test/second.jpg",
-    ]);
-});
-
-test("downloadFirstImage returns null when no image downloads", async () => {
-    globalThis.fetch = async () => {
-        throw new Error("network down");
-    };
-
-    assert.equal(
-        await downloadFirstImage([{ url: "https://example.test/a.jpg" }]),
-        null
-    );
-    assert.equal(await downloadFirstImage([]), null);
 });
 
 test("getRetryAfterDelay converts Retry-After seconds within bounds", () => {

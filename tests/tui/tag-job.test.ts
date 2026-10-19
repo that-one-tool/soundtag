@@ -9,6 +9,7 @@ import type { ProcessedTrack } from "../../src/processing/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { assertNoReport } from "../helpers/no-report.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
+import { createProviderServices } from "../helpers/metadata-chain.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-tag-job-test-"
@@ -31,7 +32,7 @@ const foundChain = new MetadataChain(
         },
     ],
     undefined,
-    createRecordingLogger()
+    createProviderServices({ logger: createRecordingLogger() })
 );
 
 async function createTrack(

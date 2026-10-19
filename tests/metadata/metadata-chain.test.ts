@@ -1,4 +1,3 @@
-import { consoleLogger } from "../../src/shared/logger.js";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
@@ -12,6 +11,8 @@ import type {
     TrackMetadata,
     TrackSearch,
 } from "../../src/metadata/types.js";
+import { createProviderServices } from "../helpers/metadata-chain.js";
+import { ImageCache } from "../../src/shared/image-cache.js";
 
 const originalConsoleLog = console.log;
 const emptyInfo: TrackInfo = { title: "", artist: "", album: "", year: "" };
@@ -77,7 +78,7 @@ test("MetadataChain returns null without asking for a cover when nothing matches
     const chain = new MetadataChain(
         [new FakeMetadataProvider(null), new FakeMetadataProvider(null)],
         coverProvider,
-        consoleLogger
+        createProviderServices()
     );
 
     assert.equal(await chain.find(search, emptyTags), null);
@@ -98,7 +99,7 @@ test("MetadataChain fills missing fields in provider order without overwriting",
             ),
         ],
         undefined,
-        consoleLogger
+        createProviderServices()
     );
 
     const existing = { ...emptyTags, info: { ...emptyInfo, year: "2020" } };
@@ -129,7 +130,7 @@ test("MetadataChain stops asking providers once metadata is complete", async () 
             lastProvider,
         ],
         undefined,
-        consoleLogger
+        createProviderServices()
     );
 
     await chain.find(search, emptyTags);
@@ -145,7 +146,7 @@ test("MetadataChain searches with collected info and only requests missing cover
     const chain = new MetadataChain(
         [firstProvider, secondProvider],
         undefined,
-        consoleLogger
+        createProviderServices()
     );
 
     await chain.find(search, emptyTags);
@@ -164,7 +165,7 @@ test("MetadataChain uses the cover provider only when matched metadata lacks a c
     const chain = new MetadataChain(
         [new FakeMetadataProvider(createMetadata({ title: "Found" }))],
         coverProvider,
-        consoleLogger
+        createProviderServices()
     );
 
     const metadata = await chain.find(search, emptyTags);
@@ -180,7 +181,7 @@ test("MetadataChain skips the cover provider when a cover was found", async () =
     const chain = new MetadataChain(
         [new FakeMetadataProvider(createMetadata({ title: "Found" }, cover))],
         coverProvider,
-        consoleLogger
+        createProviderServices()
     );
 
     assert.equal((await chain.find(search, emptyTags))?.coverData, cover);
@@ -191,7 +192,7 @@ test("MetadataChain reports whether a cover was found", async () => {
     const chain = new MetadataChain(
         [new FakeMetadataProvider(createMetadata({ title: "Found" }))],
         new FakeCoverProvider(null),
-        consoleLogger
+        createProviderServices()
     );
 
     assert.equal((await chain.find(search, emptyTags))?.coverData, null);
@@ -205,7 +206,7 @@ test("MetadataChain reports whether a cover was found", async () => {
     await new MetadataChain(
         [new FakeMetadataProvider(createMetadata({ title: "Found" }, cover))],
         undefined,
-        consoleLogger
+        createProviderServices()
     ).find(search, emptyTags);
     assert.deepEqual(output, ["Querying Fake...", "Cover: downloaded"]);
 });
@@ -215,7 +216,7 @@ test("MetadataChain reports the cover result to the injected logger", async () =
     const chain = new MetadataChain(
         [new FakeMetadataProvider(createMetadata({ title: "Title" }, cover))],
         undefined,
-        logger
+        createProviderServices({ logger })
     );
 
     await chain.find(search, emptyTags);
@@ -235,7 +236,7 @@ test("MetadataChain keeps existing extras and fills the missing ones", async () 
             ),
         ],
         undefined,
-        consoleLogger
+        createProviderServices()
     );
     const existing = { ...emptyTags, extras: { genre: "Rock" } };
 
@@ -248,7 +249,11 @@ test("MetadataChain keeps an existing cover without downloading another", async 
     const provider = new FakeMetadataProvider(createMetadata({ title: "T" }));
     const coverProvider = new FakeCoverProvider(cover);
     const logger = createRecordingLogger();
-    const chain = new MetadataChain([provider], coverProvider, logger);
+    const chain = new MetadataChain(
+        [provider],
+        coverProvider,
+        createProviderServices({ logger })
+    );
 
     const metadata = await chain.find(search, { ...emptyTags, hasCover: true });
 
@@ -272,7 +277,7 @@ test("MetadataChain counts an existing cover towards complete metadata", async (
             lastProvider,
         ],
         undefined,
-        consoleLogger
+        createProviderServices()
     );
 
     await chain.find(search, { ...emptyTags, hasCover: true });
@@ -288,7 +293,7 @@ test("MetadataChain logs each provider it queries and the cover search", async (
             new FakeMetadataProvider(createMetadata({ title: "T" }), "Second"),
         ],
         new FakeCoverProvider(cover),
-        logger
+        createProviderServices({ logger })
     );
 
     await chain.find(search, emptyTags);
@@ -299,4 +304,20 @@ test("MetadataChain logs each provider it queries and the cover search", async (
         "Searching FakeCover for a cover...",
         "Cover: downloaded",
     ]);
+});
+
+test("clearCache clears the shared image cache", () => {
+    const images = new ImageCache();
+    let clears = 0;
+    images.clear = () => {
+        clears += 1;
+    };
+
+    new MetadataChain(
+        [],
+        undefined,
+        createProviderServices({ images })
+    ).clearCache();
+
+    assert.equal(clears, 1);
 });

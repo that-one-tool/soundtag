@@ -1,3 +1,4 @@
+import { ImageCache } from "../../src/shared/image-cache.js";
 import { consoleLogger } from "../../src/shared/logger.js";
 import {
     createMetadataChain,
@@ -6,6 +7,7 @@ import {
 import type { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import type {
     ExistingTags,
+    ProviderServices,
     TrackInfo,
     TrackMetadata,
     TrackSearch,
@@ -44,4 +46,15 @@ export function findTrackMetadata(
         { title: "", artist: "", album: "", ...search },
         { ...emptyTags, info: existingInfo }
     );
+}
+
+export function createProviderServices(
+    overrides: Partial<ProviderServices> = {}
+): ProviderServices {
+    return {
+        clock: instantClock,
+        logger: consoleLogger,
+        images: new ImageCache(),
+        ...overrides,
+    };
 }

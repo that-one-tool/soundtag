@@ -1077,3 +1077,46 @@ test("findTrackMetadata uses a YouTube thumbnail only after provider artwork is 
         )
     );
 });
+
+function mockLastFmAlbumCover(imageRequests: string[]): void {
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+
+        if (url.hostname === "images.example") {
+            imageRequests.push(url.href);
+            return new Response("image", {
+                headers: { "content-type": "image/jpeg" },
+            });
+        }
+
+        return Response.json({
+            results: { trackmatches: { track: { name: "T", artist: "A" } } },
+            track: {
+                album: {
+                    title: "Album",
+                    image: [
+                        {
+                            size: "medium",
+                            "#text": "https://images.example/album.jpg",
+                        },
+                    ],
+                },
+            },
+        });
+    };
+}
+
+test("the chain downloads a shared album cover once until its cache is cleared", async () => {
+    const imageRequests: string[] = [];
+    mockLastFmAlbumCover(imageRequests);
+    const chain = createTestChain();
+    const search = { title: "T", artist: "A", album: "" };
+
+    await chain.find(search, emptyTags);
+    await chain.find(search, emptyTags);
+    chain.clearCache();
+    const metadata = await chain.find(search, emptyTags);
+
+    assert.deepEqual(metadata?.coverData, Buffer.from("image"));
+    assert.equal(imageRequests.length, 2);
+});

@@ -1,4 +1,3 @@
-import type { Logger } from "../shared/logger.js";
 import {
     buildProviderSearch,
     isComplete,
@@ -8,6 +7,7 @@ import type {
     CoverProvider,
     ExistingTags,
     MetadataProvider,
+    ProviderServices,
     TrackMetadata,
     TrackSearch,
 } from "./types.js";
@@ -46,8 +46,12 @@ export class MetadataChain {
     constructor(
         readonly providers: MetadataProvider[],
         readonly coverProvider: CoverProvider | undefined,
-        private readonly logger: Logger
+        private readonly services: ProviderServices
     ) {}
+
+    clearCache(): void {
+        this.services.images.clear();
+    }
 
     async find(
         search: TrackSearch,
@@ -60,7 +64,7 @@ export class MetadataChain {
         }
 
         const completed = await this.addFallbackCover(search, state);
-        this.logger.info(`Cover: ${getCoverStatus(completed)}`);
+        this.services.logger.info(`Cover: ${getCoverStatus(completed)}`);
         return completed.metadata;
     }
 
@@ -86,7 +90,7 @@ export class MetadataChain {
             return state;
         }
 
-        this.logger.info(`Querying ${provider.name}...`);
+        this.services.logger.info(`Querying ${provider.name}...`);
         const candidate = await provider.findMetadata(
             buildProviderSearch(search, state.metadata.info),
             needsCover(state)
@@ -102,7 +106,9 @@ export class MetadataChain {
             return state;
         }
 
-        this.logger.info(`Searching ${this.coverProvider.name} for a cover...`);
+        this.services.logger.info(
+            `Searching ${this.coverProvider.name} for a cover...`
+        );
         const coverData = await this.coverProvider.findCover(
             buildProviderSearch(search, state.metadata.info)
         );

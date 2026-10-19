@@ -1,13 +1,8 @@
 import { getErrorMessage } from "../../shared/errors.js";
-import type { Logger } from "../../shared/logger.js";
-import {
-    downloadFirstImage,
-    fetchWithTimeout,
-    readJsonResponse,
-} from "../../shared/http.js";
+import type { ImageCache } from "../../shared/image-cache.js";
+import { fetchWithTimeout, readJsonResponse } from "../../shared/http.js";
 import {
     createRateLimiter,
-    type Clock,
     type RateLimiter,
 } from "../../shared/rate-limiter.js";
 import {
@@ -19,6 +14,7 @@ import {
 } from "../track-metadata.js";
 import type {
     MetadataProvider,
+    ProviderServices,
     TrackExtras,
     TrackInfo,
     TrackMetadata,
@@ -134,19 +130,22 @@ function getItunesExtras(track: ItunesTrack, album: string): TrackExtras {
     });
 }
 
-function downloadArtwork(url: string | undefined): Promise<Buffer | null> {
-    return url ? downloadFirstImage([{ url }]) : Promise.resolve(null);
+function downloadArtwork(
+    images: ImageCache,
+    url: string | undefined
+): Promise<Buffer | null> {
+    return url ? images.downloadFirst([{ url }]) : Promise.resolve(null);
 }
 
 export class ItunesProvider implements MetadataProvider {
     readonly name = "iTunes";
     private readonly schedule: RateLimiter;
 
-    constructor(
-        clock: Clock,
-        private readonly logger: Logger
-    ) {
-        this.schedule = createRateLimiter(ITUNES_REQUEST_INTERVAL, clock);
+    constructor(private readonly services: ProviderServices) {
+        this.schedule = createRateLimiter(
+            ITUNES_REQUEST_INTERVAL,
+            services.clock
+        );
     }
 
     async findMetadata(
@@ -163,7 +162,10 @@ export class ItunesProvider implements MetadataProvider {
             info: getItunesTrackInfo(track),
             extras: getMatchedExtras(track, search),
             coverData: needsCover
-                ? await downloadArtwork(track.artworkUrl100)
+                ? await downloadArtwork(
+                      this.services.images,
+                      track.artworkUrl100
+                  )
                 : null,
         };
     }
@@ -182,7 +184,7 @@ export class ItunesProvider implements MetadataProvider {
             );
             return getFirstItunesTrack(data);
         } catch (error) {
-            this.logger.error(
+            this.services.logger.error(
                 `iTunes Search failed: ${getErrorMessage(error)}`
             );
             return null;

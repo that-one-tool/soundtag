@@ -33,7 +33,7 @@ npm run build      # compile to dist/
 | `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                                                   |
 | `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `create-metadata-chain.ts` is the composition root; pure merge helpers.                                               |
 | `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                                                          |
-| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, rate limiter with an injectable `Clock`, errors, `Logger`.                                                                       |
+| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, per-batch `ImageCache`, rate limiter with an injectable `Clock`, errors, `Logger`.                                               |
 
 Each domain owns its contracts in its own `types.ts`. Imports only point toward
 lower layers, and a layer may skip levels: `cli` → `tui` → `processing` → `tags` /
@@ -57,8 +57,10 @@ graph free of cycles.
 ## Extending
 
 - **New metadata source:** add a class in `src/metadata/providers/` that
-  implements `MetadataProvider`, then register it in `create-metadata-chain.ts`.
-  Do not change `MetadataChain`.
+  implements `MetadataProvider` and takes the shared `ProviderServices`, then
+  register it in `create-metadata-chain.ts`. Do not change `MetadataChain`.
+  Download images through `services.images` so repeated cover URLs hit the
+  per-batch cache.
 - **New audio format:** add it to `AUDIO_FORMATS` in `src/library/file.ts`, then
   map it to a `TagStore` in `src/tags/audio-tags.ts`. The compiler enforces that
   every format has a store.
@@ -106,6 +108,7 @@ Not enforced by tooling, but expected:
   - `createTestChain()` and `findTrackMetadata()`, which give a chain with
     instant rate limiting
   - `createRecordingLogger()`
+  - `createProviderServices()` for provider and chain constructors
   - `waitForFrame()`, `KEYS` and `createFakeTerminal()` for Ink, and
     `createControlledServices()` for TUI services with a hand-driven queue
 - Audio fixtures live in `tests/fixtures/`. Copy a fixture into a temporary

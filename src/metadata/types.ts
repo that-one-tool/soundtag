@@ -1,3 +1,7 @@
+import type { ImageCache } from "../shared/image-cache.js";
+import type { Logger } from "../shared/logger.js";
+import type { Clock } from "../shared/rate-limiter.js";
+
 export interface TrackInfo {
     title: string;
     artist: string;
@@ -43,4 +47,10 @@ export interface MetadataProvider {
 export interface CoverProvider {
     readonly name: string;
     findCover(search: TrackSearch): Promise<Buffer | null>;
+}
+
+export interface ProviderServices {
+    clock: Clock;
+    logger: Logger;
+    images: ImageCache;
 }

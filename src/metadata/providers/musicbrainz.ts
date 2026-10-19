@@ -1,7 +1,5 @@
 import { getErrorMessage } from "../../shared/errors.js";
-import type { Logger } from "../../shared/logger.js";
 import {
-    downloadFirstImage,
     fetchWithTimeout,
     getRetryAfterDelay,
     readJsonResponse,
@@ -9,12 +7,12 @@ import {
 } from "../../shared/http.js";
 import {
     createRateLimiter,
-    type Clock,
     type RateLimiter,
 } from "../../shared/rate-limiter.js";
 import { extractYear, valueOrEmpty } from "../track-metadata.js";
 import type {
     MetadataProvider,
+    ProviderServices,
     TrackInfo,
     TrackMetadata,
     TrackSearch,
@@ -128,10 +126,12 @@ export class MusicBrainzProvider implements MetadataProvider {
 
     constructor(
         private readonly userAgent: string,
-        private readonly clock: Clock,
-        private readonly logger: Logger
+        private readonly services: ProviderServices
     ) {
-        this.schedule = createRateLimiter(MUSICBRAINZ_REQUEST_INTERVAL, clock);
+        this.schedule = createRateLimiter(
+            MUSICBRAINZ_REQUEST_INTERVAL,
+            services.clock
+        );
     }
 
     async findMetadata(
@@ -166,7 +166,7 @@ export class MusicBrainzProvider implements MetadataProvider {
             );
             return getFirstRecording(data);
         } catch (error) {
-            this.logger.error(
+            this.services.logger.error(
                 `MusicBrainz search failed: ${getErrorMessage(error)}`
             );
             return null;
@@ -181,7 +181,7 @@ export class MusicBrainzProvider implements MetadataProvider {
         }
 
         await response.body?.cancel();
-        await this.clock.sleep(
+        await this.services.clock.sleep(
             getRetryAfterDelay(response, DEFAULT_RETRY_DELAY, MAX_RETRY_DELAY)
         );
         return this.scheduleFetch(url);
@@ -196,7 +196,7 @@ export class MusicBrainzProvider implements MetadataProvider {
     private downloadCover(
         releases: MusicBrainzRelease[] = []
     ): Promise<Buffer | null> {
-        return downloadFirstImage(
+        return this.services.images.downloadFirst(
             releases.flatMap(({ id }) =>
                 id ? [getCoverArtRequest(id, this.userAgent)] : []
             )
