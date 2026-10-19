@@ -7,6 +7,9 @@ import { cleanup, render } from "ink-testing-library";
 import { createElement } from "react";
 import { App } from "../../../src/tui/components/app.js";
 import { getTagStore } from "../../../src/tags/audio-tags.js";
+import { DetailsCache } from "../../../src/tui/details-cache.js";
+import { readEntryDetails } from "../../../src/tui/entry-details.js";
+import type { BrowserEntry, EntryDetails } from "../../../src/tui/types.js";
 import {
     findFrameLine,
     KEYS,
@@ -39,8 +42,11 @@ async function createLibrary(): Promise<string> {
     return directory;
 }
 
-async function renderApp(directory: string) {
+type DetailsReader = (entry: BrowserEntry) => Promise<EntryDetails>;
+
+async function renderApp(directory: string, readDetails?: DetailsReader) {
     const { services, jobs } = createControlledServices();
+    services.detailsCache = new DetailsCache(readDetails);
     const instance = render(
         createElement(App, { startDirectory: directory, services })
     );
@@ -296,4 +302,85 @@ test("App re-reads the hovered file once it is processed", async () => {
     });
 
     await waitForFrame(lastFrame, "Iron Man");
+});
+
+function createRecordingReader(): { reads: string[]; read: DetailsReader } {
+    const reads: string[] = [];
+    const read = (entry: BrowserEntry) => {
+        reads.push(entry.name);
+        return readEntryDetails(entry);
+    };
+    return { reads, read };
+}
+
+test("App shows a revisited file without reading it again", async () => {
+    const directory = await createLibrary();
+    const { reads, read } = createRecordingReader();
+    const { lastFrame, stdin } = await renderApp(directory, read);
+    stdin.write(KEYS.down);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Black Sabbath");
+    stdin.write(KEYS.up);
+    await waitForFrame(lastFrame, "Audio files");
+
+    stdin.write(KEYS.down);
+
+    await waitForFrame(lastFrame, "Black Sabbath");
+    assert.deepEqual(
+        reads.filter((name) => name === "song.mp3"),
+        ["song.mp3"]
+    );
+});
+
+function readFoldersOnly(entry: BrowserEntry): Promise<EntryDetails> {
+    return entry.kind === "file"
+        ? new Promise<EntryDetails>(() => {})
+        : readEntryDetails(entry);
+}
+
+test("App keeps the previous details while the next entry loads", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin } = await renderApp(directory, readFoldersOnly);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Audio files");
+
+    stdin.write(KEYS.down);
+
+    await waitForFrame(lastFrame, "Metadata …");
+    assert.match(findFrameLine(lastFrame, "song.mp3"), /▸/);
+    assert.ok((lastFrame() ?? "").includes("Audio files"));
+});
+
+test("App does not read the files the cursor only passes over", async () => {
+    const directory = await createLibrary();
+    for (const name of ["t1.mp3", "t2.mp3"]) {
+        await fs.writeFile(path.join(directory, name), "audio");
+    }
+    const { reads, read } = createRecordingReader();
+    const { lastFrame, stdin } = await renderApp(directory, read);
+
+    for (let move = 0; move < 4; move++) {
+        stdin.write(KEYS.down);
+        await delay(30);
+    }
+
+    await waitFor(() => !(lastFrame() ?? "").includes("Metadata …"));
+    await waitForFrame(lastFrame, "Duration");
+    assert.match(findFrameLine(lastFrame, "t2.mp3"), /▸/);
+    assert.ok(!reads.includes("song.mp3"));
+    assert.ok(!reads.includes("t1.mp3"));
+});
+
+async function readUnreadable(): Promise<EntryDetails> {
+    return { kind: "unreadable", message: "EBUSY" };
+}
+
+test("App stops marking the panel once an unreadable entry is read", async () => {
+    const directory = await createLibrary();
+    const { lastFrame } = await renderApp(directory, readUnreadable);
+
+    await waitForFrame(lastFrame, "Cannot read: EBUSY");
+
+    await delay(50);
+    assert.ok(!(lastFrame() ?? "").includes("Metadata …"));
 });

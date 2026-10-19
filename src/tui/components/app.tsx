@@ -6,7 +6,6 @@ import { useQuit } from "../hooks/use-quit.js";
 import { useStore } from "../hooks/use-store.js";
 import { getLayout } from "../layout.js";
 import { getEntryStatus } from "../track-statuses.js";
-import type { TrackStatusStore } from "../track-status-store.js";
 import type { TuiServices } from "../tui-services.js";
 import { BrowserPane, type BrowserPaneProps } from "./browser-pane.js";
 import { Header } from "./header.js";
@@ -24,12 +23,15 @@ function useLayout() {
     return { rows, ...getLayout(rows) };
 }
 
-function useBrowsing(startDirectory: string, statusStore: TrackStatusStore) {
+function useBrowsing(
+    startDirectory: string,
+    { statusStore, ...sources }: TuiServices
+) {
     const statuses = useStore(statusStore);
     const [browser, dispatch] = useBrowser(startDirectory, statusStore);
     const hovered = browser.entries[browser.cursor];
     const status = hovered && getEntryStatus(statuses, hovered);
-    const details = useEntryDetails(hovered, status);
+    const details = useEntryDetails({ entry: hovered, status }, sources);
     return { browser, dispatch, hovered, details, statuses };
 }
 
@@ -45,7 +47,7 @@ function useStatus({ queue, subfolders }: TuiServices) {
 
 function useAppState({ startDirectory, services }: AppProps) {
     const layout = useLayout();
-    const browsing = useBrowsing(startDirectory, services.statusStore);
+    const browsing = useBrowsing(startDirectory, services);
     const { status, requestQuit } = useStatus(services);
     useKeyboard({
         ...browsing,
@@ -61,21 +63,11 @@ function useAppState({ startDirectory, services }: AppProps) {
 
 type WorkspaceProps = BrowserPaneProps & MetadataPanelProps;
 
-function Workspace({
-    state,
-    entry,
-    details,
-    statuses,
-    height,
-}: WorkspaceProps) {
+function Workspace({ state, statuses, height, ...details }: WorkspaceProps) {
     return (
         <Box flexGrow={1} overflow="hidden">
             <BrowserPane state={state} statuses={statuses} height={height} />
-            <MetadataPanel
-                entry={entry}
-                details={details}
-                statuses={statuses}
-            />
+            <MetadataPanel {...details} statuses={statuses} />
         </Box>
     );
 }
@@ -87,8 +79,7 @@ export function App(props: AppProps) {
             <Header statuses={state.statuses} />
             <Workspace
                 state={state.browser}
-                entry={state.hovered}
-                details={state.details}
+                {...state.details}
                 statuses={state.statuses}
                 height={state.listHeight}
             />

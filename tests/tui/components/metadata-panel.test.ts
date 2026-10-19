@@ -22,8 +22,11 @@ const EMPTY_TRACK = {
     sizeBytes: 0,
 };
 
-function renderPanel(props: MetadataPanelProps): string {
-    return render(createElement(MetadataPanel, props)).lastFrame() ?? "";
+function renderPanel(
+    props: Omit<MetadataPanelProps, "loading"> & { loading?: boolean }
+): string {
+    const panel = createElement(MetadataPanel, { loading: false, ...props });
+    return render(panel).lastFrame() ?? "";
 }
 
 test("MetadataPanel shows a loading state", () => {
@@ -34,6 +37,17 @@ test("MetadataPanel shows a loading state", () => {
     });
 
     assert.ok(frame.includes("Loading"));
+});
+
+test("MetadataPanel marks its header while newer details load", () => {
+    const props = {
+        entry: { name: "..", path: "/", kind: "parent" as const },
+        details: { kind: "parent" as const },
+        statuses: new Map(),
+    };
+
+    assert.match(renderPanel({ ...props, loading: true }), /Metadata …/);
+    assert.doesNotMatch(renderPanel({ ...props, loading: false }), /…/);
 });
 
 test("MetadataPanel shows the session status of a file", () => {

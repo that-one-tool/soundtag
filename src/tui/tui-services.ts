@@ -3,6 +3,8 @@ import {
     type MetadataChainConfig,
 } from "../metadata/create-metadata-chain.js";
 import { systemClock } from "../shared/rate-limiter.js";
+import { DetailsCache } from "./details-cache.js";
+import { ReadPacer } from "./read-pacer.js";
 import { LogBuffer } from "./log-buffer.js";
 import { SubfolderSetting } from "./subfolder-setting.js";
 import { createTagJobRunner } from "./tag-job.js";
@@ -19,6 +21,8 @@ export interface TuiServices {
     logBuffer: LogBuffer;
     statusStore: TrackStatusStore;
     subfolders: SubfolderSetting;
+    detailsCache: DetailsCache;
+    readPacer: ReadPacer;
 }
 
 export function createTuiServices(options: TaggingOptions): TuiServices {
@@ -35,5 +39,7 @@ export function createTuiServices(options: TaggingOptions): TuiServices {
         logBuffer,
         statusStore,
         subfolders: new SubfolderSetting(options.recursive),
+        detailsCache: new DetailsCache(),
+        readPacer: new ReadPacer(),
     };
 }

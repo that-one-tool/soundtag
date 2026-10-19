@@ -182,6 +182,7 @@ function renderDetails(
 export interface MetadataPanelProps {
     entry: BrowserEntry | undefined;
     details: EntryDetails | null;
+    loading: boolean;
     statuses: TrackStatuses;
 }
 
@@ -199,6 +200,7 @@ export function MetadataPanel(props: MetadataPanelProps) {
                 <Text bold color={PANE_COLOR.metadata}>
                     Metadata
                 </Text>
+                {props.loading && <Text dimColor> …</Text>}
             </Box>
             {renderDetails(props.details, props.entry, props.statuses)}
         </Box>
