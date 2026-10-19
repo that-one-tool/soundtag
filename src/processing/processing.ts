@@ -4,9 +4,15 @@ import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
 import { inferFolderSearchTerms } from "../library/folder-context.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
-import { getFirstFilled } from "../metadata/track-metadata.js";
+import {
+    getFirstFilled,
+    getNewExtras,
+    hasNewFields,
+} from "../metadata/track-metadata.js";
 import { parseTrackFilename } from "../library/track-name-parser.js";
 import type {
+    ExistingTags,
+    TrackExtras,
     TrackInfo,
     TrackMetadata,
     TrackSearch,
@@ -19,12 +25,22 @@ export interface ProcessingContext {
     logger: Logger;
 }
 
-const OPTIONAL_FIELD_CHECKS: [string, (metadata: TrackMetadata) => boolean][] =
+interface FoundMetadata {
+    metadata: TrackMetadata;
+    hasExistingCover: boolean;
+}
+
+const OPTIONAL_FIELD_CHECKS: [string, (found: FoundMetadata) => boolean][] = [
+    ["album", ({ metadata }) => !metadata.info.album.trim()],
+    ["year", ({ metadata }) => !metadata.info.year.trim()],
+    ["genre", ({ metadata }) => !metadata.extras.genre],
+    ["track number", ({ metadata }) => !metadata.extras.trackNumber],
     [
-        ["album", ({ info }) => !info.album.trim()],
-        ["year", ({ info }) => !info.year.trim()],
-        ["cover art", ({ coverData }) => !coverData],
-    ];
+        "cover art",
+        ({ metadata, hasExistingCover }) =>
+            !hasExistingCover && !metadata.coverData,
+    ],
+];
 
 export function buildTrackSearch(
     source: string,
@@ -64,10 +80,10 @@ function hasTitleAndArtist({ info }: TrackMetadata): boolean {
 
 async function findWritableMetadata(
     search: TrackSearch,
-    existingInfo: TrackInfo,
+    existing: ExistingTags,
     { metadataChain, logger }: ProcessingContext
 ): Promise<TrackMetadata | null> {
-    const metadata = await metadataChain.find(search, existingInfo);
+    const metadata = await metadataChain.find(search, existing);
 
     if (!metadata) {
         logger.info(
@@ -86,9 +102,9 @@ async function findWritableMetadata(
     return metadata;
 }
 
-function logMissingFields(metadata: TrackMetadata, logger: Logger): void {
+function logMissingFields(found: FoundMetadata, logger: Logger): void {
     const missingFields = OPTIONAL_FIELD_CHECKS.filter(([, isMissing]) =>
-        isMissing(metadata)
+        isMissing(found)
     ).map(([label]) => label);
 
     if (missingFields.length > 0) {
@@ -98,21 +114,59 @@ function logMissingFields(metadata: TrackMetadata, logger: Logger): void {
     }
 }
 
+function addsMetadata(
+    existing: ExistingTags,
+    { info, coverData }: TrackMetadata,
+    newExtras: TrackExtras
+): boolean {
+    const hasNewExtras = Object.keys(newExtras).length > 0;
+    return (
+        hasNewFields(existing.info, info) || hasNewExtras || Boolean(coverData)
+    );
+}
+
+function getMetadataToWrite(
+    existing: ExistingTags,
+    metadata: TrackMetadata
+): TrackMetadata | null {
+    const extras = getNewExtras(existing.extras, metadata.extras);
+    return addsMetadata(existing, metadata, extras)
+        ? { ...metadata, extras }
+        : null;
+}
+
 async function tagUntaggedTrack(
     source: string,
-    existingInfo: TrackInfo,
+    existing: ExistingTags,
     context: ProcessingContext
 ): Promise<TrackStatus> {
     const { sourceRoot, logger } = context;
-    const search = buildTrackSearch(source, sourceRoot, existingInfo);
+    const search = buildTrackSearch(source, sourceRoot, existing.info);
     logSearch(search, logger);
-    const metadata = await findWritableMetadata(search, existingInfo, context);
+    const metadata = await findWritableMetadata(search, existing, context);
 
     if (!metadata) {
         return "SKIPPED";
     }
 
-    logMissingFields(metadata, logger);
+    logMissingFields({ metadata, hasExistingCover: existing.hasCover }, logger);
+    return writeNewMetadata(
+        source,
+        getMetadataToWrite(existing, metadata),
+        logger
+    );
+}
+
+async function writeNewMetadata(
+    source: string,
+    metadata: TrackMetadata | null,
+    logger: Logger
+): Promise<TrackStatus> {
+    if (!metadata) {
+        logger.info("No new metadata found. Leaving source unchanged.");
+        return "SKIPPED";
+    }
+
     await getTagStore(source).write(source, metadata);
     logger.info("Successfully tagged source file.");
     return "TAGGED";
@@ -129,7 +183,7 @@ async function tagTrack(
         return "SKIPPED";
     }
 
-    return tagUntaggedTrack(source, storedTags.info, context);
+    return tagUntaggedTrack(source, storedTags, context);
 }
 
 export async function processTrack(

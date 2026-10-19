@@ -45,6 +45,7 @@ test("MetadataPanel shows the session status of a file", () => {
             format: "MP3",
             tags: {
                 info: { title: "", artist: "", album: "", year: "" },
+                extras: {},
                 hasCover: true,
             },
             track: EMPTY_TRACK,
@@ -54,6 +55,7 @@ test("MetadataPanel shows the session status of a file", () => {
     assert.match(frame, /Status\s+SKIPPED/);
     assert.match(frame, /Cover\s+yes/);
     assert.match(frame, /Title\s+—/);
+    assert.ok(!frame.includes("Album artist"));
     assert.ok(frame.indexOf("Status") < frame.indexOf("Title"));
 });
 
@@ -66,6 +68,7 @@ test("MetadataPanel shows the position, genre and audio properties of a file", (
             format: "FLAC",
             tags: {
                 info: { title: "", artist: "", album: "", year: "" },
+                extras: { albumArtist: "AC/DC" },
                 hasCover: false,
             },
             track: {
@@ -85,6 +88,7 @@ test("MetadataPanel shows the position, genre and audio properties of a file", (
 
     assert.match(frame, /Track\s+3\/12 · disc 1\s/);
     assert.match(frame, /Genre\s+Rock/);
+    assert.match(frame, /Album artist\s+AC\/DC/);
     assert.match(frame, /Duration\s+3:45/);
     assert.match(frame, /Audio\s+1411 kbps · 22.05 kHz · stereo/);
     assert.match(frame, /File\s+FLAC · 4.2 MB/);

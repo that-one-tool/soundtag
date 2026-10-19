@@ -1,9 +1,6 @@
-import type { TrackInfo, TrackMetadata } from "../metadata/types.js";
+import type { ExistingTags, TrackMetadata } from "../metadata/types.js";
 
-export interface StoredTags {
-    info: TrackInfo;
-    hasCover: boolean;
-}
+export type StoredTags = ExistingTags;
 
 export interface TagStore {
     read(source: string): Promise<StoredTags>;

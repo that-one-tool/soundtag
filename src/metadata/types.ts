@@ -5,9 +5,25 @@ export interface TrackInfo {
     year: string;
 }
 
+export interface TrackExtras {
+    genre?: string;
+    albumArtist?: string;
+    trackNumber?: number;
+    trackCount?: number;
+    discNumber?: number;
+    discCount?: number;
+}
+
 export interface TrackMetadata {
     info: TrackInfo;
+    extras: TrackExtras;
     coverData: Buffer | null;
+}
+
+export interface ExistingTags {
+    info: TrackInfo;
+    extras: TrackExtras;
+    hasCover: boolean;
 }
 
 export interface TrackSearch {

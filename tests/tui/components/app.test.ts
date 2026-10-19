@@ -33,6 +33,7 @@ async function createLibrary(): Promise<string> {
             album: "Paranoid",
             year: "1970",
         },
+        extras: {},
         coverData: null,
     });
     return directory;
@@ -240,6 +241,7 @@ test("App re-reads the hovered file once it is processed", async () => {
             album: "Paranoid",
             year: "1970",
         },
+        extras: {},
         coverData: null,
     });
     services.statusStore.record({

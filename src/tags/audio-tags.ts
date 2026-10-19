@@ -22,7 +22,11 @@ export function getTagStore(source: string): TagStore {
     return TAG_STORES[format];
 }
 
-export function isProperlyTagged({ info, hasCover }: StoredTags): boolean {
+export function hasCoreTags({ info, hasCover }: StoredTags): boolean {
     const requiredFields = [info.title, info.artist, info.year];
     return hasCover && requiredFields.every((field) => field.trim());
+}
+
+export function isProperlyTagged(tags: StoredTags): boolean {
+    return hasCoreTags(tags) && Boolean(tags.extras.genre);
 }

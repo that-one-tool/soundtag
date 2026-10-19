@@ -7,8 +7,18 @@ import {
 } from "node-taglib-sharp";
 import { writeTemporaryCopy } from "../library/file.js";
 import { getImageMimeType } from "./image-type.js";
-import { TRACK_FIELDS, trimOrEmpty } from "../metadata/track-metadata.js";
-import type { TrackInfo, TrackMetadata } from "../metadata/types.js";
+import {
+    optionalCount,
+    optionalText,
+    removeUnknownValues,
+    TRACK_FIELDS,
+    trimOrEmpty,
+} from "../metadata/track-metadata.js";
+import type {
+    TrackExtras,
+    TrackInfo,
+    TrackMetadata,
+} from "../metadata/types.js";
 import type { StoredTags, TagStore } from "./types.js";
 
 type FieldWriter = (tag: Tag, value: string) => void;
@@ -27,6 +37,29 @@ const FIELD_WRITERS: Record<keyof TrackInfo, FieldWriter> = {
         tag.year = Number.parseInt(value, 10) || 0;
     },
 };
+
+type ExtraWriter = (tag: Tag, extras: TrackExtras) => void;
+
+const EXTRA_WRITERS: readonly ExtraWriter[] = [
+    (tag, { genre }) => {
+        if (genre !== undefined) tag.genres = [genre];
+    },
+    (tag, { albumArtist }) => {
+        if (albumArtist !== undefined) tag.albumArtists = [albumArtist];
+    },
+    (tag, { trackNumber }) => {
+        if (trackNumber !== undefined) tag.track = trackNumber;
+    },
+    (tag, { trackCount }) => {
+        if (trackCount !== undefined) tag.trackCount = trackCount;
+    },
+    (tag, { discNumber }) => {
+        if (discNumber !== undefined) tag.disc = discNumber;
+    },
+    (tag, { discCount }) => {
+        if (discCount !== undefined) tag.discCount = discCount;
+    },
+];
 
 function useTagLibFile<T>(source: string, use: (file: TagLibFile) => T): T {
     const file = TagLibFile.createFromPath(source);
@@ -56,6 +89,23 @@ function readTagLibInfo(tag: Tag): TrackInfo {
     };
 }
 
+function readTagLibExtras(tag: Tag): TrackExtras {
+    return removeUnknownValues({
+        genre: optionalText(tag.firstGenre),
+        albumArtist: optionalText(tag.firstAlbumArtist),
+        trackNumber: optionalCount(tag.track),
+        trackCount: optionalCount(tag.trackCount),
+        discNumber: optionalCount(tag.disc),
+        discCount: optionalCount(tag.discCount),
+    });
+}
+
+function writeKnownExtras(tag: Tag, extras: TrackExtras): void {
+    for (const writeExtra of EXTRA_WRITERS) {
+        writeExtra(tag, extras);
+    }
+}
+
 function writeFilledFields(tag: Tag, info: TrackInfo): void {
     const fields = TRACK_FIELDS.filter((field) => info[field].trim());
 
@@ -75,9 +125,10 @@ function buildCoverPicture(coverData: Buffer): Picture {
 
 function writeTagLibMetadata(
     file: TagLibFile,
-    { info, coverData }: TrackMetadata
+    { info, extras, coverData }: TrackMetadata
 ): void {
     writeFilledFields(file.tag, info);
+    writeKnownExtras(file.tag, extras);
 
     if (coverData) {
         file.tag.pictures = [buildCoverPicture(coverData)];
@@ -90,6 +141,7 @@ export class TagLibTagStore implements TagStore {
     async read(source: string): Promise<StoredTags> {
         return useTagLibFile(source, (file) => ({
             info: readTagLibInfo(file.tag),
+            extras: readTagLibExtras(file.tag),
             hasCover: file.tag.pictures.length > 0,
         }));
     }

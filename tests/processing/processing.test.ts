@@ -59,6 +59,18 @@ test("processTrack writes OGG Vorbis comments and embedded cover art", async () 
             });
         }
 
+        if (url.hostname === "itunes.apple.com") {
+            return Response.json({
+                results: [
+                    {
+                        trackName: "Title",
+                        artistName: "Artist",
+                        primaryGenreName: "Rock",
+                    },
+                ],
+            });
+        }
+
         return new Response(cover, {
             headers: { "content-type": "image/jpeg" },
         });
@@ -263,6 +275,7 @@ test("processTrack skips files that are already properly tagged", async () => {
     await fs.writeFile(source, "audio bytes");
     await getTagStore(source).write(source, {
         info: { title: "Title", artist: "Artist", album: "", year: "2024" },
+        extras: { genre: "Rock" },
         coverData: Buffer.from("cover"),
     });
     globalThis.fetch = async () => {
@@ -408,7 +421,7 @@ test("processTrack logs its search and the metadata it could not find", async ()
     );
     assert.ok(
         output.logs.includes(
-            "Some metadata was unavailable (album, year, cover art); saving the fields that were found."
+            "Some metadata was unavailable (album, year, genre, track number, cover art); saving the fields that were found."
         )
     );
     assert.ok(output.logs.includes("Successfully tagged source file."));
@@ -431,4 +444,130 @@ test("processTrack logs to the context logger", async () => {
     assert.equal(logger.errors.length, 1);
     assert.match(logger.errors[0], /^Processing error: /);
     assert.deepEqual(output.errors, []);
+});
+
+test("processTrack adds a missing genre and keeps the existing tags and cover", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "tagged.mp3");
+    const cover = Buffer.from("existing cover");
+    await fs.writeFile(source, "audio bytes");
+    await getTagStore(source).write(source, {
+        info: {
+            title: "Title",
+            artist: "Artist",
+            album: "Album",
+            year: "2024",
+        },
+        extras: { trackNumber: 2 },
+        coverData: cover,
+    });
+    globalThis.fetch = async (input) =>
+        new URL(input.toString()).hostname === "itunes.apple.com"
+            ? Response.json({
+                  results: [
+                      {
+                          trackName: "Title",
+                          artistName: "Artist",
+                          collectionName: "Album",
+                          primaryGenreName: "Rock",
+                          trackNumber: 7,
+                          artworkUrl100: "https://artwork.test/cover.jpg",
+                      },
+                  ],
+              })
+            : Response.json({ results: { trackmatches: { track: [] } } });
+
+    const status = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: createTestChain(),
+    });
+
+    assert.equal(status, "TAGGED");
+    const tags = await NodeID3.Promise.read(source);
+    assert.equal(tags.title, "Title");
+    assert.equal(tags.genre, "Rock");
+    assert.equal(tags.trackNumber, "2");
+    assert.ok(typeof tags.image === "object");
+    assert.deepEqual(tags.image.imageBuffer, cover);
+    assert.ok(!output.logs.some((line) => line.includes("cover art")));
+    assert.ok(output.logs.includes("Cover: kept"));
+});
+
+test("processTrack keeps every existing genre of a re-tagged FLAC", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "Artist - Title.flac");
+    await fs.copyFile(
+        path.join(process.cwd(), "tests/fixtures/silent.flac"),
+        source
+    );
+    const file = TagLibFile.createFromPath(source);
+    try {
+        file.tag.title = "Title";
+        file.tag.performers = ["Artist"];
+        file.tag.genres = ["Rock", "Pop"];
+        file.save();
+    } finally {
+        file.dispose();
+    }
+    globalThis.fetch = async (input) =>
+        new URL(input.toString()).hostname === "itunes.apple.com"
+            ? Response.json({
+                  results: [
+                      {
+                          trackName: "Title",
+                          artistName: "Artist",
+                          primaryGenreName: "Metal",
+                          releaseDate: "2001-01-01",
+                      },
+                  ],
+              })
+            : Response.json({ results: { trackmatches: { track: [] } } });
+
+    await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: createTestChain(),
+    });
+
+    const tagged = TagLibFile.createFromPath(source);
+    try {
+        assert.deepEqual(tagged.tag.genres, ["Rock", "Pop"]);
+        assert.equal(tagged.tag.year, 2001);
+    } finally {
+        tagged.dispose();
+    }
+});
+
+test("processTrack leaves a file unchanged when the services add nothing new", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "tagged.mp3");
+    await fs.writeFile(source, "audio bytes");
+    await getTagStore(source).write(source, {
+        info: {
+            title: "Title",
+            artist: "Artist",
+            album: "Album",
+            year: "2024",
+        },
+        extras: {},
+        coverData: Buffer.from("cover"),
+    });
+    const before = await fs.readFile(source);
+    globalThis.fetch = async (input) =>
+        new URL(input.toString()).hostname === "itunes.apple.com"
+            ? Response.json({ results: [{ trackName: "Other" }] })
+            : Response.json({ results: { trackmatches: { track: [] } } });
+
+    const status = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: createTestChain(),
+    });
+
+    assert.equal(status, "SKIPPED");
+    assert.deepEqual(await fs.readFile(source), before);
+    assert.ok(
+        output.logs.includes("No new metadata found. Leaving source unchanged.")
+    );
 });

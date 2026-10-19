@@ -4,10 +4,14 @@ import * as path from "node:path";
 import NodeID3 from "node-id3";
 import { File as TagLibFile } from "node-taglib-sharp";
 import { test } from "node:test";
-import { getTagStore, isProperlyTagged } from "../../src/tags/audio-tags.js";
+import {
+    getTagStore,
+    hasCoreTags,
+    isProperlyTagged,
+} from "../../src/tags/audio-tags.js";
 import { Id3TagStore } from "../../src/tags/id3-tag-store.js";
 import { TagLibTagStore } from "../../src/tags/taglib-tag-store.js";
-import type { TrackInfo } from "../../src/metadata/types.js";
+import type { TrackExtras, TrackInfo } from "../../src/metadata/types.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
@@ -19,7 +23,36 @@ async function writeTags(
     info: TrackInfo,
     coverData: Buffer | null
 ): Promise<void> {
-    await getTagStore(source).write(source, { info, coverData });
+    await getTagStore(source).write(source, { info, extras: {}, coverData });
+}
+
+async function writeExtras(source: string, extras: TrackExtras): Promise<void> {
+    await getTagStore(source).write(source, {
+        info: completeInfo,
+        extras,
+        coverData: null,
+    });
+}
+
+async function readExtras(source: string): Promise<TrackExtras> {
+    return (await getTagStore(source).read(source)).extras;
+}
+
+async function copyFixture(format: string): Promise<string> {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, `source.${format}`);
+    await fs.copyFile(
+        path.join(process.cwd(), `tests/fixtures/silent.${format}`),
+        source
+    );
+    return source;
+}
+
+async function createMp3(): Promise<string> {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "source.mp3");
+    await fs.writeFile(source, "audio bytes");
+    return source;
 }
 
 async function readInfo(source: string): Promise<TrackInfo> {
@@ -50,8 +83,12 @@ test("getTagStore picks the store for each supported format", () => {
     );
 });
 
-test("isProperlyTagged requires title, artist, year, and cover art", () => {
-    const tagged = { info: completeInfo, hasCover: true };
+test("isProperlyTagged requires title, artist, year, genre and cover art", () => {
+    const tagged = {
+        info: completeInfo,
+        extras: { genre: "Rock" },
+        hasCover: true,
+    };
 
     assert.equal(isProperlyTagged(tagged), true);
     assert.equal(isProperlyTagged({ ...tagged, hasCover: false }), false);
@@ -70,6 +107,18 @@ test("isProperlyTagged requires title, artist, year, and cover art", () => {
     assert.equal(
         isProperlyTagged({ ...tagged, info: { ...completeInfo, album: "" } }),
         true
+    );
+    assert.equal(isProperlyTagged({ ...tagged, extras: {} }), false);
+});
+
+test("hasCoreTags requires title, artist, year and cover art but no genre", () => {
+    const tagged = { info: completeInfo, extras: {}, hasCover: true };
+
+    assert.equal(hasCoreTags(tagged), true);
+    assert.equal(hasCoreTags({ ...tagged, hasCover: false }), false);
+    assert.equal(
+        hasCoreTags({ ...tagged, info: { ...completeInfo, year: "" } }),
+        false
     );
 });
 
@@ -96,16 +145,11 @@ test("tag stores write MP3 tags that make the file properly tagged", async () =>
     await fs.writeFile(source, "audio bytes");
 
     assert.equal(await isTagged(source), false);
-    await writeTags(
-        source,
-        {
-            title: "Title",
-            artist: "Artist",
-            album: "Album",
-            year: "2024",
-        },
-        Buffer.from("cover image")
-    );
+    await getTagStore(source).write(source, {
+        info: completeInfo,
+        extras: { genre: "Rock" },
+        coverData: Buffer.from("cover image"),
+    });
 
     assert.equal(await isTagged(source), true);
     const tags = await NodeID3.Promise.read(source);
@@ -289,7 +333,6 @@ for (const format of ["flac", "wav"] as const) {
             album: "Existing album",
             year: "2020",
         });
-        assert.equal(await isTagged(source), true);
 
         const file = TagLibFile.createFromPath(source);
         try {
@@ -368,3 +411,72 @@ test("tag stores leave a TagLib year unset when it is not numeric", async () => 
 
     assert.equal((await readInfo(source)).year, "");
 });
+
+const allExtras: TrackExtras = {
+    genre: "Hard Rock",
+    albumArtist: "AC/DC",
+    trackNumber: 6,
+    trackCount: 10,
+    discNumber: 1,
+    discCount: 2,
+};
+
+test("tag stores read no extras from an untagged file", async () => {
+    assert.deepEqual(await readExtras(await createMp3()), {});
+    assert.deepEqual(await readExtras(await copyFixture("flac")), {});
+});
+
+test("tag stores write and read back MP3 extras", async () => {
+    const source = await createMp3();
+
+    await writeExtras(source, allExtras);
+
+    assert.deepEqual(await readExtras(source), allExtras);
+    const tags = await NodeID3.Promise.read(source);
+    assert.equal(tags.trackNumber, "6/10");
+    assert.equal(tags.partOfSet, "1/2");
+    assert.equal(tags.performerInfo, "AC/DC");
+    assert.equal(tags.genre, "Hard Rock");
+});
+
+test("tag stores write MP3 positions without a count", async () => {
+    const source = await createMp3();
+
+    await writeExtras(source, { trackNumber: 6, discCount: 2 });
+
+    const tags = await NodeID3.Promise.read(source);
+    assert.equal(tags.trackNumber, "6");
+    assert.equal(tags.partOfSet, undefined);
+});
+
+test("tag stores ignore unreadable MP3 positions", async () => {
+    const source = await createMp3();
+    assert.equal(
+        NodeID3.write({ trackNumber: "A1", partOfSet: "1/x" }, source),
+        true
+    );
+
+    assert.deepEqual(await readExtras(source), { discNumber: 1 });
+});
+
+for (const format of ["ogg", "flac", "wav"] as const) {
+    test(`tag stores write and read back ${format.toUpperCase()} extras`, async () => {
+        const source = await copyFixture(format);
+
+        await writeExtras(source, allExtras);
+
+        assert.deepEqual(await readExtras(source), allExtras);
+    });
+}
+
+for (const format of ["mp3", "flac"] as const) {
+    test(`tag stores keep existing ${format.toUpperCase()} extras when none are found`, async () => {
+        const source =
+            format === "mp3" ? await createMp3() : await copyFixture(format);
+        await writeExtras(source, allExtras);
+
+        await writeExtras(source, {});
+
+        assert.deepEqual(await readExtras(source), allExtras);
+    });
+}

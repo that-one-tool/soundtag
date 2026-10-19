@@ -5,6 +5,7 @@ import {
 } from "../../src/metadata/create-metadata-chain.js";
 import type { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import type {
+    ExistingTags,
     TrackInfo,
     TrackMetadata,
     TrackSearch,
@@ -16,6 +17,12 @@ export const emptyInfo: TrackInfo = {
     artist: "",
     album: "",
     year: "",
+};
+
+export const emptyTags: ExistingTags = {
+    info: emptyInfo,
+    extras: {},
+    hasCover: false,
 };
 
 export function createTestChain(
@@ -35,6 +42,6 @@ export function findTrackMetadata(
 ): Promise<TrackMetadata | null> {
     return createTestChain(config).find(
         { title: "", artist: "", album: "", ...search },
-        existingInfo
+        { ...emptyTags, info: existingInfo }
     );
 }

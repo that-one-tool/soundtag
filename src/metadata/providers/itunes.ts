@@ -10,9 +10,16 @@ import {
     type Clock,
     type RateLimiter,
 } from "../../shared/rate-limiter.js";
-import { extractYear, valueOrEmpty } from "../track-metadata.js";
+import {
+    extractYear,
+    optionalCount,
+    optionalText,
+    removeUnknownValues,
+    valueOrEmpty,
+} from "../track-metadata.js";
 import type {
     MetadataProvider,
+    TrackExtras,
     TrackInfo,
     TrackMetadata,
     TrackSearch,
@@ -27,6 +34,12 @@ interface ItunesTrack {
     collectionName?: string;
     releaseDate?: string;
     artworkUrl100?: string;
+    primaryGenreName?: string;
+    collectionArtistName?: string;
+    trackNumber?: number;
+    trackCount?: number;
+    discNumber?: number;
+    discCount?: number;
 }
 
 interface ItunesSearchResponse {
@@ -58,6 +71,69 @@ function getItunesTrackInfo(track: ItunesTrack): TrackInfo {
     };
 }
 
+function normalizeAlbum(album: string | undefined): string {
+    return valueOrEmpty(album).trim().toLowerCase();
+}
+
+// Track and disc numbers from another release (compilation, single) would be wrong.
+function isSameRelease(track: ItunesTrack, album: string): boolean {
+    return (
+        !album || normalizeAlbum(track.collectionName) === normalizeAlbum(album)
+    );
+}
+
+// Brackets that name another version (live, karaoke, remix) must still differ.
+const NOISE_BRACKET =
+    /[([][^)\]]*\b(?:remaster|feat|ft\b|explicit|mono|stereo)[^)\]]*[)\]]/g;
+
+function normalizeName(name: string | undefined): string {
+    return valueOrEmpty(name)
+        .toLowerCase()
+        .normalize("NFD")
+        .replaceAll(/\p{M}/gu, "")
+        .replaceAll(NOISE_BRACKET, "")
+        .replaceAll(/[^\p{L}\p{N}]/gu, "");
+}
+
+function isSameName(found: string | undefined, searched: string): boolean {
+    return normalizeName(found) === normalizeName(searched);
+}
+
+// limit=1 can return a karaoke or cover version, whose extras would stick.
+function isSameTrack(track: ItunesTrack, { title, artist }: TrackSearch) {
+    const isSameArtist = !artist || isSameName(track.artistName, artist);
+    return isSameArtist && isSameName(track.trackName, title);
+}
+
+function getReleaseExtras(track: ItunesTrack): TrackExtras {
+    return {
+        albumArtist: optionalText(track.collectionArtistName),
+        trackNumber: optionalCount(track.trackNumber),
+        trackCount: optionalCount(track.trackCount),
+        discNumber: optionalCount(track.discNumber),
+        discCount: optionalCount(track.discCount),
+    };
+}
+
+function getMatchedExtras(
+    track: ItunesTrack,
+    search: TrackSearch
+): TrackExtras {
+    return isSameTrack(track, search)
+        ? getItunesExtras(track, search.album)
+        : {};
+}
+
+function getItunesExtras(track: ItunesTrack, album: string): TrackExtras {
+    const releaseExtras = isSameRelease(track, album)
+        ? getReleaseExtras(track)
+        : {};
+    return removeUnknownValues({
+        genre: optionalText(track.primaryGenreName),
+        ...releaseExtras,
+    });
+}
+
 function downloadArtwork(url: string | undefined): Promise<Buffer | null> {
     return url ? downloadFirstImage([{ url }]) : Promise.resolve(null);
 }
@@ -84,6 +160,7 @@ export class ItunesProvider implements MetadataProvider {
 
         return {
             info: getItunesTrackInfo(track),
+            extras: getMatchedExtras(track, search),
             coverData: needsCover
                 ? await downloadArtwork(track.artworkUrl100)
                 : null,

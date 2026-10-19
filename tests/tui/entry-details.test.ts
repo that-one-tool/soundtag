@@ -22,6 +22,7 @@ test("readEntryDetails reads the stored tags of a file", async () => {
     };
     await getTagStore(source).write(source, {
         info,
+        extras: {},
         coverData: Buffer.from("cover"),
     });
 
@@ -34,7 +35,7 @@ test("readEntryDetails reads the stored tags of a file", async () => {
     assert.deepEqual(details, {
         kind: "file",
         format: "MP3",
-        tags: { info, hasCover: true },
+        tags: { info, extras: {}, hasCover: true },
         track: {
             trackNumber: 0,
             trackCount: 0,

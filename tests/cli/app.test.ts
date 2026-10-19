@@ -52,6 +52,7 @@ test("runApp tags a library and prints a summary", async () => {
             title: "Title",
             artist: "Artist",
             year: "2024",
+            genre: "Rock",
             image: {
                 mime: "image/jpeg",
                 type: { id: 3, name: "front cover" },
@@ -81,6 +82,7 @@ test("runApp keeps file names with --no-rename", async () => {
             title: "Title",
             artist: "Artist",
             year: "2024",
+            genre: "Rock",
             image: {
                 mime: "image/jpeg",
                 type: { id: 3, name: "front cover" },

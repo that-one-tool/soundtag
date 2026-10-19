@@ -46,7 +46,12 @@ MusicBrainz fallback is used when Last.fm misses track metadata or cover
 art; cover images are retrieved from the Cover Art Archive. If metadata is
 still incomplete, SoundTag also searches the iTunes Store using
 [Apple's Search API](https://performance-partners.apple.com/search-api) and
-uses its song details and artwork as a final fallback. iTunes searches are
+uses its song details and artwork as a final fallback. iTunes also provides
+the genre and, when its release matches the track's album (or no album is
+known), the track number, disc number and album artist. These are only taken
+when the iTunes song has the same title and artist. Since only iTunes provides
+them, a track missing its genre or track number is looked up on every
+service. iTunes searches are
 spaced at least three seconds apart to stay within the 20-requests-per-minute
 limit.
 If no provider returns artwork for a track matched by the metadata services,
@@ -162,14 +167,20 @@ unknown placeholders are ignored.
 ## Output
 
 Files are updated in place; no tagged copies are created. A source file is
-skipped as already tagged only when it has a title, artist, year, and embedded
-cover art. If any of these are missing, SoundTag attempts to process the file.
+skipped as already tagged only when it has a title, artist, year, genre, and
+embedded cover art. If any of these are missing, SoundTag attempts to process
+the file, so files tagged before genre support are processed again. An
+embedded cover is kept and never replaced, and a genre, album artist, track or
+disc number already in the file is never rewritten.
 If the services return a title and artist but cannot find optional fields such
-as the album, year, or cover art, SoundTag still writes the fields it found.
+as the album, year, genre, track number, or cover art, SoundTag still writes
+the fields it found.
 Fields that the services did not find are left unchanged if the source file
 already has values for them.
-Because the file is not considered fully tagged until year and cover art are
-present, later runs can retry to fill those gaps. SoundTag gets the year from
+When the services add nothing the file lacks, it is not rewritten and is
+reported as skipped.
+Because the file is not considered fully tagged until year, genre and cover
+art are present, later runs can retry to fill those gaps. SoundTag gets the year from
 Last.fm or, when needed, from the MusicBrainz recording or release date. Each
 file is processed sequentially using a temporary copy before replacement;
 large lossless files therefore need temporary free space comparable to the

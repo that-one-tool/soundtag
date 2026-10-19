@@ -6,8 +6,8 @@ import {
 } from "./track-metadata.js";
 import type {
     CoverProvider,
+    ExistingTags,
     MetadataProvider,
-    TrackInfo,
     TrackMetadata,
     TrackSearch,
 } from "./types.js";
@@ -15,6 +15,31 @@ import type {
 interface ChainState {
     metadata: TrackMetadata;
     matched: boolean;
+    hasExistingCover: boolean;
+}
+
+function getCoverStatus({ metadata, hasExistingCover }: ChainState): string {
+    if (hasExistingCover) {
+        return "kept";
+    }
+
+    return metadata.coverData ? "downloaded" : "unavailable";
+}
+
+function needsCover({ metadata, hasExistingCover }: ChainState): boolean {
+    return !hasExistingCover && !metadata.coverData;
+}
+
+function createInitialState({
+    info,
+    extras,
+    hasCover,
+}: ExistingTags): ChainState {
+    return {
+        metadata: { info: { ...info }, extras: { ...extras }, coverData: null },
+        matched: false,
+        hasExistingCover: hasCover,
+    };
 }
 
 export class MetadataChain {
@@ -26,49 +51,44 @@ export class MetadataChain {
 
     async find(
         search: TrackSearch,
-        existingInfo: TrackInfo
+        existing: ExistingTags
     ): Promise<TrackMetadata | null> {
-        const metadata = await this.collectMetadata(search, existingInfo);
+        const state = await this.collectMetadata(search, existing);
 
-        if (!metadata) {
+        if (!state.matched) {
             return null;
         }
 
-        const completed = await this.addFallbackCover(search, metadata);
-        this.logger.info(
-            `Cover: ${completed.coverData ? "downloaded" : "unavailable"}`
-        );
-        return completed;
+        const completed = await this.addFallbackCover(search, state);
+        this.logger.info(`Cover: ${getCoverStatus(completed)}`);
+        return completed.metadata;
     }
 
     private async collectMetadata(
         search: TrackSearch,
-        existingInfo: TrackInfo
-    ): Promise<TrackMetadata | null> {
-        let state: ChainState = {
-            metadata: { info: { ...existingInfo }, coverData: null },
-            matched: false,
-        };
+        existing: ExistingTags
+    ): Promise<ChainState> {
+        let state = createInitialState(existing);
 
         for (const provider of this.providers) {
             state = await applyProvider(provider, search, state);
         }
 
-        return state.matched ? state.metadata : null;
+        return state;
     }
 
     private async addFallbackCover(
         search: TrackSearch,
-        metadata: TrackMetadata
-    ): Promise<TrackMetadata> {
-        if (metadata.coverData || !this.coverProvider) {
-            return metadata;
+        state: ChainState
+    ): Promise<ChainState> {
+        if (!needsCover(state) || !this.coverProvider) {
+            return state;
         }
 
         const coverData = await this.coverProvider.findCover(
-            buildProviderSearch(search, metadata.info)
+            buildProviderSearch(search, state.metadata.info)
         );
-        return { ...metadata, coverData };
+        return { ...state, metadata: { ...state.metadata, coverData } };
     }
 }
 
@@ -77,20 +97,27 @@ async function applyProvider(
     search: TrackSearch,
     state: ChainState
 ): Promise<ChainState> {
-    if (isComplete(state.metadata)) {
+    if (isComplete(state.metadata, state.hasExistingCover)) {
         return state;
     }
 
     const candidate = await provider.findMetadata(
         buildProviderSearch(search, state.metadata.info),
-        !state.metadata.coverData
+        needsCover(state)
     );
+    return mergeCandidate(state, candidate);
+}
 
+function mergeCandidate(
+    state: ChainState,
+    candidate: TrackMetadata | null
+): ChainState {
     if (!candidate) {
         return state;
     }
 
     return {
+        ...state,
         metadata: mergeMetadata(state.metadata, candidate),
         matched: true,
     };

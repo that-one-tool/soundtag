@@ -8,6 +8,7 @@ import { MusicBrainzProvider } from "../../src/metadata/providers/musicbrainz.js
 import { YouTubeCoverProvider } from "../../src/metadata/providers/youtube.js";
 import { instantClock } from "../helpers/clock.js";
 import { createRecordingLogger } from "../helpers/logger.js";
+import { emptyTags } from "../helpers/metadata-chain.js";
 
 const originalConsoleError = console.error;
 const originalFetch = globalThis.fetch;
@@ -72,7 +73,7 @@ test("createMetadataChain gives the injected logger to the chain and providers",
     try {
         await chain.find(
             { title: "Title", artist: "Artist", album: "" },
-            { title: "", artist: "", album: "", year: "" }
+            emptyTags
         );
     } finally {
         globalThis.fetch = originalFetch;

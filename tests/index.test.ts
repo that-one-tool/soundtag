@@ -129,6 +129,7 @@ test("CLI records a properly tagged file as skipped in the report", async () => 
                 artist: "Artist",
                 album: "Album",
                 year: "2024",
+                genre: "Rock",
                 image: {
                     mime: "image/jpeg",
                     type: { id: 3, name: "front cover" },

@@ -58,6 +58,7 @@ test("processBatch records each file status and logs its position", async () => 
     await fs.writeFile(broken, "not really flac");
     await getTagStore(tagged).write(tagged, {
         info: { title: "Title", artist: "Artist", album: "", year: "2024" },
+        extras: { genre: "Rock" },
         coverData: Buffer.from("cover"),
     });
     const files = [broken, tagged];
@@ -134,6 +135,7 @@ test("processBatch keeps file names when renaming is disabled", async () => {
     await fs.writeFile(tagged, "audio bytes");
     await getTagStore(tagged).write(tagged, {
         info: { title: "Title", artist: "Artist", album: "A", year: "2024" },
+        extras: { genre: "Rock" },
         coverData: Buffer.from("cover"),
     });
     const report = createReport([tagged], directory);
@@ -162,6 +164,7 @@ test("processBatch renames newly tagged files but not tracks that were not found
     );
     await getTagStore(notFound).write(notFound, {
         info: { title: "Track 01", artist: "Unknown", album: "", year: "" },
+        extras: {},
         coverData: null,
     });
     const chain = new MetadataChain(
@@ -176,6 +179,7 @@ test("processBatch renames newly tagged files but not tracks that were not found
                                   album: "Album",
                                   year: "2024",
                               },
+                              extras: {},
                               coverData: Buffer.from("cover"),
                           }
                         : null,
@@ -220,6 +224,7 @@ test("processBatch renames only the first of two files with the same tags", asyn
                 album: "A",
                 year: "2024",
             },
+            extras: {},
             coverData: Buffer.from("cover"),
         });
     }
@@ -272,6 +277,7 @@ test("processBatch announces each processed track with its new path", async () =
     await fs.writeFile(broken, "not really flac");
     await getTagStore(tagged).write(tagged, {
         info: { title: "Title", artist: "Artist", album: "", year: "2024" },
+        extras: { genre: "Rock" },
         coverData: Buffer.from("cover"),
     });
     const files = [broken, tagged];

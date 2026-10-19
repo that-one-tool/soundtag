@@ -266,7 +266,7 @@ export class LastFmProvider implements MetadataProvider {
         const info = getAlbumInfo(matched, album);
         const coverData = needsCover ? await downloadAlbumCover(album) : null;
         logAlbumDetails(info, this.logger);
-        return { info, coverData };
+        return { info, extras: {}, coverData };
     }
 
     private getUrlLogger(): Logger | null {

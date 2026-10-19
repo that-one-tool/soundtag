@@ -145,6 +145,7 @@ export class MusicBrainzProvider implements MetadataProvider {
 
         return {
             info: getRecordingInfo(recording),
+            extras: {},
             coverData: needsCover
                 ? await this.downloadCover(recording.releases)
                 : null,

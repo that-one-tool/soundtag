@@ -4,6 +4,7 @@ import { useEntryDetails } from "../hooks/use-entry-details.js";
 import { useKeyboard } from "../hooks/use-keyboard.js";
 import { useQuit } from "../hooks/use-quit.js";
 import { useStore } from "../hooks/use-store.js";
+import { getLayout } from "../layout.js";
 import { getEntryStatus } from "../track-statuses.js";
 import type { TrackStatusStore } from "../track-status-store.js";
 import type { TuiServices } from "../tui-services.js";
@@ -13,11 +14,6 @@ import { LogPane } from "./log-pane.js";
 import { MetadataPanel, type MetadataPanelProps } from "./metadata-panel.js";
 import { StatusBar } from "./status-bar.js";
 
-const LOG_LINES = 6;
-// Header, log pane borders, status bar, browser borders, title and error line.
-const RESERVED_ROWS = 1 + LOG_LINES + 2 + 1 + 2 + 2;
-const MIN_LIST_HEIGHT = 3;
-
 export interface AppProps {
     startDirectory: string;
     services: TuiServices;
@@ -25,10 +21,7 @@ export interface AppProps {
 
 function useLayout() {
     const { rows } = useWindowSize();
-    return {
-        rows,
-        listHeight: Math.max(rows - RESERVED_ROWS, MIN_LIST_HEIGHT),
-    };
+    return { rows, ...getLayout(rows) };
 }
 
 function useBrowsing(startDirectory: string, statusStore: TrackStatusStore) {
@@ -54,7 +47,8 @@ function useAppState({ startDirectory, services }: AppProps) {
         requestQuit,
         pageSize: layout.listHeight,
     });
-    return { ...layout, ...browsing, queueState, quitting };
+    const { logBuffer } = services;
+    return { ...layout, ...browsing, queueState, quitting, logBuffer };
 }
 
 type WorkspaceProps = BrowserPaneProps & MetadataPanelProps;
@@ -90,7 +84,7 @@ export function App(props: AppProps) {
                 statuses={state.statuses}
                 height={state.listHeight}
             />
-            <LogPane logBuffer={props.services.logBuffer} height={LOG_LINES} />
+            <LogPane logBuffer={state.logBuffer} height={state.logLines} />
             <StatusBar
                 queueState={state.queueState}
                 quitting={state.quitting}

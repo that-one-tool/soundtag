@@ -13,11 +13,12 @@ import {
 } from "../detail-format.js";
 import { ERROR_COLOR, PANE_COLOR, STATUS_COLOR } from "../theme.js";
 import { countFolderStatuses, STATUS_ORDER } from "../track-statuses.js";
+import type { TrackExtras } from "../../metadata/types.js";
 import type { TrackDetails } from "../../tags/types.js";
 import type { BrowserEntry, EntryDetails, TrackStatuses } from "../types.js";
 
-const PANEL_WIDTH = 46;
-const LABEL_WIDTH = 12;
+const PANEL_WIDTH = 47;
+const LABEL_WIDTH = 13;
 
 interface FieldRow {
     label: string;
@@ -66,11 +67,16 @@ function formatAudio(track: TrackDetails): string {
     ]);
 }
 
+function getAlbumArtistRows({ albumArtist }: TrackExtras): FieldRow[] {
+    return albumArtist ? [{ label: "Album artist", value: albumArtist }] : [];
+}
+
 function getTagRows({ tags, track }: FileDetailsData): FieldRow[] {
     return [
         { label: "Title", value: tags.info.title },
         { label: "Artist", value: tags.info.artist },
         { label: "Album", value: tags.info.album },
+        ...getAlbumArtistRows(tags.extras),
         { label: "Year", value: tags.info.year },
         { label: "Track", value: formatTrackAndDisc(track) },
         { label: "Genre", value: track.genre },

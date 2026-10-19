@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import {
     createTestChain,
-    emptyInfo,
+    emptyTags,
     findTrackMetadata,
 } from "../helpers/metadata-chain.js";
 
@@ -78,9 +78,11 @@ test("findTrackMetadata gets track info and downloads medium cover art", async (
             album: "Matched album",
             year: "2024",
         },
+        extras: {},
         coverData: image,
     });
-    assert.equal(requests.length, 3);
+    assert.equal(requests.length, 4);
+    assert.equal(requests[3].hostname, "itunes.apple.com");
     assert.equal(requests[0].searchParams.get("track"), "search query");
     assert.equal(requests[0].searchParams.get("method"), "track.search");
     assert.equal(requests[1].searchParams.get("method"), "track.getInfo");
@@ -245,6 +247,7 @@ test("findTrackMetadata uses MusicBrainz and Cover Art Archive when Last.fm miss
             album: "MusicBrainz Album",
             year: "1997",
         },
+        extras: {},
         coverData: image,
     });
     const musicBrainzRequest = requests.find(
@@ -317,6 +320,7 @@ test("findTrackMetadata falls back to MusicBrainz when Last.fm has no track", as
                 album: "Fallback album",
                 year: "1997",
             },
+            extras: {},
             coverData: image,
         }
     );
@@ -426,13 +430,13 @@ test("MusicBrainz rate limiting does not delay Last.fm requests", async () => {
     });
     const firstTrack = chain.find(
         { title: "First title", artist: "", album: "" },
-        emptyInfo
+        emptyTags
     );
     await firstMusicBrainzRequest;
 
     const secondTrack = chain.find(
         { title: "Second title", artist: "", album: "" },
-        emptyInfo
+        emptyTags
     );
     await secondLastFmInfo;
 
@@ -479,6 +483,7 @@ test("findTrackMetadata leaves Last.fm data intact when MusicBrainz has no resul
                 album: "Album",
                 year: "",
             },
+            extras: {},
             coverData: null,
         }
     );
@@ -526,6 +531,7 @@ test("findTrackMetadata preserves partial Last.fm metadata when MusicBrainz fail
 
     assert.deepEqual(metadata, {
         info: { title: "Title", artist: "Artist", album: "", year: "" },
+        extras: {},
         coverData: null,
     });
     assert.deepEqual(errors, [
@@ -821,6 +827,7 @@ test("findTrackMetadata uses iTunes to fill missing metadata and artwork", async
             album: "iTunes album",
             year: "2023",
         },
+        extras: {},
         coverData: cover,
     });
     const itunesRequest = requests.find(
@@ -955,6 +962,7 @@ test("iTunes fallback does not replace metadata already found by Last.fm", async
             album: "Last.fm album",
             year: "2022",
         },
+        extras: {},
         coverData: null,
     });
     assert.ok(requests.some(({ hostname }) => hostname === "itunes.apple.com"));
@@ -1046,6 +1054,7 @@ test("findTrackMetadata uses a YouTube thumbnail only after provider artwork is 
             album: "Matched album",
             year: "2021",
         },
+        extras: {},
         coverData: thumbnail,
     });
     const youtubeRequest = requests.find(

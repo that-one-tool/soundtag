@@ -7,7 +7,7 @@ import {
 import { buildTrackFilename } from "../library/track-filename.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
-import { getTagStore, isProperlyTagged } from "../tags/audio-tags.js";
+import { getTagStore, hasCoreTags } from "../tags/audio-tags.js";
 import type { StoredTags } from "../tags/types.js";
 import type { TrackStatus } from "./types.js";
 
@@ -25,7 +25,7 @@ const RENAME_CONDITIONS: Partial<
     Record<TrackStatus, (tags: StoredTags) => boolean>
 > = {
     TAGGED: hasArtistAndTitle,
-    SKIPPED: isProperlyTagged,
+    SKIPPED: hasCoreTags,
 };
 
 async function readRenamableTags(

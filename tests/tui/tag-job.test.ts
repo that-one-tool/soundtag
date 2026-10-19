@@ -23,6 +23,7 @@ const foundChain = new MetadataChain(
                     album: "Album",
                     year: "2024",
                 },
+                extras: {},
                 coverData: Buffer.from("cover"),
             }),
         },

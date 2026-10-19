@@ -30,7 +30,11 @@ const thunderstruck = { ...emptyInfo, artist: "AC/DC", title: "Thunderstruck" };
 async function createTaggedMp3(
     directory: string,
     filename: string,
-    metadata: TrackMetadata = { info: thunderstruck, coverData: null }
+    metadata: TrackMetadata = {
+        info: thunderstruck,
+        extras: {},
+        coverData: null,
+    }
 ): Promise<string> {
     const source = path.join(directory, filename);
     await fs.writeFile(source, "audio bytes");
@@ -66,6 +70,7 @@ test("renameTrack leaves a file without artist or title", async () => {
     const directory = await createTemporaryDirectory();
     const source = await createTaggedMp3(directory, "untitled.mp3", {
         info: { ...emptyInfo, title: "Only Title" },
+        extras: {},
         coverData: null,
     });
 
@@ -112,6 +117,7 @@ test("renameTrack renames a skipped file only when it is fully tagged", async ()
     const notFound = await createTaggedMp3(directory, "not-found.mp3");
     const complete = await createTaggedMp3(directory, "complete.mp3", {
         info: { ...emptyInfo, artist: "Artist", title: "Title", year: "2024" },
+        extras: {},
         coverData: Buffer.from("cover"),
     });
 
