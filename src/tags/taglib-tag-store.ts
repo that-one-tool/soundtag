@@ -2,6 +2,7 @@ import {
     ByteVector,
     Picture,
     PictureType,
+    ReadStyle,
     File as TagLibFile,
     type Tag,
 } from "node-taglib-sharp";
@@ -61,8 +62,15 @@ const EXTRA_WRITERS: readonly ExtraWriter[] = [
     },
 ];
 
-function useTagLibFile<T>(source: string, use: (file: TagLibFile) => T): T {
-    const file = TagLibFile.createFromPath(source);
+// Tags need neither the audio properties nor the picture bytes up front.
+const TAGS_ONLY = ReadStyle.None | ReadStyle.PictureLazy;
+
+function useTagLibFile<T>(
+    source: string,
+    use: (file: TagLibFile) => T,
+    readStyle?: ReadStyle
+): T {
+    const file = TagLibFile.createFromPath(source, undefined, readStyle);
 
     try {
         return use(file);
@@ -144,15 +152,23 @@ function writeTagLibMetadata(
 
 export class TagLibTagStore implements TagStore {
     async read(source: string): Promise<StoredTags> {
-        return useTagLibFile(source, (file) => ({
-            info: readTagLibInfo(file.tag),
-            extras: readTagLibExtras(file.tag),
-            hasCover: file.tag.pictures.length > 0,
-        }));
+        return useTagLibFile(
+            source,
+            (file) => ({
+                info: readTagLibInfo(file.tag),
+                extras: readTagLibExtras(file.tag),
+                hasCover: file.tag.pictures.length > 0,
+            }),
+            TAGS_ONLY
+        );
     }
 
     async readCover(source: string): Promise<Buffer | null> {
-        return useTagLibFile(source, ({ tag }) => readFirstPicture(tag));
+        return useTagLibFile(
+            source,
+            ({ tag }) => readFirstPicture(tag),
+            TAGS_ONLY
+        );
     }
 
     async write(source: string, metadata: TrackMetadata): Promise<void> {

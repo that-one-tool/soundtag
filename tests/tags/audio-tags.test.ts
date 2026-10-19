@@ -125,18 +125,30 @@ test("hasCoreTags requires title, artist, year and cover art but no genre", () =
 test("tag stores report whether cover art is embedded", async () => {
     const directory = await createTemporaryDirectory();
     const mp3 = path.join(directory, "cover.mp3");
-    const flac = path.join(directory, "cover.flac");
     await fs.writeFile(mp3, "audio bytes");
-    await fs.copyFile(
-        path.join(process.cwd(), "tests/fixtures/silent.flac"),
-        flac
+    const taglibFiles = await Promise.all(
+        ["flac", "ogg", "wav"].map((format) => copyFixture(format))
     );
 
-    for (const source of [mp3, flac]) {
+    for (const source of [mp3, ...taglibFiles]) {
         assert.equal((await getTagStore(source).read(source)).hasCover, false);
         await writeTags(source, completeInfo, Buffer.from("cover"));
         assert.equal((await getTagStore(source).read(source)).hasCover, true);
     }
+});
+
+test("tag stores read the tags of a FLAC whose audio is truncated", async () => {
+    const source = await copyFixture("flac");
+    await writeTags(source, completeInfo, null);
+    const bytes = await fs.readFile(source);
+    await fs.writeFile(
+        source,
+        bytes.subarray(0, Math.floor(bytes.length * 0.4))
+    );
+
+    const tags = await getTagStore(source).read(source);
+
+    assert.equal(tags.info.title, completeInfo.title);
 });
 
 test("tag stores read back the embedded cover", async () => {

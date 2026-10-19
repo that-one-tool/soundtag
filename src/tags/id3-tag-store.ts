@@ -1,5 +1,6 @@
 import NodeID3 from "node-id3";
 import { writeTemporaryCopy } from "../library/file.js";
+import { readId3TagBytes } from "./id3-tag-reader.js";
 import { getImageMimeType } from "./image-type.js";
 import {
     getFilledFields,
@@ -88,7 +89,7 @@ function updateId3Tags(tags: NodeID3.Tags, source: string): void {
 
 export class Id3TagStore implements TagStore {
     async read(source: string): Promise<StoredTags> {
-        const tags = await NodeID3.Promise.read(source);
+        const tags = NodeID3.read(await readId3TagBytes(source));
 
         return {
             info: {
@@ -103,7 +104,7 @@ export class Id3TagStore implements TagStore {
     }
 
     async readCover(source: string): Promise<Buffer | null> {
-        const { image } = await NodeID3.Promise.read(source);
+        const { image } = NodeID3.read(await readId3TagBytes(source));
         return typeof image === "object" ? image.imageBuffer : null;
     }
 
