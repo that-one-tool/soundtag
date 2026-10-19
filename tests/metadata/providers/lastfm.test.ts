@@ -69,7 +69,7 @@ test("LastFmProvider spaces its API requests but not its cover download", async 
     mockLastFmMatchWithCover(requestedHosts);
     const clock = createFakeClock();
 
-    await createLastFm({ clock }).findMetadata(search, true);
+    await createLastFm({ clock }).findMetadata({ ...search, artist: "" }, true);
 
     assert.ok(requestedHosts.includes("images.test"));
     assert.deepEqual(clock.sleeps, [2000]);
@@ -121,6 +121,7 @@ test("LastFmProvider reads the first match from a result list with a plain artis
         album: "Album",
         year: "1999",
     });
+    assert.equal(requests[0].searchParams.get("method"), "track.search");
     assert.equal(requests[0].searchParams.has("artist"), false);
     assert.equal(requests[1].searchParams.get("track"), "Song");
     assert.equal(requests[1].searchParams.get("autocorrect"), "1");
@@ -185,7 +186,150 @@ test("LastFmProvider logs to the injected logger", async () => {
     assert.deepEqual(logger.errors, [
         "Last.fm search failed: Last.fm request failed: HTTP 500",
     ]);
-    assert.deepEqual(logger.infos, ["Album: ", "Year: "]);
+    assert.deepEqual(logger.infos, [
+        "Last.fm track.getInfo URL: https://ws.audioscrobbler.com/2.0/?method=track.getInfo&artist=Artist&track=Title&api_key=%5BREDACTED%5D&format=json&autocorrect=1",
+        "Album: ",
+        "Year: ",
+    ]);
     assert.deepEqual(output.logs, []);
     assert.deepEqual(output.errors, []);
+});
+
+function mockTrackInfo(requests: URL[], track: object): void {
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+        requests.push(url);
+
+        if (url.searchParams.get("method") === "track.search") {
+            return Response.json({
+                results: {
+                    trackmatches: { track: { name: "Found", artist: "Band" } },
+                },
+            });
+        }
+
+        return Response.json({ track });
+    };
+}
+
+test("LastFmProvider asks track.getInfo directly when the artist is known", async () => {
+    const requests: URL[] = [];
+    mockTrackInfo(requests, {
+        name: "Corrected Title",
+        artist: { name: "Corrected Artist" },
+        album: { title: "Album", year: "2001" },
+    });
+
+    const metadata = await createLastFm().findMetadata(search, false);
+
+    assert.deepEqual(metadata?.info, {
+        title: "Corrected Title",
+        artist: "Corrected Artist",
+        album: "Album",
+        year: "2001",
+    });
+    assert.deepEqual(
+        requests.map((url) => url.searchParams.get("method")),
+        ["track.getInfo"]
+    );
+    assert.equal(requests[0].searchParams.get("artist"), "Artist");
+    assert.equal(requests[0].searchParams.get("track"), "Title");
+});
+
+test("LastFmProvider falls back to track.search when the direct lookup finds no track", async () => {
+    const requests: URL[] = [];
+    mockTrackInfo(requests, { album: { title: "Album" } });
+
+    const metadata = await createLastFm().findMetadata(search, false);
+
+    assert.deepEqual(metadata?.info, {
+        title: "Found",
+        artist: "Band",
+        album: "Album",
+        year: "",
+    });
+    assert.deepEqual(
+        requests.map((url) => url.searchParams.get("method")),
+        ["track.getInfo", "track.search", "track.getInfo"]
+    );
+});
+
+test("LastFmProvider strips a repeated artist from the title it asks directly", async () => {
+    const requests: URL[] = [];
+    mockTrackInfo(requests, { name: "Title", album: { title: "Album" } });
+
+    await createLastFm().findMetadata(
+        { ...search, title: "Artist - Title" },
+        false
+    );
+
+    assert.equal(requests[0].searchParams.get("track"), "Title");
+});
+
+test("LastFmProvider falls back to track.search when the direct hit has no album", async () => {
+    const requests: URL[] = [];
+    mockTrackInfo(requests, { name: "Title", artist: { name: "Artist" } });
+
+    await createLastFm().findMetadata(search, false);
+
+    assert.deepEqual(
+        requests.map((url) => url.searchParams.get("method")),
+        ["track.getInfo", "track.search", "track.getInfo"]
+    );
+});
+
+test("LastFmProvider does not ask track.getInfo twice for the same track", async () => {
+    const requests: URL[] = [];
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+        requests.push(url);
+        return url.searchParams.get("method") === "track.search"
+            ? Response.json({
+                  results: {
+                      trackmatches: {
+                          track: { name: "Title", artist: "Artist" },
+                      },
+                  },
+              })
+            : Response.json({ track: { name: "Title" } });
+    };
+
+    const metadata = await createLastFm().findMetadata(search, false);
+
+    assert.equal(metadata?.info.title, "Title");
+    assert.deepEqual(
+        requests.map((url) => url.searchParams.get("method")),
+        ["track.getInfo", "track.search"]
+    );
+});
+
+test("LastFmProvider falls back silently and spaced when the direct lookup fails", async () => {
+    const logger = createRecordingLogger();
+    const clock = createFakeClock();
+    let infoCalls = 0;
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+
+        if (url.searchParams.get("method") === "track.search") {
+            return Response.json({
+                results: {
+                    trackmatches: { track: { name: "Found", artist: "Band" } },
+                },
+            });
+        }
+
+        infoCalls += 1;
+        return infoCalls === 1
+            ? new Response(null, { status: 500 })
+            : Response.json({ track: { album: { title: "Album" } } });
+    };
+
+    const metadata = await createLastFm({ clock, logger }).findMetadata(
+        search,
+        false
+    );
+
+    assert.equal(metadata?.info.album, "Album");
+    assert.deepEqual(logger.errors, []);
+    assert.deepEqual(clock.sleeps, [2000, 2000]);
 });

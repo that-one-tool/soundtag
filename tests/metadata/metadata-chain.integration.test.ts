@@ -176,11 +176,18 @@ test("findTrackMetadata constrains the search by artist and removes a repeated a
 
     await findTrackMetadata({ title: "Tubthumping", artist: "Chumbawamba" });
 
-    assert.equal(requests[0].searchParams.get("track"), "Tubthumping");
-    assert.equal(requests[0].searchParams.get("artist"), "Chumbawamba");
-    assert.equal(requests[1].searchParams.get("method"), "track.getInfo");
-    assert.equal(requests[1].searchParams.get("artist"), "Chumbawamba");
-    assert.equal(requests[1].searchParams.get("track"), "Tubthumping");
+    const [infoRequest, searchRequest] = requests;
+    assert.equal(infoRequest.searchParams.get("method"), "track.getInfo");
+    assert.equal(infoRequest.searchParams.get("artist"), "Chumbawamba");
+    assert.equal(infoRequest.searchParams.get("track"), "Tubthumping");
+    assert.equal(searchRequest.searchParams.get("method"), "track.search");
+    assert.equal(searchRequest.searchParams.get("track"), "Tubthumping");
+    assert.equal(searchRequest.searchParams.get("artist"), "Chumbawamba");
+    assert.equal(
+        requests.filter((url) => url.hostname === "ws.audioscrobbler.com")
+            .length,
+        2
+    );
 });
 
 test("findTrackMetadata uses MusicBrainz and Cover Art Archive when Last.fm misses data", async () => {

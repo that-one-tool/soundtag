@@ -59,6 +59,20 @@ interface LastFmInfoResponse {
     track?: LastFmTrack;
 }
 
+type MatchedTrack = Pick<TrackInfo, "title" | "artist">;
+
+interface DirectLookup {
+    asked: MatchedTrack | null;
+    track: LastFmTrack | null;
+}
+
+const NO_DIRECT_LOOKUP: DirectLookup = { asked: null, track: null };
+
+interface LastFmMatch {
+    matched: MatchedTrack;
+    album?: LastFmAlbum;
+}
+
 interface CoverImage {
     size: "large" | "medium" | "small";
     url: string;
@@ -120,7 +134,7 @@ function getFirstMatch(data: LastFmSearchResponse): LastFmTrack | null {
 }
 
 function buildTrackInfoParams(
-    { artist, title }: Pick<TrackInfo, "title" | "artist">,
+    { artist, title }: MatchedTrack,
     apiKey: string
 ): Record<string, string> {
     return {
@@ -180,7 +194,7 @@ function getCoverImageRequests(images: CoverImage[]): ImageRequest[] {
 function getMatchedTrack(
     match: LastFmTrack,
     search: TrackSearch
-): Pick<TrackInfo, "title" | "artist"> {
+): MatchedTrack {
     const artist = getArtistName(match.artist) || search.artist;
     return {
         artist,
@@ -188,12 +202,32 @@ function getMatchedTrack(
     };
 }
 
+// A scrobbled variant without an album is a worse match than what search finds.
+function isAlbumTrack(track: LastFmTrack): boolean {
+    return Boolean(track.name && track.album?.title);
+}
+
+function getAlbumTrackMatch(
+    { track }: DirectLookup,
+    search: TrackSearch
+): LastFmMatch | null {
+    if (!track || !isAlbumTrack(track)) {
+        return null;
+    }
+
+    return { matched: getMatchedTrack(track, search), album: track.album };
+}
+
+function isSameTrack(asked: MatchedTrack | null, matched: MatchedTrack) {
+    return asked?.title === matched.title && asked.artist === matched.artist;
+}
+
 function getAlbumYear(album: LastFmAlbum): string {
     return album.year ?? extractYear(album.date);
 }
 
 function getAlbumInfo(
-    matched: Pick<TrackInfo, "title" | "artist">,
+    matched: MatchedTrack,
     album: LastFmAlbum = {}
 ): TrackInfo {
     return {
@@ -212,10 +246,7 @@ function downloadAlbumCover(
     );
 }
 
-function logMatch(
-    { title, artist }: Pick<TrackInfo, "title" | "artist">,
-    logger: Logger
-): void {
+function logMatch({ title, artist }: MatchedTrack, logger: Logger): void {
     logger.info(`Match: ${artist} - ${title}`);
     logger.info(`Artist: ${artist}`);
     logger.info(`Title: ${title}`);
@@ -247,26 +278,67 @@ export class LastFmProvider implements MetadataProvider {
         search: TrackSearch,
         needsCover: boolean
     ): Promise<TrackMetadata | null> {
-        const match = await this.searchTrack(search);
+        const match = await this.findMatch(search);
 
         if (!match) {
             logAlbumDetails({ album: "", year: "" }, this.services.logger);
             return null;
         }
 
-        return this.getMatchMetadata(
-            getMatchedTrack(match, search),
-            needsCover
+        return this.getMatchMetadata(match, needsCover);
+    }
+
+    private async findMatch(search: TrackSearch): Promise<LastFmMatch | null> {
+        const direct = await this.lookUpDirectly(search);
+        return (
+            getAlbumTrackMatch(direct, search) ??
+            this.searchThenGetInfo(search, direct)
         );
     }
 
+    // Saves the track.search request, which halves the Last.fm time per track.
+    private async lookUpDirectly(search: TrackSearch): Promise<DirectLookup> {
+        if (!search.artist) {
+            return NO_DIRECT_LOOKUP;
+        }
+
+        const asked = {
+            artist: search.artist,
+            title: removeArtistPrefix(search.title, search.artist),
+        };
+        const track = await this.requestTrackInfo(asked).catch(() => null);
+        return { asked, track };
+    }
+
+    private async searchThenGetInfo(
+        search: TrackSearch,
+        direct: DirectLookup
+    ): Promise<LastFmMatch | null> {
+        const match = await this.searchTrack(search);
+
+        if (!match) {
+            return null;
+        }
+
+        const matched = getMatchedTrack(match, search);
+        const track = await this.getTrackInfoOnce(matched, direct);
+        return { matched, album: track?.album };
+    }
+
+    private getTrackInfoOnce(
+        matched: MatchedTrack,
+        direct: DirectLookup
+    ): Promise<LastFmTrack | null> {
+        return isSameTrack(direct.asked, matched)
+            ? Promise.resolve(direct.track)
+            : this.getTrackInfo(matched);
+    }
+
     private async getMatchMetadata(
-        matched: Pick<TrackInfo, "title" | "artist">,
+        { matched, album }: LastFmMatch,
         needsCover: boolean
     ): Promise<TrackMetadata> {
         logMatch(matched, this.services.logger);
-        const track = await this.getTrackInfo(matched);
-        const album = track?.album;
         const info = getAlbumInfo(matched, album);
         const coverData = needsCover
             ? await downloadAlbumCover(this.services.images, album)
@@ -304,15 +376,21 @@ export class LastFmProvider implements MetadataProvider {
         }
     }
 
+    private async requestTrackInfo(
+        matched: MatchedTrack
+    ): Promise<LastFmTrack | null> {
+        const data = await this.request<LastFmInfoResponse>(
+            buildTrackInfoParams(matched, this.settings.apiKey),
+            this.getUrlLogger()
+        );
+        return data.track ?? null;
+    }
+
     private async getTrackInfo(
-        matched: Pick<TrackInfo, "title" | "artist">
+        matched: MatchedTrack
     ): Promise<LastFmTrack | null> {
         try {
-            const data = await this.request<LastFmInfoResponse>(
-                buildTrackInfoParams(matched, this.settings.apiKey),
-                this.getUrlLogger()
-            );
-            return data.track ?? null;
+            return await this.requestTrackInfo(matched);
         } catch (error) {
             this.services.logger.error(
                 `Could not retrieve track information: ${getErrorMessage(error)}`
