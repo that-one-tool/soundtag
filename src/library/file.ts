@@ -35,8 +35,12 @@ function isHidden(entry: Dirent): boolean {
     return entry.name.startsWith(".");
 }
 
+function isVisibleDirectory(entry: Dirent): boolean {
+    return entry.isDirectory() && !isHidden(entry);
+}
+
 function isWalkableDirectory(entry: Dirent, search: AudioFileSearch): boolean {
-    return search.recursive && entry.isDirectory() && !isHidden(entry);
+    return search.recursive && isVisibleDirectory(entry);
 }
 
 function isVisibleFile(entry: Dirent): boolean {
@@ -86,6 +90,28 @@ export async function findAudioFiles(
     return search.files.toSorted((first, second) =>
         first.localeCompare(second)
     );
+}
+
+async function isVisibleFolderOrLink(
+    entry: Dirent,
+    directory: string
+): Promise<boolean> {
+    if (!entry.isSymbolicLink()) {
+        return isVisibleDirectory(entry);
+    }
+
+    return !isHidden(entry) && isDirectory(path.join(directory, entry.name));
+}
+
+export async function listSubfolders(directory: string): Promise<string[]> {
+    const entries = await fs.readdir(directory, { withFileTypes: true });
+    const folderFlags = await Promise.all(
+        entries.map((entry) => isVisibleFolderOrLink(entry, directory))
+    );
+    return entries
+        .filter((_entry, index) => folderFlags[index])
+        .map((entry) => entry.name)
+        .toSorted((first, second) => first.localeCompare(second));
 }
 
 export async function writeTemporaryCopy(

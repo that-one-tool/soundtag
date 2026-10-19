@@ -6,58 +6,90 @@ import { EXIT_INTERRUPTED } from "./exit-codes.js";
 
 export interface TerminalSession {
     ask: Ask;
-    stopSignal: AbortSignal;
+    renewStopSignal(): AbortSignal;
     close(): void;
 }
 
-function createStopRequester(stopRequested: AbortController): () => void {
+interface TerminalStreams {
+    input: NodeJS.ReadableStream;
+    output: NodeJS.WritableStream;
+}
+
+interface StopRequest {
+    controller: AbortController;
+    prompting: boolean;
+}
+
+function getStopMessage({ prompting }: StopRequest): string {
+    return prompting
+        ? "\nInterrupted."
+        : "\nInterrupted. Press Ctrl+C again to quit immediately.";
+}
+
+function createStopRequester(stopRequest: StopRequest): () => void {
     return () => {
-        if (stopRequested.signal.aborted) {
+        if (stopRequest.controller.signal.aborted) {
             process.exit(EXIT_INTERRUPTED);
         }
 
-        console.log("\nInterrupted. Press Ctrl+C again to quit immediately.");
-        stopRequested.abort();
+        console.log(getStopMessage(stopRequest));
+        stopRequest.controller.abort();
     };
 }
 
 function createAsk(
     terminal: readline.Interface,
-    cancelSignal: AbortSignal
+    inputClosed: AbortSignal,
+    stopRequest: StopRequest
 ): Ask {
     return async (question) => {
+        const cancelSignal = AbortSignal.any([
+            inputClosed,
+            stopRequest.controller.signal,
+        ]);
+
+        stopRequest.prompting = true;
+
         try {
             return await terminal.question(question, { signal: cancelSignal });
         } catch (error) {
             throw new InputCancelledError({ cause: error });
+        } finally {
+            stopRequest.prompting = false;
         }
     };
 }
 
+function renewStopSignal(stopRequest: StopRequest): AbortSignal {
+    stopRequest.controller = new AbortController();
+    return stopRequest.controller.signal;
+}
+
 function listenForStopRequests(
     terminal: readline.Interface,
-    stopRequested: AbortController
+    stopRequest: StopRequest
 ): () => void {
-    const requestStop = createStopRequester(stopRequested);
+    const requestStop = createStopRequester(stopRequest);
     terminal.on("SIGINT", requestStop);
     process.on("SIGINT", requestStop);
     return () => process.off("SIGINT", requestStop);
 }
 
-export function openTerminalSession(): TerminalSession {
-    const terminal = readline.createInterface({ input, output });
+export function openTerminalSession(
+    streams: TerminalStreams = { input, output }
+): TerminalSession {
+    const terminal = readline.createInterface(streams);
     const inputClosed = new AbortController();
-    const stopRequested = new AbortController();
+    const stopRequest: StopRequest = {
+        controller: new AbortController(),
+        prompting: false,
+    };
     terminal.once("close", () => inputClosed.abort());
-    const stopListening = listenForStopRequests(terminal, stopRequested);
-    const cancelSignal = AbortSignal.any([
-        inputClosed.signal,
-        stopRequested.signal,
-    ]);
+    const stopListening = listenForStopRequests(terminal, stopRequest);
 
     return {
-        ask: createAsk(terminal, cancelSignal),
-        stopSignal: stopRequested.signal,
+        ask: createAsk(terminal, inputClosed.signal, stopRequest),
+        renewStopSignal: () => renewStopSignal(stopRequest),
         close: () => {
             stopListening();
             terminal.close();

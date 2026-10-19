@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { parseArguments } from "./cli-options.js";
 import { isDirectory } from "../library/file.js";
-import type { AppConfig } from "./types.js";
+import type { SessionConfig } from "./types.js";
 
 export type Ask = (question: string) => Promise<string>;
 
@@ -26,19 +26,6 @@ async function resolveRequiredValue(
     return resolved;
 }
 
-async function resolveSourceRoot(
-    sourceInput: string,
-    workingDirectory: string
-): Promise<string> {
-    const sourceRoot = path.resolve(workingDirectory, sourceInput);
-
-    if (!(await isDirectory(sourceRoot))) {
-        throw new Error("The source folder does not exist.");
-    }
-
-    return sourceRoot;
-}
-
 function resolveApiKey({ env, ask }: ConfigSources): Promise<string> {
     return resolveRequiredValue(
         env.LASTFM_API_KEY,
@@ -47,34 +34,38 @@ function resolveApiKey({ env, ask }: ConfigSources): Promise<string> {
     );
 }
 
-function resolveSourceInput(
-    sourcePath: string | undefined,
-    ask: Ask
+export async function resolveSourceRoot(
+    sourceInput: string,
+    workingDirectory: string
 ): Promise<string> {
-    return resolveRequiredValue(
-        sourcePath,
-        () => ask("Enter the source folder path: "),
-        "A source folder is required."
-    );
+    const trimmedInput = sourceInput.trim();
+
+    if (!trimmedInput) {
+        throw new Error("A source folder is required.");
+    }
+
+    const sourceRoot = path.resolve(workingDirectory, trimmedInput);
+
+    if (!(await isDirectory(sourceRoot))) {
+        throw new Error("The source folder does not exist.");
+    }
+
+    return sourceRoot;
 }
 
-export async function loadConfig(sources: ConfigSources): Promise<AppConfig> {
+export async function loadSessionConfig(
+    sources: ConfigSources
+): Promise<SessionConfig> {
     const options = parseArguments(sources.argv);
-    const lastFmApiKey = await resolveApiKey(sources);
-    const sourceInput = await resolveSourceInput(
-        options.sourcePath,
-        sources.ask
-    );
 
     return {
-        lastFmApiKey,
-        sourceRoot: await resolveSourceRoot(
-            sourceInput,
-            sources.workingDirectory
-        ),
-        recursive: options.recursive,
-        verbose: options.verbose,
-        musicBrainzUserAgent: sources.env.MUSICBRAINZ_USER_AGENT,
-        youtubeApiKey: sources.env.YOUTUBE_API_KEY,
+        sourcePath: options.sourcePath,
+        settings: {
+            lastFmApiKey: await resolveApiKey(sources),
+            recursive: options.recursive,
+            verbose: options.verbose,
+            musicBrainzUserAgent: sources.env.MUSICBRAINZ_USER_AGENT,
+            youtubeApiKey: sources.env.YOUTUBE_API_KEY,
+        },
     };
 }

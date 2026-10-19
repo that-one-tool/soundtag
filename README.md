@@ -58,8 +58,13 @@ Run SoundTag with a source folder:
 npm start -- /path/to/music
 ```
 
-If no source folder is supplied, SoundTag prompts for one. Paths containing
-spaces should be quoted.
+Paths containing spaces should be quoted.
+
+If no source folder is supplied, SoundTag opens a folder browser in the current
+directory. Type a number to open a subfolder, `0` to go up, `s` to process the
+folder shown, or `q` to quit. After each run the browser reopens on the
+processed folder. Symlinked folders are listed too. The browser needs an
+interactive terminal; for scripted runs, pass the source folder as an argument.
 
 By default, SoundTag scans subfolders. Use `--no-recursive` to scan only the
 source folder itself:
@@ -81,9 +86,15 @@ FLAC files use their supported native tags and picture metadata, and MP3 files
 use ID3 tags. WAV metadata is written through TagLib's RIFF/ID3 support;
 embedded artwork compatibility can vary between players.
 
-Press Ctrl+C to stop a run: SoundTag finishes the file it is working on, writes
-the report (unprocessed files stay `READ`), and exits with code 130. Press
-Ctrl+C a second time to quit immediately without writing the report.
+Press Ctrl+C to stop a run: SoundTag finishes the file it is working on and
+writes the report (unprocessed files stay `READ`). With a source folder
+argument it then exits with code 130; in the folder browser it returns to the
+browser instead. Press Ctrl+C a second time during a run to quit immediately
+without writing the report. Ctrl+C at a prompt exits with code 130.
+
+When you leave the folder browser with `q` or when input ends, SoundTag exits
+with code 1 if any run failed, otherwise 0. Stopped runs do not count as
+failures.
 
 Pass `-v` or `--verbose` to log the Last.fm `track.getInfo` request URL:
 

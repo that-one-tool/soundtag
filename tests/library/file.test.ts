@@ -7,6 +7,7 @@ import {
     findAudioFiles,
     getAudioFormat,
     isDirectory,
+    listSubfolders,
     writeTemporaryCopy,
 } from "../../src/library/file.js";
 
@@ -31,6 +32,38 @@ test("isDirectory recognizes directories and missing paths", async () => {
         await isDirectory(path.join(temporaryDirectory, "missing")),
         false
     );
+});
+
+test("listSubfolders returns visible subfolder names sorted", async () => {
+    await fs.mkdir(path.join(temporaryDirectory, "Beta"));
+    await fs.mkdir(path.join(temporaryDirectory, "Alpha"));
+    await fs.mkdir(path.join(temporaryDirectory, ".hidden"));
+    await fs.writeFile(path.join(temporaryDirectory, "song.mp3"), "audio");
+
+    assert.deepEqual(await listSubfolders(temporaryDirectory), [
+        "Alpha",
+        "Beta",
+    ]);
+});
+
+test("listSubfolders includes symlinks to folders but not to files", async () => {
+    const target = path.join(temporaryDirectory, "Target");
+    await fs.mkdir(target);
+    await fs.writeFile(path.join(temporaryDirectory, "song.mp3"), "audio");
+    await fs.symlink(target, path.join(temporaryDirectory, "Linked"));
+    await fs.symlink(
+        path.join(temporaryDirectory, "song.mp3"),
+        path.join(temporaryDirectory, "file-link")
+    );
+    await fs.symlink(
+        path.join(temporaryDirectory, "missing"),
+        path.join(temporaryDirectory, "broken-link")
+    );
+
+    assert.deepEqual(await listSubfolders(temporaryDirectory), [
+        "Linked",
+        "Target",
+    ]);
 });
 
 test("getAudioFormat recognizes supported extensions case-insensitively", () => {

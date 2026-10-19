@@ -203,7 +203,7 @@ test("CLI warns at startup when MusicBrainz is not configured", async () => {
     );
 });
 
-test("CLI prompts for the API key and source folder when not provided", async () => {
+test("CLI prompts for the API key and browses folders when not provided", async () => {
     const workingDirectory = await createTemporaryDirectory();
     const sourceDirectory = path.join(workingDirectory, "source");
     await fs.mkdir(sourceDirectory);
@@ -213,13 +213,14 @@ test("CLI prompts for the API key and source folder when not provided", async ()
             LASTFM_API_KEY: undefined,
             MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
         },
-        answers: ["prompted-key", sourceDirectory],
+        answers: ["prompted-key", "1", "s", "q"],
     });
 
     assert.equal(exitCode, 0);
     assert.equal(stderr, "");
     assert.match(stdout, /Enter your Last\.fm API key: /);
-    assert.match(stdout, /Enter the source folder path: /);
+    assert.match(stdout, /1\) source\n/);
+    assert.match(stdout, /Choose a folder: /);
     assert.match(
         stdout,
         /No supported audio files found in the source folder\./
@@ -255,9 +256,34 @@ test("CLI stops with exit code 130 when interrupted at a prompt", async () => {
 
     assert.equal(exitCode, 130);
     assert.equal(stderr, "");
-    assert.match(
-        stdout,
-        /Interrupted\. Press Ctrl\+C again to quit immediately\./
-    );
+    assert.match(stdout, /Interrupted\./);
+    assert.doesNotMatch(stdout, /Press Ctrl\+C again/);
     assert.match(stdout, /Processing report written to /);
+});
+
+test("CLI stops with exit code 130 when interrupted at the folder browser", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+
+    const { exitCode, stderr } = await runCli(workingDirectory, [], {
+        answers: [INTERRUPT],
+    });
+
+    assert.equal(exitCode, 130);
+    assert.equal(stderr, "");
+    await assert.rejects(
+        fs.access(path.join(workingDirectory, "soundtag_output.json"))
+    );
+});
+
+test("CLI quits the folder browser when input ends", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+
+    const { exitCode, stdout, stderr } = await runCli(workingDirectory, []);
+
+    assert.equal(exitCode, 0);
+    assert.equal(stderr, "");
+    assert.match(stdout, /Choose a folder: /);
+    await assert.rejects(
+        fs.access(path.join(workingDirectory, "soundtag_output.json"))
+    );
 });

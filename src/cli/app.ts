@@ -5,34 +5,51 @@ import {
     createReport,
     processBatch,
 } from "../processing/batch.js";
-import { loadConfig, type ConfigSources } from "./config.js";
+import {
+    loadSessionConfig,
+    resolveSourceRoot,
+    type ConfigSources,
+} from "./config.js";
+import { browseFolder } from "./folder-browser.js";
 import { createMetadataChain } from "../metadata/create-metadata-chain.js";
+import type { MetadataChain } from "../metadata/metadata-chain.js";
 import { getErrorMessage, InputCancelledError } from "../shared/errors.js";
 import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_SUCCESS } from "./exit-codes.js";
 import { findAudioFiles } from "../library/file.js";
 import type { ProcessingReport, ProcessingStats } from "../processing/types.js";
-import type { AppConfig } from "./types.js";
+import type { AppConfig, TaggingSettings } from "./types.js";
 
 const MAX_FILES_PER_RUN = 3000;
 const REPORT_FILENAME = "soundtag_output.json";
 const SEPARATOR = "========================================";
 
 export interface AppEnvironment extends ConfigSources {
-    stopSignal: AbortSignal;
+    renewStopSignal: () => AbortSignal;
 }
 
 interface TaggingRun {
     reportPath: string;
     report: ProcessingReport;
     stopSignal: AbortSignal;
+    interruptedExitCode: number;
 }
+
+interface TaggingSession {
+    settings: TaggingSettings;
+    metadataChain: MetadataChain;
+    environment: AppEnvironment;
+}
+
+type SourceRootResolver = () => Promise<string>;
+
+type FolderPick = { sourceRoot: string } | { exitCode: number };
 
 function printBanner(): void {
     console.log(SEPARATOR);
     console.log("                SOUNDTAG");
     console.log(`${SEPARATOR}\n`);
     console.log(
-        "Usage: npm start -- <source-folder> [--recursive | --no-recursive] [-v | --verbose]"
+        "Usage: npm start -- [source-folder] [--recursive | --no-recursive] [-v | --verbose]"
     );
 }
 
@@ -62,8 +79,28 @@ function findLibraryFiles({
     return findAudioFiles(sourceRoot, recursive, MAX_FILES_PER_RUN);
 }
 
-async function tagLibrary(config: AppConfig, run: TaggingRun): Promise<void> {
-    const metadataChain = createMetadataChain(config);
+function printProcessingStart(fileCount: number): void {
+    console.log(`Processing ${fileCount} audio files. Starting tagging...\n`);
+}
+
+function createRun(
+    reportPath: string,
+    stopSignal: AbortSignal,
+    interruptedExitCode: number
+): TaggingRun {
+    return {
+        reportPath,
+        report: { files: {} },
+        stopSignal,
+        interruptedExitCode,
+    };
+}
+
+async function tagLibrary(
+    config: AppConfig,
+    run: TaggingRun,
+    metadataChain: MetadataChain
+): Promise<void> {
     printRunSettings(config);
     const audioFiles = await findLibraryFiles(config);
 
@@ -72,9 +109,7 @@ async function tagLibrary(config: AppConfig, run: TaggingRun): Promise<void> {
         return;
     }
 
-    console.log(
-        `Processing ${audioFiles.length} audio files. Starting tagging...\n`
-    );
+    printProcessingStart(audioFiles.length);
     run.report = createReport(audioFiles, config.sourceRoot);
     await processBatch(audioFiles, {
         context: { sourceRoot: config.sourceRoot, metadataChain },
@@ -84,13 +119,13 @@ async function tagLibrary(config: AppConfig, run: TaggingRun): Promise<void> {
     printSummary(countStatuses(run.report), run);
 }
 
-function getCompletionExitCode({ stopSignal }: TaggingRun): number {
-    return stopSignal.aborted ? EXIT_INTERRUPTED : EXIT_SUCCESS;
+function getCompletionExitCode(run: TaggingRun): number {
+    return run.stopSignal.aborted ? run.interruptedExitCode : EXIT_SUCCESS;
 }
 
 function getFailureExitCode(
     error: unknown,
-    { stopSignal }: TaggingRun
+    { stopSignal }: Pick<TaggingRun, "stopSignal">
 ): number {
     if (error instanceof InputCancelledError && stopSignal.aborted) {
         return EXIT_INTERRUPTED;
@@ -101,13 +136,15 @@ function getFailureExitCode(
 }
 
 async function runTagging(
-    sources: ConfigSources,
-    run: TaggingRun
+    session: TaggingSession,
+    run: TaggingRun,
+    resolveSource: SourceRootResolver
 ): Promise<number> {
     try {
-        const config = await loadConfig(sources);
-        run.reportPath = path.join(config.sourceRoot, REPORT_FILENAME);
-        await tagLibrary(config, run);
+        const sourceRoot = await resolveSource();
+        run.reportPath = path.join(sourceRoot, REPORT_FILENAME);
+        const config = { ...session.settings, sourceRoot };
+        await tagLibrary(config, run, session.metadataChain);
         return getCompletionExitCode(run);
     } catch (error) {
         return getFailureExitCode(error, run);
@@ -134,14 +171,110 @@ async function writeReport({
     }
 }
 
-export async function runApp(environment: AppEnvironment): Promise<number> {
-    printBanner();
-    const run: TaggingRun = {
-        reportPath: path.resolve(environment.workingDirectory, REPORT_FILENAME),
-        report: { files: {} },
-        stopSignal: environment.stopSignal,
-    };
-    const taggingExitCode = await runTagging(environment, run);
+async function tagAndReport(
+    session: TaggingSession,
+    run: TaggingRun,
+    resolveSource: SourceRootResolver
+): Promise<number> {
+    const taggingExitCode = await runTagging(session, run, resolveSource);
     const reportExitCode = await writeReport(run);
     return Math.max(taggingExitCode, reportExitCode);
+}
+
+function getBrowserExitCode(error: unknown, stopSignal: AbortSignal): number {
+    if (error instanceof InputCancelledError && !stopSignal.aborted) {
+        return EXIT_SUCCESS;
+    }
+
+    return getFailureExitCode(error, { stopSignal });
+}
+
+async function pickSourceFolder(
+    { environment }: TaggingSession,
+    directory: string,
+    stopSignal: AbortSignal
+): Promise<FolderPick> {
+    try {
+        const sourceRoot = await browseFolder(environment.ask, directory);
+        return sourceRoot ? { sourceRoot } : { exitCode: EXIT_SUCCESS };
+    } catch (error) {
+        return { exitCode: getBrowserExitCode(error, stopSignal) };
+    }
+}
+
+function tagFolder(
+    session: TaggingSession,
+    sourceRoot: string,
+    stopSignal: AbortSignal
+): Promise<number> {
+    const reportPath = path.join(sourceRoot, REPORT_FILENAME);
+    // Ctrl+C during a browsed run only returns to the browser.
+    const run = createRun(reportPath, stopSignal, EXIT_SUCCESS);
+    return tagAndReport(session, run, async () => sourceRoot);
+}
+
+async function browseAndTag(session: TaggingSession): Promise<number> {
+    let directory = session.environment.workingDirectory;
+    let worstExitCode = EXIT_SUCCESS;
+
+    for (;;) {
+        const stopSignal = session.environment.renewStopSignal();
+        const pick = await pickSourceFolder(session, directory, stopSignal);
+
+        if ("exitCode" in pick) {
+            return Math.max(worstExitCode, pick.exitCode);
+        }
+
+        const exitCode = await tagFolder(session, pick.sourceRoot, stopSignal);
+        worstExitCode = Math.max(worstExitCode, exitCode);
+        directory = pick.sourceRoot;
+    }
+}
+
+function runSession(
+    session: TaggingSession,
+    sourcePath: string | undefined,
+    setupRun: TaggingRun
+): Promise<number> {
+    const { workingDirectory } = session.environment;
+
+    if (sourcePath === undefined) {
+        return browseAndTag(session);
+    }
+
+    return tagAndReport(session, setupRun, () =>
+        resolveSourceRoot(sourcePath, workingDirectory)
+    );
+}
+
+function createSession(
+    settings: TaggingSettings,
+    environment: AppEnvironment
+): TaggingSession {
+    return {
+        settings,
+        metadataChain: createMetadataChain(settings),
+        environment,
+    };
+}
+
+export async function runApp(environment: AppEnvironment): Promise<number> {
+    printBanner();
+    const setupRun = createRun(
+        path.resolve(environment.workingDirectory, REPORT_FILENAME),
+        environment.renewStopSignal(),
+        EXIT_INTERRUPTED
+    );
+
+    try {
+        const { settings, sourcePath } = await loadSessionConfig(environment);
+        return await runSession(
+            createSession(settings, environment),
+            sourcePath,
+            setupRun
+        );
+    } catch (error) {
+        const setupExitCode = getFailureExitCode(error, setupRun);
+        return Math.max(setupExitCode, await writeReport(setupRun));
+    }
 }

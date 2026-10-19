@@ -10,7 +10,7 @@ try {
         env: process.env,
         ask: session.ask,
         workingDirectory: process.cwd(),
-        stopSignal: session.stopSignal,
+        renewStopSignal: session.renewStopSignal,
     });
 } finally {
     session.close();

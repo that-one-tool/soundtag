@@ -1,10 +1,18 @@
-export interface AppConfig {
+export interface TaggingSettings {
     lastFmApiKey: string;
-    sourceRoot: string;
     recursive: boolean;
     verbose: boolean;
     musicBrainzUserAgent?: string;
     youtubeApiKey?: string;
+}
+
+export interface AppConfig extends TaggingSettings {
+    sourceRoot: string;
+}
+
+export interface SessionConfig {
+    settings: TaggingSettings;
+    sourcePath?: string;
 }
 
 export interface CommandLineOptions {
