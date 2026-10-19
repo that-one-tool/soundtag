@@ -4,7 +4,13 @@ import type { BrowserAction } from "../browser-state.js";
 import { getKeyAction, type KeyAction } from "../key-actions.js";
 import type { SubfolderSetting } from "../subfolder-setting.js";
 import type { TaggingQueue } from "../tagging-queue.js";
-import type { BrowserEntry, EntryKind, TagTarget } from "../types.js";
+import type {
+    BrowserEntry,
+    EntryKind,
+    FocusedPane,
+    TagTarget,
+} from "../types.js";
+import type { LogView } from "./use-log-view.js";
 
 export interface KeyboardControls {
     dispatch: Dispatch<BrowserAction>;
@@ -15,7 +21,14 @@ export interface KeyboardControls {
     requestQuit(): void;
     pageSize: number;
     subfolders: SubfolderSetting;
+    logView: LogView;
+    logPageSize: number;
 }
+
+type NavigationAction =
+    "moveUp" | "moveDown" | "pageUp" | "pageDown" | "open" | "parent";
+
+type KeyHandlers<Action extends KeyAction> = Record<Action, () => void>;
 
 function getFolderTarget(
     folder: string,
@@ -51,10 +64,10 @@ function enqueue(
     }
 }
 
-function createKeyHandlers(
-    controls: KeyboardControls
-): Record<KeyAction, () => void> {
-    const { dispatch, pageSize } = controls;
+function createBrowserNavigation({
+    dispatch,
+    pageSize,
+}: KeyboardControls): KeyHandlers<NavigationAction> {
     const move = (delta: number) => () => dispatch({ type: "move", delta });
     return {
         moveUp: move(-1),
@@ -63,11 +76,41 @@ function createKeyHandlers(
         pageDown: move(pageSize),
         open: () => dispatch({ type: "open" }),
         parent: () => dispatch({ type: "parent" }),
+    };
+}
+
+function createLogNavigation({
+    logView,
+    logPageSize,
+}: KeyboardControls): KeyHandlers<NavigationAction> {
+    const scroll = (delta: number) => () => logView.scrollLog(delta);
+    return {
+        moveUp: scroll(-1),
+        moveDown: scroll(1),
+        pageUp: scroll(-logPageSize),
+        pageDown: scroll(logPageSize),
+        open: () => {},
+        parent: () => {},
+    };
+}
+
+const NAVIGATION_BY_FOCUS: Record<
+    FocusedPane,
+    (controls: KeyboardControls) => KeyHandlers<NavigationAction>
+> = {
+    browser: createBrowserNavigation,
+    log: createLogNavigation,
+};
+
+function createKeyHandlers(controls: KeyboardControls): KeyHandlers<KeyAction> {
+    return {
+        ...NAVIGATION_BY_FOCUS[controls.logView.getFocus()](controls),
         tag: () => enqueue(getTagTarget(controls.hovered, controls), controls),
         tagFolder: () =>
             enqueue(getFolderTarget(controls.directory, controls), controls),
         stop: () => controls.queue.stop(),
         toggleSubfolders: () => controls.subfolders.toggle(),
+        toggleFocus: () => controls.logView.toggleFocus(),
         quit: () => controls.requestQuit(),
     };
 }

@@ -10,10 +10,11 @@ const KEY_HINTS: Hint[] = [
     ["⏎/→", "open"],
     ["←", "up"],
     ["t", "tag"],
-    ["a", "tag folder"],
-    ["r", "subfolders"],
+    ["a", "tag all"],
+    ["r", "subdirs"],
     ["s", "stop"],
     ["q", "quit"],
+    ["⇥", "log"],
 ];
 
 function KeyHints() {

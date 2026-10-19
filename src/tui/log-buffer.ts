@@ -2,6 +2,7 @@ import type { Logger } from "../shared/logger.js";
 import { Listeners } from "./listeners.js";
 
 export interface LogLine {
+    id: number;
     text: string;
     isError: boolean;
 }
@@ -19,6 +20,7 @@ function isKeptLine(
 export class LogBuffer implements Logger {
     private readonly listeners = new Listeners();
     private lines: readonly LogLine[] = [];
+    private nextId = 0;
 
     constructor(private readonly maxLines = DEFAULT_MAX_LINES) {}
 
@@ -36,9 +38,11 @@ export class LogBuffer implements Logger {
     }
 
     private append(message: string, isError: boolean): void {
-        const added = message
-            .split("\n")
-            .map((text) => ({ text: text.trim() ? text : "", isError }));
+        const added = message.split("\n").map((text) => ({
+            id: this.nextId++,
+            text: text.trim() ? text : "",
+            isError,
+        }));
         this.lines = [...this.lines, ...added]
             .filter(isKeptLine)
             .slice(-this.maxLines);

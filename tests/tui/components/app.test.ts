@@ -384,3 +384,30 @@ test("App stops marking the panel once an unreadable entry is read", async () =>
     await delay(50);
     assert.ok(!(lastFrame() ?? "").includes("Metadata …"));
 });
+
+test("App scrolls the focused log pane instead of the browser", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, services } = await renderApp(directory);
+    for (let line = 1; line <= 30; line++) {
+        services.logBuffer.info(`log line ${line}`);
+    }
+    await waitForFrame(lastFrame, "log line 30");
+
+    stdin.write("\t");
+    stdin.write(KEYS.up);
+    stdin.write(KEYS.up);
+
+    await waitForFrame(lastFrame, "Log ↑2");
+    stdin.write(KEYS.enter);
+    stdin.write(KEYS.left);
+    await delay(50);
+    assert.ok(!(lastFrame() ?? "").includes("log line 30"));
+    assert.match(findFrameLine(lastFrame, ".."), /▸/);
+    assert.ok((lastFrame() ?? "").includes(directory));
+
+    stdin.write("\t");
+    stdin.write(KEYS.down);
+
+    await waitFor(() => /▸/.test(findFrameLine(lastFrame, "Album")));
+    assert.ok((lastFrame() ?? "").includes("Log ↑2"));
+});

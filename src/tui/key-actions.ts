@@ -11,6 +11,7 @@ export type KeyAction =
     | "tagFolder"
     | "stop"
     | "toggleSubfolders"
+    | "toggleFocus"
     | "quit";
 
 type KeyMatcher = (input: string, key: Key) => boolean;
@@ -26,6 +27,7 @@ const KEY_BINDINGS: [KeyMatcher, KeyAction][] = [
     [(input) => input === "a", "tagFolder"],
     [(input) => input === "s", "stop"],
     [(input) => input === "r", "toggleSubfolders"],
+    [(_input, key) => key.tab, "toggleFocus"],
     [(input) => input === "q", "quit"],
     [(input, key) => key.ctrl && input === "c", "quit"],
 ];

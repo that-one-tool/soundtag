@@ -92,6 +92,10 @@ folder, its file counts). Processing messages appear in the log pane below.
 | `r`                    | Include or exclude subfolders in folder runs    |
 | `s`                    | Stop the current run after the file in progress |
 | `q`, Ctrl+C            | Quit (press again during a run to quit at once) |
+| Tab                    | Switch between the browser and the log pane     |
+
+While the log pane has focus, `↑` `↓`, PgUp and PgDn scroll it; it stays in
+place as new messages arrive until you scroll back to the bottom.
 
 Tagging runs in the background, so you can keep browsing; further `t` and `a`
 presses are queued and run one after another, and are ignored once you quit.

@@ -9,8 +9,8 @@ test("LogBuffer keeps info and error lines in order", () => {
     buffer.error("Failed");
 
     assert.deepEqual(buffer.getSnapshot(), [
-        { text: "Searching", isError: false },
-        { text: "Failed", isError: true },
+        { id: 0, text: "Searching", isError: false },
+        { id: 1, text: "Failed", isError: true },
     ]);
 });
 
@@ -35,6 +35,18 @@ test("LogBuffer collapses consecutive blank lines", () => {
     assert.deepEqual(
         buffer.getSnapshot().map((line) => line.text),
         ["one", "", "two"]
+    );
+});
+
+test("LogBuffer keeps the ids of kept lines", () => {
+    const buffer = new LogBuffer(2);
+
+    buffer.info("one\n\n\ntwo");
+    buffer.info("three");
+
+    assert.deepEqual(
+        buffer.getSnapshot().map((line) => line.id),
+        [3, 4]
     );
 });
 

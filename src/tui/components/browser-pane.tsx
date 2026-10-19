@@ -57,6 +57,7 @@ export interface BrowserPaneProps {
     state: BrowserState;
     statuses: TrackStatuses;
     height: number;
+    focused: boolean;
 }
 
 function EntryList({ state, statuses, height }: BrowserPaneProps) {
@@ -94,6 +95,7 @@ export function BrowserPane(props: BrowserPaneProps) {
             flexGrow={1}
             borderStyle="round"
             borderColor={PANE_COLOR.browser}
+            borderDimColor={!props.focused}
             paddingX={1}
         >
             <Text bold color={PANE_COLOR.browser} wrap="truncate-start">

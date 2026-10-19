@@ -2,6 +2,7 @@ import { Box, useWindowSize } from "ink";
 import { useBrowser } from "../hooks/use-browser.js";
 import { useEntryDetails } from "../hooks/use-entry-details.js";
 import { useKeyboard } from "../hooks/use-keyboard.js";
+import { useLogView } from "../hooks/use-log-view.js";
 import { useQuit } from "../hooks/use-quit.js";
 import { useStore } from "../hooks/use-store.js";
 import { getLayout } from "../layout.js";
@@ -9,7 +10,7 @@ import { getEntryStatus } from "../track-statuses.js";
 import type { TuiServices } from "../tui-services.js";
 import { BrowserPane, type BrowserPaneProps } from "./browser-pane.js";
 import { Header } from "./header.js";
-import { LogPane } from "./log-pane.js";
+import { LogPane, type LogPaneProps } from "./log-pane.js";
 import { MetadataPanel, type MetadataPanelProps } from "./metadata-panel.js";
 import { StatusBar } from "./status-bar.js";
 
@@ -49,6 +50,7 @@ function useAppState({ startDirectory, services }: AppProps) {
     const layout = useLayout();
     const browsing = useBrowsing(startDirectory, services);
     const { status, requestQuit } = useStatus(services);
+    const logView = useLogView(services.logBuffer, layout.logLines);
     useKeyboard({
         ...browsing,
         directory: browsing.browser.directory,
@@ -57,16 +59,38 @@ function useAppState({ startDirectory, services }: AppProps) {
         requestQuit,
         pageSize: layout.listHeight,
         subfolders: services.subfolders,
+        logView,
+        logPageSize: layout.logLines,
     });
-    return { ...layout, ...browsing, status, logBuffer: services.logBuffer };
+    return { ...layout, ...browsing, status, logView, services };
+}
+
+function getLogPaneProps({
+    services,
+    logLines,
+    logView,
+}: ReturnType<typeof useAppState>): LogPaneProps {
+    return {
+        logBuffer: services.logBuffer,
+        height: logLines,
+        anchorId: logView.anchorId,
+        focused: logView.focus === "log",
+    };
 }
 
 type WorkspaceProps = BrowserPaneProps & MetadataPanelProps;
 
-function Workspace({ state, statuses, height, ...details }: WorkspaceProps) {
+function Workspace({
+    state,
+    statuses,
+    height,
+    focused,
+    ...details
+}: WorkspaceProps) {
+    const browser = { state, statuses, height, focused };
     return (
         <Box flexGrow={1} overflow="hidden">
-            <BrowserPane state={state} statuses={statuses} height={height} />
+            <BrowserPane {...browser} />
             <MetadataPanel {...details} statuses={statuses} />
         </Box>
     );
@@ -82,8 +106,9 @@ export function App(props: AppProps) {
                 {...state.details}
                 statuses={state.statuses}
                 height={state.listHeight}
+                focused={state.logView.focus === "browser"}
             />
-            <LogPane logBuffer={state.logBuffer} height={state.logLines} />
+            <LogPane {...getLogPaneProps(state)} />
             <StatusBar {...state.status} />
         </Box>
     );

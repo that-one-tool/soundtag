@@ -7,12 +7,14 @@ import { LogBuffer } from "../../../src/tui/log-buffer.js";
 
 afterEach(() => cleanup());
 
+const FOLLOWING = { anchorId: null, focused: false };
+
 test("LogPane keeps blank lines between log lines", () => {
     const logBuffer = new LogBuffer();
     logBuffer.info("first\n\nsecond");
 
     const frame = render(
-        createElement(LogPane, { logBuffer, height: 5 })
+        createElement(LogPane, { logBuffer, height: 5, ...FOLLOWING })
     ).lastFrame();
 
     const lines = (frame ?? "").split("\n");
@@ -26,11 +28,29 @@ test("LogPane shows an older line instead of a leading blank one", () => {
     logBuffer.info("first\n\nsecond\nthird");
 
     const frame = render(
-        createElement(LogPane, { logBuffer, height: 3 })
+        createElement(LogPane, { logBuffer, height: 3, ...FOLLOWING })
     ).lastFrame();
 
     const lines = (frame ?? "").split("\n");
     assert.match(lines[1], /first/);
     assert.match(lines[2], /second/);
     assert.match(lines[3], /third/);
+});
+
+test("LogPane titles its border and counts the lines below a scrolled view", () => {
+    const logBuffer = new LogBuffer();
+    logBuffer.info("one\ntwo\nthree\nfour");
+    const props = { logBuffer, height: 2, focused: true };
+
+    const scrolled = render(createElement(LogPane, { ...props, anchorId: 1 }));
+    const following = render(
+        createElement(LogPane, { ...props, anchorId: null })
+    );
+
+    const [scrolledTop] = (scrolled.lastFrame() ?? "").split("\n");
+    const [followingTop] = (following.lastFrame() ?? "").split("\n");
+    assert.match(scrolledTop, /╭.*Log ↑2.*╮/);
+    assert.match(followingTop, /╭.*Log.*╮/);
+    assert.doesNotMatch(followingTop, /↑/);
+    assert.ok((scrolled.lastFrame() ?? "").includes("two"));
 });

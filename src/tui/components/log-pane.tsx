@@ -1,6 +1,8 @@
 import { Box, Text } from "ink";
+import type { ReactNode } from "react";
 import { useStore } from "../hooks/use-store.js";
 import type { LogBuffer, LogLine } from "../log-buffer.js";
+import { getLogWindow } from "../log-scroll.js";
 import { ERROR_COLOR, PANE_COLOR } from "../theme.js";
 
 function LogLineText({ line }: { line: LogLine }) {
@@ -11,23 +13,29 @@ function LogLineText({ line }: { line: LogLine }) {
     );
 }
 
-function getVisibleLines(lines: readonly LogLine[], height: number) {
-    const visible = lines.slice(-height);
-
-    if (visible[0]?.text !== "") {
-        return visible;
-    }
-
-    return [...lines.slice(-height - 1, -height), ...visible.slice(1)];
+interface LogTitleProps {
+    hiddenBelow: number;
+    focused: boolean;
 }
 
-export interface LogPaneProps {
-    logBuffer: LogBuffer;
+// Drawn over the top border, so it takes no log line.
+function LogTitle({ hiddenBelow, focused }: LogTitleProps) {
+    const position = hiddenBelow > 0 ? ` ↑${hiddenBelow}` : "";
+    return (
+        <Box position="absolute" top={-1}>
+            <Text bold={focused} color={PANE_COLOR.log} wrap="truncate">
+                {` Log${position} `}
+            </Text>
+        </Box>
+    );
+}
+
+interface LogFrameProps extends LogTitleProps {
     height: number;
+    children: ReactNode;
 }
 
-export function LogPane({ logBuffer, height }: LogPaneProps) {
-    const lines = getVisibleLines(useStore(logBuffer), height);
+function LogFrame({ height, focused, hiddenBelow, children }: LogFrameProps) {
     return (
         <Box
             flexDirection="column"
@@ -35,11 +43,29 @@ export function LogPane({ logBuffer, height }: LogPaneProps) {
             flexShrink={0}
             borderStyle="round"
             borderColor={PANE_COLOR.log}
+            borderDimColor={!focused}
             paddingX={1}
         >
-            {lines.map((line, index) => (
-                <LogLineText key={index} line={line} />
-            ))}
+            <LogTitle hiddenBelow={hiddenBelow} focused={focused} />
+            {children}
         </Box>
+    );
+}
+
+export interface LogPaneProps {
+    logBuffer: LogBuffer;
+    height: number;
+    anchorId: number | null;
+    focused: boolean;
+}
+
+export function LogPane({ logBuffer, anchorId, ...frame }: LogPaneProps) {
+    const window = getLogWindow(useStore(logBuffer), frame.height, anchorId);
+    return (
+        <LogFrame {...frame} hiddenBelow={window.hiddenBelow}>
+            {window.lines.map((line) => (
+                <LogLineText key={line.id} line={line} />
+            ))}
+        </LogFrame>
     );
 }

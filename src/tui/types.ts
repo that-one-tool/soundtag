@@ -1,6 +1,8 @@
 import type { StoredTags, TrackDetails } from "../tags/types.js";
 import type { TrackStatus } from "../processing/types.js";
 
+export type FocusedPane = "browser" | "log";
+
 export type EntryKind = "parent" | "folder" | "file";
 
 export interface BrowserEntry {
