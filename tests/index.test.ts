@@ -279,4 +279,5 @@ test("CLI stops with exit code 130 when interrupted at a prompt", async () => {
     assert.match(stdout, /Interrupted\./);
     assert.doesNotMatch(stdout, /Press Ctrl\+C again/);
     assert.match(stdout, /Processing report written to /);
+    assert.doesNotMatch(stdout, /Done!/);
 });

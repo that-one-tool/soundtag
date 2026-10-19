@@ -151,6 +151,7 @@ test("a job fails and logs when the folder cannot be read", async () => {
 
     assert.equal(succeeded, false);
     assert.match(logger.errors[0], /^Error: .*ENOENT/);
+    assert.equal(logger.infos.at(-1), "Done!");
 });
 
 test("a job fails when the report cannot be written", async () => {
@@ -169,6 +170,18 @@ test("a job fails when the report cannot be written", async () => {
         logger.errors.at(-1) ?? "",
         /^Could not write processing report/
     );
+    assert.equal(logger.infos.at(-1), "Done!");
+});
+
+test("a stopped job saves its report and then logs Done!", async () => {
+    const directory = await createTemporaryDirectory();
+    await createTrack(directory, "a.mp3");
+    const { runJob, logger } = createRunner();
+
+    await runJob({ kind: "folder", path: directory }, AbortSignal.abort());
+
+    assert.match(logger.infos.at(-2) ?? "", /^Processing report written to /);
+    assert.equal(logger.infos.at(-1), "Done!");
 });
 
 test("a job announces its target", async () => {
@@ -183,6 +196,8 @@ test("a job announces its target", async () => {
 
     assert.equal(logger.infos[0], `Tagging 1 audio files in ${directory}`);
     assert.ok(logger.infos.includes("\nSaving report..."));
+    assert.match(logger.infos.at(-2) ?? "", /^Processing report written to /);
+    assert.equal(logger.infos.at(-1), "Done!");
 });
 
 test("a job without audio files writes no report", async () => {
@@ -197,6 +212,7 @@ test("a job without audio files writes no report", async () => {
     assert.equal(succeeded, true);
     assert.deepEqual(logger.infos, [
         `No supported audio files found in ${directory}.`,
+        "Done!",
     ]);
     await assert.rejects(
         fs.access(path.join(directory, "soundtag_output.json"))
@@ -229,6 +245,7 @@ test("a file job skips a file that no longer exists", async () => {
     assert.equal(succeeded, true);
     assert.deepEqual(processed, []);
     assert.ok(logger.infos.includes(`Skipped: ${source} no longer exists.`));
+    assert.equal(logger.infos.at(-1), "Done!");
 });
 
 test("a job merges its results into the folder report", async () => {

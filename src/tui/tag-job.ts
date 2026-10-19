@@ -119,19 +119,29 @@ async function tagFoundFiles(
     return true;
 }
 
+async function runTagJob(
+    target: TagTarget,
+    stopSignal: AbortSignal,
+    dependencies: TagJobDependencies
+): Promise<boolean> {
+    try {
+        const targetFiles = await TARGET_FINDERS[target.kind](
+            target.path,
+            dependencies
+        );
+        return await tagFoundFiles(targetFiles, stopSignal, dependencies);
+    } catch (error) {
+        dependencies.logger.error(`Error: ${getErrorMessage(error)}`);
+        return false;
+    }
+}
+
 export function createTagJobRunner(
     dependencies: TagJobDependencies
 ): TagJobRunner {
     return async (target, stopSignal) => {
-        try {
-            const targetFiles = await TARGET_FINDERS[target.kind](
-                target.path,
-                dependencies
-            );
-            return await tagFoundFiles(targetFiles, stopSignal, dependencies);
-        } catch (error) {
-            dependencies.logger.error(`Error: ${getErrorMessage(error)}`);
-            return false;
-        }
+        const succeeded = await runTagJob(target, stopSignal, dependencies);
+        dependencies.logger.info("Done!");
+        return succeeded;
     };
 }

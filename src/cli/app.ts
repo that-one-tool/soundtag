@@ -181,6 +181,7 @@ async function tagAndReport(
 ): Promise<number> {
     const taggingExitCode = await runTagging(session, run, resolveSource);
     const reportExitCode = await writeReport(run);
+    consoleLogger.info("Done!");
     return Math.max(taggingExitCode, reportExitCode);
 }
 

@@ -71,6 +71,8 @@ test("runApp tags a library and prints a summary", async () => {
     assert.equal(output.logs[1], "                SOUNDTAG");
     assert.ok(output.logs.includes("Skipped:    1"));
     assert.ok(output.logs.includes("PROCESSING COMPLETE"));
+    assert.match(output.logs.at(-2) ?? "", /^Processing report written to /);
+    assert.equal(output.logs.at(-1), "Done!");
 });
 
 test("runApp keeps file names with --no-rename", async () => {
@@ -119,6 +121,7 @@ test("runApp fails on configuration errors and still writes the report", async (
     assert.equal(await runAppIn(workingDirectory, ["--unknown"]), 1);
     assert.deepEqual(output.errors, ["Error: Unknown option: --unknown"]);
     assert.deepEqual(await readReport(workingDirectory), { files: {} });
+    assert.ok(!output.logs.includes("Done!"));
 });
 
 test("runApp fails when the report cannot be written", async () => {
@@ -130,6 +133,7 @@ test("runApp fails when the report cannot be written", async () => {
         output.errors.at(-1) ?? "",
         /^Could not write processing report to /
     );
+    assert.equal(output.logs.at(-1), "Done!");
 });
 
 test("runApp writes the report into the source folder", async () => {
@@ -191,6 +195,7 @@ test("runApp still reports real errors after a stop was requested", async () => 
     assert.deepEqual(output.errors, [
         "Error: The source folder does not exist.",
     ]);
+    assert.equal(output.logs.at(-1), "Done!");
 });
 
 function browseWith(
