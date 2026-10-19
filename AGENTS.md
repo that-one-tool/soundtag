@@ -141,7 +141,8 @@ Not enforced by tooling, but expected:
 - Files are rewritten through a hidden temporary copy (`.<name>.<uuid>.<ext>`).
   The scan skips hidden files and folders so leftovers are never tagged.
 - MusicBrainz needs `MUSICBRAINZ_USER_AGENT` and allows 1 request/s; SoundTag
-  spaces requests 2 s apart, like Last.fm API calls. iTunes is spaced 4 s apart.
+  spaces requests 3 s apart (2 s and 2.5 s still drew 503s). Last.fm API calls are
+  spaced 2 s apart and iTunes 4 s apart.
   Cover image downloads are not rate-limited.
 - With piped stdin, readline drops lines that arrive before `question()` is
   called. The CLI test helper answers each prompt only once it appears.

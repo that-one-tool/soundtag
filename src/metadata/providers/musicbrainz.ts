@@ -20,7 +20,7 @@ import type {
 
 const MUSICBRAINZ_BASE = "https://musicbrainz.org/ws/2/";
 const COVER_ART_ARCHIVE_BASE = "https://coverartarchive.org/release/";
-const MUSICBRAINZ_REQUEST_INTERVAL = 2_000;
+const MUSICBRAINZ_REQUEST_INTERVAL = 3_000;
 const SERVICE_UNAVAILABLE = 503;
 const DEFAULT_RETRY_DELAY = 3_000;
 const MAX_RETRY_DELAY = 10_000;

@@ -43,7 +43,7 @@ Last.fm API requests (up to two per track: a search, then the track details)
 are spaced two seconds apart; cover image downloads are not.
 
 MusicBrainz does not require an API key. It requires a meaningful User-Agent
-string and limits requests to one per second; SoundTag spaces them two
+string and limits requests to one per second; SoundTag spaces them three
 seconds apart. Set `MUSICBRAINZ_USER_AGENT` to
 identify your SoundTag installation and provide contact information. The
 MusicBrainz fallback is used when Last.fm misses track metadata or cover

@@ -73,7 +73,7 @@ test("MusicBrainzProvider rate-limits the retry", async () => {
         createProviderServices({ clock, logger: consoleLogger })
     ).findMetadata(search, false);
 
-    assert.deepEqual(clock.sleeps, [0, 2000]);
+    assert.deepEqual(clock.sleeps, [0, 3000]);
 });
 
 test("MusicBrainzProvider gives up after a second unavailable response", async () => {
