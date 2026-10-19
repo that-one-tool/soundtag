@@ -1,4 +1,3 @@
-import { setTimeout as delay } from "node:timers/promises";
 import { getErrorMessage } from "./errors.js";
 import {
     downloadFirstImage,
@@ -7,8 +6,19 @@ import {
     readJsonResponse,
     type ImageRequest,
 } from "./http.js";
-import { createRateLimiter } from "./rate-limiter.js";
-import type { TrackInfo } from "./types.js";
+import {
+    createRateLimiter,
+    systemClock,
+    type Clock,
+    type RateLimiter,
+} from "./rate-limiter.js";
+import { extractYear } from "./track-metadata.js";
+import type {
+    MetadataProvider,
+    TrackInfo,
+    TrackMetadata,
+    TrackSearch,
+} from "./types.js";
 
 const MUSICBRAINZ_BASE = "https://musicbrainz.org/ws/2/";
 const COVER_ART_ARCHIVE_BASE = "https://coverartarchive.org/release/";
@@ -16,11 +26,8 @@ const MUSICBRAINZ_REQUEST_INTERVAL = 1000;
 const SERVICE_UNAVAILABLE = 503;
 const DEFAULT_RETRY_DELAY = 2_000;
 const MAX_RETRY_DELAY = 10_000;
-const scheduleMusicBrainzRequest = createRateLimiter(
-    MUSICBRAINZ_REQUEST_INTERVAL
-);
 
-export interface MusicBrainzRelease {
+interface MusicBrainzRelease {
     id?: string;
     title?: string;
     date?: string;
@@ -32,7 +39,7 @@ interface MusicBrainzArtistCredit {
     joinphrase?: string;
 }
 
-export interface MusicBrainzRecording {
+interface MusicBrainzRecording {
     title?: string;
     "artist-credit"?: MusicBrainzArtistCredit[];
     "first-release-date"?: string;
@@ -43,76 +50,63 @@ interface MusicBrainzSearchResponse {
     recordings?: MusicBrainzRecording[];
 }
 
-function scheduleMusicBrainzFetch(
-    url: URL,
-    userAgent: string
-): Promise<Response> {
-    return scheduleMusicBrainzRequest(() =>
-        fetchWithTimeout(url, { headers: { "User-Agent": userAgent } })
-    );
+function buildSearchTerm(field: string, value: string): string {
+    return `${field}:"${value.replaceAll('"', '\\"')}"`;
 }
 
-async function fetchMusicBrainzWithRetry(
-    url: URL,
-    userAgent: string
-): Promise<Response> {
-    const response = await scheduleMusicBrainzFetch(url, userAgent);
-
-    if (response.status !== SERVICE_UNAVAILABLE) {
-        return response;
-    }
-
-    await response.body?.cancel();
-    await delay(
-        getRetryAfterDelay(response, DEFAULT_RETRY_DELAY, MAX_RETRY_DELAY)
-    );
-    return scheduleMusicBrainzFetch(url, userAgent);
-}
-
-async function requestMusicBrainz<T>(url: URL, userAgent: string): Promise<T> {
-    const response = await fetchMusicBrainzWithRetry(url, userAgent);
-    return readJsonResponse<T>(response, "MusicBrainz");
-}
-
-function getMusicBrainzArtist(recording: MusicBrainzRecording): string {
-    return (
-        recording["artist-credit"]
-            ?.map(
-                (credit) =>
-                    `${credit.name ?? credit.artist?.name ?? ""}${credit.joinphrase ?? ""}`
-            )
-            .join("")
-            .trim() ?? ""
-    );
-}
-
-export async function searchMusicBrainz(
-    title: string,
-    artist: string,
-    userAgent: string,
-    album?: string
-): Promise<MusicBrainzRecording | null> {
+function buildRecordingSearchUrl({ title, artist, album }: TrackSearch): URL {
     const terms = [
-        `recording:"${title.replaceAll('"', '\\"')}"`,
-        artist && `artist:"${artist.replaceAll('"', '\\"')}"`,
-        album && `release:"${album.replaceAll('"', '\\"')}"`,
-    ].filter((term): term is string => Boolean(term));
-    const query = terms.join(" AND ");
+        buildSearchTerm("recording", title),
+        ...(artist ? [buildSearchTerm("artist", artist)] : []),
+        ...(album ? [buildSearchTerm("release", album)] : []),
+    ];
     const url = new URL("recording", MUSICBRAINZ_BASE);
-    url.searchParams.set("query", query);
+    url.searchParams.set("query", terms.join(" AND "));
     url.searchParams.set("fmt", "json");
     url.searchParams.set("limit", "1");
+    return url;
+}
 
-    try {
-        const data = await requestMusicBrainz<MusicBrainzSearchResponse>(
-            url,
-            userAgent
-        );
-        return data.recordings?.[0] ?? null;
-    } catch (error) {
-        console.error(`MusicBrainz search failed: ${getErrorMessage(error)}`);
-        return null;
-    }
+function getCreditName(credit: MusicBrainzArtistCredit): string {
+    return credit.name ?? credit.artist?.name ?? "";
+}
+
+function getMusicBrainzArtist(credits: MusicBrainzArtistCredit[] = []): string {
+    return credits
+        .map((credit) => `${getCreditName(credit)}${credit.joinphrase ?? ""}`)
+        .join("")
+        .trim();
+}
+
+function getFirstRelease(recording: MusicBrainzRecording): MusicBrainzRelease {
+    return recording.releases?.[0] ?? {};
+}
+
+function getRecordingYear(
+    recording: MusicBrainzRecording,
+    firstRelease: MusicBrainzRelease
+): string {
+    return (
+        extractYear(recording["first-release-date"]) ||
+        extractYear(firstRelease.date)
+    );
+}
+
+function getRecordingInfo(recording: MusicBrainzRecording): TrackInfo {
+    const firstRelease = getFirstRelease(recording);
+
+    return {
+        title: recording.title ?? "",
+        artist: getMusicBrainzArtist(recording["artist-credit"]),
+        album: firstRelease.title ?? "",
+        year: getRecordingYear(recording, firstRelease),
+    };
+}
+
+function getFirstRecording(
+    data: MusicBrainzSearchResponse
+): MusicBrainzRecording | null {
+    return data.recordings?.[0] ?? null;
 }
 
 function getCoverArtRequest(
@@ -128,45 +122,81 @@ function getCoverArtRequest(
     };
 }
 
-export function downloadMusicBrainzCover(
-    releases: MusicBrainzRelease[],
-    userAgent: string
-): Promise<Buffer | null> {
-    return downloadFirstImage(
-        releases.flatMap(({ id }) =>
-            id ? [getCoverArtRequest(id, userAgent)] : []
-        )
-    );
-}
+export class MusicBrainzProvider implements MetadataProvider {
+    private readonly schedule: RateLimiter;
 
-export async function findMusicBrainzMetadata(
-    title: string,
-    artist: string,
-    userAgent: string,
-    includeCover: boolean,
-    album?: string
-): Promise<{ info: TrackInfo; coverData: Buffer | null } | null> {
-    const recording = await searchMusicBrainz(title, artist, userAgent, album);
-
-    if (!recording) {
-        return null;
+    constructor(
+        private readonly userAgent: string,
+        private readonly clock: Clock = systemClock
+    ) {
+        this.schedule = createRateLimiter(MUSICBRAINZ_REQUEST_INTERVAL, clock);
     }
 
-    return {
-        info: {
-            title: recording.title ?? "",
-            artist: getMusicBrainzArtist(recording),
-            album: recording.releases?.[0]?.title ?? "",
-            year:
-                recording["first-release-date"]?.match(/\b\d{4}\b/)?.[0] ??
-                recording.releases?.[0]?.date?.match(/\b\d{4}\b/)?.[0] ??
-                "",
-        },
-        coverData: includeCover
-            ? await downloadMusicBrainzCover(
-                  recording.releases ?? [],
-                  userAgent
-              )
-            : null,
-    };
+    async findMetadata(
+        search: TrackSearch,
+        needsCover: boolean
+    ): Promise<TrackMetadata | null> {
+        const recording = await this.searchRecording(search);
+
+        if (!recording) {
+            return null;
+        }
+
+        return {
+            info: getRecordingInfo(recording),
+            coverData: needsCover
+                ? await this.downloadCover(recording.releases)
+                : null,
+        };
+    }
+
+    private async searchRecording(
+        search: TrackSearch
+    ): Promise<MusicBrainzRecording | null> {
+        try {
+            const response = await this.fetchWithRetry(
+                buildRecordingSearchUrl(search)
+            );
+            const data = await readJsonResponse<MusicBrainzSearchResponse>(
+                response,
+                "MusicBrainz"
+            );
+            return getFirstRecording(data);
+        } catch (error) {
+            console.error(
+                `MusicBrainz search failed: ${getErrorMessage(error)}`
+            );
+            return null;
+        }
+    }
+
+    private async fetchWithRetry(url: URL): Promise<Response> {
+        const response = await this.scheduleFetch(url);
+
+        if (response.status !== SERVICE_UNAVAILABLE) {
+            return response;
+        }
+
+        await response.body?.cancel();
+        await this.clock.sleep(
+            getRetryAfterDelay(response, DEFAULT_RETRY_DELAY, MAX_RETRY_DELAY)
+        );
+        return this.scheduleFetch(url);
+    }
+
+    private scheduleFetch(url: URL): Promise<Response> {
+        return this.schedule(() =>
+            fetchWithTimeout(url, { headers: { "User-Agent": this.userAgent } })
+        );
+    }
+
+    private downloadCover(
+        releases: MusicBrainzRelease[] = []
+    ): Promise<Buffer | null> {
+        return downloadFirstImage(
+            releases.flatMap(({ id }) =>
+                id ? [getCoverArtRequest(id, this.userAgent)] : []
+            )
+        );
+    }
 }

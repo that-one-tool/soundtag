@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createRateLimiter, type Clock } from "../src/rate-limiter.js";
+import {
+    createRateLimiter,
+    systemClock,
+    type Clock,
+} from "../src/rate-limiter.js";
 
 function createFakeClock(): Clock & {
     sleeps: number[];
@@ -90,4 +94,12 @@ test("createRateLimiter keeps scheduling after a task fails", async () => {
         /failed task/
     );
     assert.equal(await schedule(async () => "next"), "next");
+});
+
+test("systemClock sleeps for the requested time on a monotonic clock", async () => {
+    const startedAt = systemClock.now();
+
+    await systemClock.sleep(20);
+
+    assert.ok(systemClock.now() - startedAt >= 15);
 });

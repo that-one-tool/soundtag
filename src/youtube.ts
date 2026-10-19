@@ -1,5 +1,6 @@
 import { getErrorMessage } from "./errors.js";
 import { downloadImage, fetchWithTimeout, readJsonResponse } from "./http.js";
+import type { CoverProvider, TrackSearch } from "./types.js";
 
 const YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 
@@ -69,11 +70,15 @@ async function downloadThumbnail(url: string): Promise<Buffer | null> {
     }
 }
 
-export async function findYouTubeThumbnail(
-    title: string,
-    artist: string,
-    apiKey: string
-): Promise<Buffer | null> {
-    const thumbnailUrl = await findThumbnailUrl(title, artist, apiKey);
-    return thumbnailUrl ? downloadThumbnail(thumbnailUrl) : null;
+export class YouTubeCoverProvider implements CoverProvider {
+    constructor(private readonly apiKey: string) {}
+
+    async findCover(search: TrackSearch): Promise<Buffer | null> {
+        const thumbnailUrl = await findThumbnailUrl(
+            search.title,
+            search.artist,
+            this.apiKey
+        );
+        return thumbnailUrl ? downloadThumbnail(thumbnailUrl) : null;
+    }
 }

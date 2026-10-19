@@ -9,6 +9,11 @@ import { getAudioFormat, writeTemporaryCopy } from "./file.js";
 import { getImageMimeType } from "./image-type.js";
 import type { TrackInfo } from "./types.js";
 
+function getFirstPerformer(performers: string[]): string {
+    const trimmedPerformers = performers.map((performer) => performer.trim());
+    return trimmedPerformers.find(Boolean) ?? "";
+}
+
 export async function readTrackInfo(source: string): Promise<TrackInfo> {
     const format = getAudioFormat(source);
 
@@ -28,10 +33,7 @@ export async function readTrackInfo(source: string): Promise<TrackInfo> {
         try {
             return {
                 title: file.tag.title?.trim() ?? "",
-                artist:
-                    file.tag.performers.find((performer) =>
-                        performer?.trim()
-                    ) ?? "",
+                artist: getFirstPerformer(file.tag.performers),
                 album: file.tag.album?.trim() ?? "",
                 year: file.tag.year > 0 ? String(file.tag.year) : "",
             };

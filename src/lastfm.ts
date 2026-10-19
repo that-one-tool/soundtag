@@ -5,7 +5,13 @@ import {
     readJsonResponse,
     type ImageRequest,
 } from "./http.js";
-import type { TrackInfo, TrackMetadata } from "./types.js";
+import { extractYear } from "./track-metadata.js";
+import type {
+    MetadataProvider,
+    TrackInfo,
+    TrackMetadata,
+    TrackSearch,
+} from "./types.js";
 
 const LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/";
 const DEFAULT_COVER = "2a96cbd8b46e442fc41c2b86b821562f.png";
@@ -98,8 +104,7 @@ async function searchTrack(
 }
 
 async function getTrackInfo(
-    artist: string,
-    title: string,
+    { artist, title }: Pick<TrackInfo, "title" | "artist">,
     apiKey: string,
     verbose: boolean
 ): Promise<LastFmTrack | null> {
@@ -168,37 +173,89 @@ function getCoverImageRequests(images: CoverImage[]): ImageRequest[] {
     }));
 }
 
-export async function findLastFmMetadata(
-    query: string,
-    apiKey: string,
-    searchArtist?: string,
-    verbose = false
-): Promise<TrackMetadata | null> {
-    const result = await searchTrack(query, apiKey, searchArtist);
+function getMatchedTrack(
+    match: LastFmTrack,
+    search: TrackSearch
+): Pick<TrackInfo, "title" | "artist"> {
+    const artist = getArtistName(match.artist) || search.artist;
+    return {
+        artist,
+        title: removeArtistPrefix(match.name || search.title, artist),
+    };
+}
 
-    if (!result) {
-        return null;
-    }
+function getAlbumYear(album: LastFmAlbum): string {
+    return album.year ?? extractYear(album.date);
+}
 
-    const artist = getArtistName(result.artist) || searchArtist || "";
-    const title = removeArtistPrefix(result.name || query, artist);
+function getAlbumInfo(
+    matched: Pick<TrackInfo, "title" | "artist">,
+    album: LastFmAlbum = {}
+): TrackInfo {
+    return {
+        ...matched,
+        album: album.title ?? "",
+        year: getAlbumYear(album),
+    };
+}
+
+function downloadAlbumCover(album: LastFmAlbum = {}): Promise<Buffer | null> {
+    return downloadFirstImage(
+        getCoverImageRequests(getCoverImages(album.image))
+    );
+}
+
+function logMatch({
+    title,
+    artist,
+}: Pick<TrackInfo, "title" | "artist">): void {
     console.log(`Match: ${artist} - ${title}`);
     console.log(`Artist: ${artist}`);
     console.log(`Title: ${title}`);
+}
 
-    const info = await getTrackInfo(artist, title, apiKey, verbose);
-    const album = info?.album?.title ?? "";
-    const year =
-        info?.album?.year ?? info?.album?.date?.match(/\b\d{4}\b/)?.[0] ?? "";
-    const coverData = await downloadFirstImage(
-        getCoverImageRequests(getCoverImages(info?.album?.image ?? []))
-    );
-
+function logAlbumDetails(album: string, year: string): void {
     console.log(`Album: ${album}`);
     console.log(`Year: ${year}`);
+}
 
-    return {
-        info: { title, artist, album, year } satisfies TrackInfo,
-        coverData,
-    };
+export class LastFmProvider implements MetadataProvider {
+    constructor(
+        private readonly apiKey: string,
+        private readonly verbose = false
+    ) {}
+
+    async findMetadata(
+        search: TrackSearch,
+        needsCover: boolean
+    ): Promise<TrackMetadata | null> {
+        const match = await searchTrack(
+            search.title,
+            this.apiKey,
+            search.artist
+        );
+
+        if (!match) {
+            logAlbumDetails("", "");
+            return null;
+        }
+
+        return this.getMatchMetadata(
+            getMatchedTrack(match, search),
+            needsCover
+        );
+    }
+
+    private async getMatchMetadata(
+        matched: Pick<TrackInfo, "title" | "artist">,
+        needsCover: boolean
+    ): Promise<TrackMetadata> {
+        logMatch(matched);
+        const track = await getTrackInfo(matched, this.apiKey, this.verbose);
+        const album = track?.album;
+        const info = getAlbumInfo(matched, album);
+        const coverData = needsCover ? await downloadAlbumCover(album) : null;
+        logAlbumDetails(info.album, info.year);
+        return { info, coverData };
+    }
 }

@@ -30,7 +30,10 @@ async function createTemporaryDirectory(): Promise<string> {
 
 function runCli(
     workingDirectory: string,
-    args: string[]
+    args: string[],
+    environment: NodeJS.ProcessEnv = {
+        MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
+    }
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
         const child = spawn(
@@ -43,7 +46,13 @@ function runCli(
             ],
             {
                 cwd: workingDirectory,
-                env: { ...process.env, LASTFM_API_KEY: "test-key" },
+                env: {
+                    ...process.env,
+                    LASTFM_API_KEY: "test-key",
+                    MUSICBRAINZ_USER_AGENT: undefined,
+                    YOUTUBE_API_KEY: undefined,
+                    ...environment,
+                },
                 stdio: ["ignore", "pipe", "pipe"],
             }
         );
@@ -160,4 +169,22 @@ test("CLI accepts the verbose option", async () => {
 
     assert.equal(exitCode, 0);
     assert.equal(stderr, "");
+});
+
+test("CLI warns at startup when MusicBrainz is not configured", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const sourceDirectory = path.join(workingDirectory, "source");
+    await fs.mkdir(sourceDirectory);
+
+    const { exitCode, stderr } = await runCli(
+        workingDirectory,
+        [sourceDirectory],
+        {}
+    );
+
+    assert.equal(exitCode, 0);
+    assert.equal(
+        stderr,
+        "MusicBrainz fallback requires MUSICBRAINZ_USER_AGENT.\n"
+    );
 });

@@ -1,21 +1,18 @@
 import * as path from "node:path";
 import { getErrorMessage } from "./errors.js";
 import { inferFolderSearchTerms, parseTrackFilename } from "./file.js";
-import { readTrackInfo } from "./audio-tags.js";
-import { findTrackMetadata, isProperlyTagged, tagAudio } from "./tagger.js";
+import { isProperlyTagged, readTrackInfo, tagAudio } from "./audio-tags.js";
+import type { MetadataChain } from "./metadata-chain.js";
 import type { ProcessingReport, ProcessingStats } from "./types.js";
 
 export async function processTrack(
     source: string,
     sourceRoot: string,
-    apiKey: string,
+    metadataChain: MetadataChain,
     stats: ProcessingStats,
     report: ProcessingReport,
     index: number,
-    total: number,
-    verbose: boolean,
-    musicBrainzUserAgent?: string,
-    youtubeApiKey?: string
+    total: number
 ): Promise<void> {
     const relativePath = path.relative(sourceRoot, source);
     const filenameTerms = parseTrackFilename(path.basename(source));
@@ -47,14 +44,9 @@ export async function processTrack(
             `Searching: "${title}"${artist ? ` (artist: "${artist}")` : ""}${album ? ` (album: "${album}")` : ""}`
         );
 
-        const metadata = await findTrackMetadata(
-            title,
-            apiKey,
-            artist,
-            verbose,
-            musicBrainzUserAgent,
-            youtubeApiKey,
-            { album, existingInfo }
+        const metadata = await metadataChain.find(
+            { title, artist, album },
+            existingInfo
         );
 
         if (!metadata) {

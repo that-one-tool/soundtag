@@ -6,6 +6,7 @@ import * as readline from "node:readline/promises";
 import { getErrorMessage } from "./errors.js";
 import { findAudioFiles, isDirectory } from "./file.js";
 import { parseArguments } from "./cli-options.js";
+import { createMetadataChain } from "./create-metadata-chain.js";
 import { processTrack } from "./processing.js";
 import type { ProcessingReport, ProcessingStats } from "./types.js";
 
@@ -36,6 +37,13 @@ async function main(): Promise<void> {
         if (!apiKey) {
             throw new Error("A Last.fm API key is required.");
         }
+
+        const metadataChain = createMetadataChain({
+            lastFmApiKey: apiKey,
+            verbose: options.verbose,
+            musicBrainzUserAgent: process.env.MUSICBRAINZ_USER_AGENT,
+            youtubeApiKey: process.env.YOUTUBE_API_KEY,
+        });
 
         const sourceInput = (
             options.sourcePath ??
@@ -89,14 +97,11 @@ async function main(): Promise<void> {
             await processTrack(
                 audioFiles[i],
                 sourceRoot,
-                apiKey,
+                metadataChain,
                 stats,
                 report,
                 i + 1,
-                audioFiles.length,
-                options.verbose,
-                process.env.MUSICBRAINZ_USER_AGENT,
-                process.env.YOUTUBE_API_KEY
+                audioFiles.length
             );
         }
 

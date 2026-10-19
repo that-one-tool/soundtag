@@ -1,85 +1,127 @@
 import assert from "node:assert/strict";
-import { performance } from "node:perf_hooks";
-import { afterEach, test } from "node:test";
-import { searchMusicBrainz } from "../src/musicbrainz.js";
+import { afterEach, beforeEach, test } from "node:test";
+import { MusicBrainzProvider } from "../src/musicbrainz.js";
+import type { Clock } from "../src/rate-limiter.js";
 
 const originalFetch = globalThis.fetch;
+const originalConsoleError = console.error;
 const userAgent = "SoundTag/1.0 (test@example.com)";
+const search = { title: "Title", artist: "Artist", album: "" };
+
+beforeEach(() => {
+    console.error = () => {};
+});
 
 afterEach(() => {
     globalThis.fetch = originalFetch;
+    console.error = originalConsoleError;
 });
 
-function mockMusicBrainzResponses(responses: (() => Response)[]): {
-    count: () => number;
-    times: number[];
-    bodies: Response[];
-} {
-    const times: number[] = [];
-    const bodies: Response[] = [];
-    globalThis.fetch = async () => {
-        times.push(performance.now());
-        const response = responses[times.length - 1]();
-        bodies.push(response);
-        return response;
+function createFakeClock(): Clock & { sleeps: number[] } {
+    let currentTime = 0;
+    const sleeps: number[] = [];
+
+    return {
+        sleeps,
+        now: () => currentTime,
+        async sleep(milliseconds) {
+            sleeps.push(milliseconds);
+            currentTime += milliseconds;
+        },
     };
-    return { count: () => times.length, times, bodies };
 }
 
-const unavailable = () =>
-    new Response("busy", { status: 503, headers: { "retry-after": "0" } });
+function mockMusicBrainzResponses(responses: (() => Response)[]): Response[] {
+    const sent: Response[] = [];
+    globalThis.fetch = async () => {
+        const response = responses[sent.length]();
+        sent.push(response);
+        return response;
+    };
+    return sent;
+}
+
+function unavailable(retryAfter: string): () => Response {
+    return () =>
+        new Response("busy", {
+            status: 503,
+            headers: { "retry-after": retryAfter },
+        });
+}
+
 const recording = () =>
     Response.json({ recordings: [{ title: "Retried title" }] });
 
-test("searchMusicBrainz retries once when the service is unavailable", async () => {
-    const requests = mockMusicBrainzResponses([unavailable, recording]);
+test("MusicBrainzProvider retries once after the Retry-After delay", async () => {
+    const clock = createFakeClock();
+    const sent = mockMusicBrainzResponses([unavailable("3"), recording]);
 
-    const result = await searchMusicBrainz("Title", "Artist", userAgent);
+    const metadata = await new MusicBrainzProvider(
+        userAgent,
+        clock
+    ).findMetadata(search, false);
 
-    assert.equal(result?.title, "Retried title");
-    assert.equal(requests.count(), 2);
-    assert.ok(
-        requests.times[1] - requests.times[0] >= 900,
-        "the retry must go through the MusicBrainz rate limiter"
-    );
-    assert.equal(requests.bodies[0].bodyUsed, true);
+    assert.equal(metadata?.info.title, "Retried title");
+    assert.equal(sent.length, 2);
+    assert.equal(sent[0].bodyUsed, true);
+    assert.deepEqual(clock.sleeps, [3000]);
 });
 
-test("searchMusicBrainz gives up after a second unavailable response", async () => {
-    const requests = mockMusicBrainzResponses([
-        unavailable,
-        unavailable,
+test("MusicBrainzProvider rate-limits the retry", async () => {
+    const clock = createFakeClock();
+    mockMusicBrainzResponses([unavailable("0"), recording]);
+
+    await new MusicBrainzProvider(userAgent, clock).findMetadata(search, false);
+
+    assert.deepEqual(clock.sleeps, [0, 1000]);
+});
+
+test("MusicBrainzProvider gives up after a second unavailable response", async () => {
+    const sent = mockMusicBrainzResponses([
+        unavailable("0"),
+        unavailable("0"),
         recording,
     ]);
-    const originalConsoleError = console.error;
-    console.error = () => {};
 
-    try {
-        assert.equal(
-            await searchMusicBrainz("Title", "Artist", userAgent),
-            null
-        );
-    } finally {
-        console.error = originalConsoleError;
-    }
-    assert.equal(requests.count(), 2);
+    assert.equal(
+        await new MusicBrainzProvider(
+            userAgent,
+            createFakeClock()
+        ).findMetadata(search, false),
+        null
+    );
+    assert.equal(sent.length, 2);
 });
 
-test("searchMusicBrainz does not retry other HTTP errors", async () => {
-    const requests = mockMusicBrainzResponses([
+test("MusicBrainzProvider does not retry other HTTP errors", async () => {
+    const sent = mockMusicBrainzResponses([
         () => new Response(null, { status: 500 }),
         recording,
     ]);
-    const originalConsoleError = console.error;
-    console.error = () => {};
 
-    try {
-        assert.equal(
-            await searchMusicBrainz("Title", "Artist", userAgent),
-            null
-        );
-    } finally {
-        console.error = originalConsoleError;
-    }
-    assert.equal(requests.count(), 1);
+    assert.equal(
+        await new MusicBrainzProvider(
+            userAgent,
+            createFakeClock()
+        ).findMetadata(search, false),
+        null
+    );
+    assert.equal(sent.length, 1);
+});
+
+test("MusicBrainzProvider skips the cover download when no cover is needed", async () => {
+    const sent = mockMusicBrainzResponses([
+        () =>
+            Response.json({
+                recordings: [{ title: "Title", releases: [{ id: "release" }] }],
+            }),
+    ]);
+
+    const metadata = await new MusicBrainzProvider(
+        userAgent,
+        createFakeClock()
+    ).findMetadata(search, false);
+
+    assert.equal(metadata?.coverData, null);
+    assert.equal(sent.length, 1);
 });

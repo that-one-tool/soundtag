@@ -127,9 +127,13 @@ source folder to its final status:
 ## Development
 
 The source is organized by responsibility: `cli-options.ts` parses command-line
-arguments, `file.ts` handles audio-file discovery and temporary copies,
-`lastfm.ts` and `musicbrainz.ts` perform metadata lookups, `audio-tags.ts`
-reads and writes embedded tags, and `tagger.ts` coordinates metadata lookup.
+arguments, `file.ts` handles audio-file discovery and temporary copies, and
+`audio-tags.ts` reads and writes embedded tags. Metadata lookup is a chain of
+providers (`lastfm.ts`, `musicbrainz.ts`, `itunes.ts`, and the cover-only
+`youtube.ts`) run by `metadata-chain.ts`, which fills missing fields in order
+until the metadata is complete. `create-metadata-chain.ts` assembles the chain
+from configuration. Shared helpers live in `http.ts`, `rate-limiter.ts`, and
+`track-metadata.ts`.
 
 Build the application:
 

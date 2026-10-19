@@ -2,18 +2,23 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { performance } from "node:perf_hooks";
 import NodeID3 from "node-id3";
 import { File as TagLibFile } from "node-taglib-sharp";
 import { afterEach, test } from "node:test";
 import {
-    findTrackMetadata,
     isProperlyTagged,
+    readTrackInfo,
     tagAudio,
-} from "../src/tagger.js";
-import { readTrackInfo } from "../src/audio-tags.js";
-import { findItunesMetadata } from "../src/itunes.js";
+} from "../src/audio-tags.js";
+import {
+    createMetadataChain,
+    type MetadataChainConfig,
+} from "../src/create-metadata-chain.js";
+import { ItunesProvider } from "../src/itunes.js";
+import type { MetadataChain } from "../src/metadata-chain.js";
 import { processTrack } from "../src/processing.js";
+import type { Clock } from "../src/rate-limiter.js";
+import type { TrackInfo, TrackMetadata, TrackSearch } from "../src/types.js";
 
 const originalFetch = globalThis.fetch;
 const temporaryDirectories: string[] = [];
@@ -28,6 +33,29 @@ afterEach(async () => {
             )
     );
 });
+
+const instantClock: Clock = { now: () => 0, sleep: async () => undefined };
+const emptyInfo: TrackInfo = { title: "", artist: "", album: "", year: "" };
+
+function createTestChain(
+    config: Partial<MetadataChainConfig> = {}
+): MetadataChain {
+    return createMetadataChain(
+        { lastFmApiKey: "test-key", verbose: false, ...config },
+        instantClock
+    );
+}
+
+function findTrackMetadata(
+    search: Partial<TrackSearch>,
+    config: Partial<MetadataChainConfig> = {},
+    existingInfo: TrackInfo = emptyInfo
+): Promise<TrackMetadata | null> {
+    return createTestChain(config).find(
+        { title: "", artist: "", album: "", ...search },
+        existingInfo
+    );
+}
 
 async function createTemporaryDirectory(): Promise<string> {
     const directory = await fs.mkdtemp(
@@ -92,10 +120,8 @@ test("findTrackMetadata gets track info and downloads medium cover art", async (
     let metadata;
     try {
         metadata = await findTrackMetadata(
-            "search query",
-            "test-key",
-            undefined,
-            true
+            { title: "search query" },
+            { verbose: true }
         );
     } finally {
         console.log = originalConsoleLog;
@@ -168,7 +194,7 @@ test("findTrackMetadata does not log the track info URL unless verbose is enable
     };
 
     try {
-        await findTrackMetadata("Title", "test-key");
+        await findTrackMetadata({ title: "Title" });
     } finally {
         console.log = originalConsoleLog;
     }
@@ -202,7 +228,7 @@ test("findTrackMetadata constrains the search by artist and removes a repeated a
         return Response.json({ track: {} });
     };
 
-    await findTrackMetadata("Tubthumping", "test-key", "Chumbawamba");
+    await findTrackMetadata({ title: "Tubthumping", artist: "Chumbawamba" });
 
     assert.equal(requests[0].searchParams.get("track"), "Tubthumping");
     assert.equal(requests[0].searchParams.get("artist"), "Chumbawamba");
@@ -264,11 +290,8 @@ test("findTrackMetadata uses MusicBrainz and Cover Art Archive when Last.fm miss
     };
 
     const metadata = await findTrackMetadata(
-        "Tubthumping",
-        "test-key",
-        "Chumbawamba",
-        false,
-        "SoundTag/1.0 (test@example.com)"
+        { title: "Tubthumping", artist: "Chumbawamba" },
+        { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
     );
 
     assert.deepEqual(metadata, {
@@ -340,11 +363,8 @@ test("findTrackMetadata falls back to MusicBrainz when Last.fm has no track", as
 
     assert.deepEqual(
         await findTrackMetadata(
-            "Tubthumping",
-            "test-key",
-            "Chumbawamba",
-            false,
-            "SoundTag/1.0 (test@example.com)"
+            { title: "Tubthumping", artist: "Chumbawamba" },
+            { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
         ),
         {
             info: {
@@ -384,19 +404,13 @@ test("findTrackMetadata replaces a whitespace-only existing year with a fallback
     };
 
     const metadata = await findTrackMetadata(
-        "Title",
-        "test-key",
-        "Artist",
-        false,
-        "SoundTag/1.0 (test@example.com)",
-        undefined,
+        { title: "Title", artist: "Artist" },
+        { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" },
         {
-            existingInfo: {
-                title: "Existing title",
-                artist: "Existing artist",
-                album: "Existing album",
-                year: "   ",
-            },
+            title: "Existing title",
+            artist: "Existing artist",
+            album: "Existing album",
+            year: "   ",
         }
     );
 
@@ -463,21 +477,18 @@ test("MusicBrainz rate limiting does not delay Last.fm requests", async () => {
         throw new Error(`Unexpected request: ${url}`);
     };
 
-    const firstTrack = findTrackMetadata(
-        "First title",
-        "test-key",
-        undefined,
-        false,
-        "SoundTag/1.0 (test@example.com)"
+    const chain = createTestChain({
+        musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
+    });
+    const firstTrack = chain.find(
+        { title: "First title", artist: "", album: "" },
+        emptyInfo
     );
     await firstMusicBrainzRequest;
 
-    const secondTrack = findTrackMetadata(
-        "Second title",
-        "test-key",
-        undefined,
-        false,
-        "SoundTag/1.0 (test@example.com)"
+    const secondTrack = chain.find(
+        { title: "Second title", artist: "", album: "" },
+        emptyInfo
     );
     await secondLastFmInfo;
 
@@ -514,11 +525,8 @@ test("findTrackMetadata leaves Last.fm data intact when MusicBrainz has no resul
 
     assert.deepEqual(
         await findTrackMetadata(
-            "Title",
-            "test-key",
-            undefined,
-            false,
-            "SoundTag/1.0 (test@example.com)"
+            { title: "Title" },
+            { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
         ),
         {
             info: {
@@ -565,11 +573,8 @@ test("findTrackMetadata preserves partial Last.fm metadata when MusicBrainz fail
     let metadata;
     try {
         metadata = await findTrackMetadata(
-            "Title",
-            "test-key",
-            undefined,
-            false,
-            "SoundTag/1.0 (test@example.com)"
+            { title: "Title" },
+            { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
         );
     } finally {
         console.error = originalConsoleError;
@@ -630,7 +635,7 @@ test("findTrackMetadata uses large cover art when it is below 500 KB", async () 
         });
     };
 
-    const metadata = await findTrackMetadata("Title", "test-key");
+    const metadata = await findTrackMetadata({ title: "Title" });
 
     assert.deepEqual(metadata?.coverData, image);
     assert.deepEqual(imageRequests, ["https://images.example/large.jpg"]);
@@ -692,7 +697,7 @@ test("findTrackMetadata falls back to medium when large cover is not under 500 K
         });
     };
 
-    const metadata = await findTrackMetadata("Title", "test-key");
+    const metadata = await findTrackMetadata({ title: "Title" });
 
     assert.deepEqual(metadata?.coverData, mediumImage);
     assert.deepEqual(imageRequests, [
@@ -744,7 +749,7 @@ test("findTrackMetadata uses small cover art when medium is unavailable", async 
         });
     };
 
-    const metadata = await findTrackMetadata("Title", "test-key");
+    const metadata = await findTrackMetadata({ title: "Title" });
 
     assert.deepEqual(metadata?.coverData, image);
     assert.deepEqual(imageRequests, ["https://images.example/small.jpg"]);
@@ -800,7 +805,7 @@ test("findTrackMetadata falls back to small cover when medium cannot be download
         });
     };
 
-    const metadata = await findTrackMetadata("Title", "test-key");
+    const metadata = await findTrackMetadata({ title: "Title" });
 
     assert.deepEqual(metadata?.coverData, image);
     assert.deepEqual(imageRequests, [
@@ -820,7 +825,7 @@ test("findTrackMetadata returns null when neither service has a match and fallba
         return Response.json({ results: { trackmatches: { track: [] } } });
     };
 
-    assert.equal(await findTrackMetadata("missing track", "test-key"), null);
+    assert.equal(await findTrackMetadata({ title: "missing track" }), null);
     assert.equal(requestCount, 2);
 });
 
@@ -861,11 +866,8 @@ test("findTrackMetadata uses iTunes to fill missing metadata and artwork", async
     };
 
     const metadata = await findTrackMetadata(
-        "search title",
-        "test-key",
-        "search artist",
-        false,
-        "SoundTag/1.0 (test@example.com)"
+        { title: "search title", artist: "search artist" },
+        { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
     );
 
     assert.deepEqual(metadata, {
@@ -919,21 +921,12 @@ test("findTrackMetadata includes album context in fallback provider searches", a
 
     assert.equal(
         await findTrackMetadata(
-            "Track title",
-            "test-key",
-            "Folder artist",
-            false,
-            "SoundTag/1.0 (test@example.com)",
-            undefined,
             {
+                title: "Track title",
+                artist: "Folder artist",
                 album: "Folder album",
-                existingInfo: {
-                    title: "",
-                    artist: "",
-                    album: "",
-                    year: "",
-                },
-            }
+            },
+            { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
         ),
         null
     );
@@ -1007,11 +1000,8 @@ test("iTunes fallback does not replace metadata already found by Last.fm", async
     };
 
     const metadata = await findTrackMetadata(
-        "search title",
-        "test-key",
-        undefined,
-        false,
-        "SoundTag/1.0 (test@example.com)"
+        { title: "search title" },
+        { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
     );
 
     assert.deepEqual(metadata, {
@@ -1031,24 +1021,27 @@ test("iTunes fallback does not replace metadata already found by Last.fm", async
 });
 
 test("iTunes searches are rate-limited when requests run concurrently", async () => {
-    const requestTimes: number[] = [];
+    let requestCount = 0;
+    const sleeps: number[] = [];
+    const clock: Clock = {
+        now: () => 0,
+        sleep: async (milliseconds) => sleeps.push(milliseconds),
+    };
     globalThis.fetch = async (input) => {
-        const url = new URL(input.toString());
-        assert.equal(url.hostname, "itunes.apple.com");
-        requestTimes.push(performance.now());
+        assert.equal(new URL(input.toString()).hostname, "itunes.apple.com");
+        requestCount++;
         return Response.json({ results: [] });
     };
+    const provider = new ItunesProvider(clock);
+    const search = { title: "title", artist: "artist", album: "" };
 
     await Promise.all([
-        findItunesMetadata("first title", "artist"),
-        findItunesMetadata("second title", "artist"),
+        provider.findMetadata(search, true),
+        provider.findMetadata(search, true),
     ]);
 
-    assert.equal(requestTimes.length, 2);
-    assert.ok(
-        requestTimes[1] - requestTimes[0] >= 2_900,
-        "iTunes Search requests must be at least three seconds apart"
-    );
+    assert.equal(requestCount, 2);
+    assert.deepEqual(sleeps, [3000]);
 });
 
 test("findTrackMetadata uses a YouTube thumbnail only after provider artwork is missing", async () => {
@@ -1119,12 +1112,11 @@ test("findTrackMetadata uses a YouTube thumbnail only after provider artwork is 
     };
 
     const metadata = await findTrackMetadata(
-        "search title",
-        "test-key",
-        "search artist",
-        false,
-        "SoundTag/1.0 (test@example.com)",
-        "youtube-test-key"
+        { title: "search title", artist: "search artist" },
+        {
+            musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
+            youtubeApiKey: "youtube-test-key",
+        }
     );
 
     assert.deepEqual(metadata, {
@@ -1184,6 +1176,24 @@ test("tagAudio writes MP3 tags and isProperlyTagged reads them", async () => {
 const pngCover = Buffer.from([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
 ]);
+
+test("readTrackInfo trims the artist read from TagLib formats", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "padded.wav");
+    await fs.copyFile(
+        path.join(process.cwd(), "tests/fixtures/silent.wav"),
+        source
+    );
+    const file = TagLibFile.createFromPath(source);
+    try {
+        file.tag.performers = ["  ", " Padded artist "];
+        file.save();
+    } finally {
+        file.dispose();
+    }
+
+    assert.equal((await readTrackInfo(source)).artist, "Padded artist");
+});
 
 test("tagAudio stores the detected MIME type of MP3 cover art", async () => {
     const directory = await createTemporaryDirectory();
@@ -1409,12 +1419,11 @@ test("processTrack writes OGG Vorbis comments and embedded cover art", async () 
     await processTrack(
         source,
         directory,
-        "test-key",
+        createTestChain(),
         stats,
         report,
         1,
-        1,
-        false
+        1
     );
 
     const file = TagLibFile.createFromPath(source);
@@ -1501,13 +1510,13 @@ test("processTrack combines embedded tags with artist and album folder context",
     await processTrack(
         source,
         directory,
-        "test-key",
+        createTestChain({
+            musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
+        }),
         stats,
         report,
         1,
-        1,
-        false,
-        "SoundTag/1.0 (test@example.com)"
+        1
     );
 
     const lastFmSearch = requests.find(
@@ -1573,13 +1582,13 @@ test("processTrack writes available tags when year and cover art are unavailable
     await processTrack(
         source,
         directory,
-        "test-key",
+        createTestChain({
+            musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
+        }),
         stats,
         report,
         1,
-        1,
-        false,
-        "SoundTag/1.0 (test@example.com)"
+        1
     );
 
     const tags = await NodeID3.Promise.read(source);

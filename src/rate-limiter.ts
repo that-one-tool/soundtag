@@ -8,7 +8,7 @@ export interface Clock {
 
 export type RateLimiter = <T>(task: () => Promise<T>) => Promise<T>;
 
-const systemClock: Clock = {
+export const systemClock: Clock = {
     now: () => performance.now(),
     sleep: (milliseconds) => delay(milliseconds),
 };
