@@ -180,3 +180,34 @@ test("processBatch renames newly tagged files but not tracks that were not found
     });
     await fs.access(notFound);
 });
+
+test("processBatch renames only the first of two files with the same tags", async () => {
+    const directory = await createTemporaryDirectory();
+    const files = ["a.mp3", "b.mp3"].map((name) => path.join(directory, name));
+    for (const file of files) {
+        await fs.writeFile(file, `audio ${file}`);
+        await getTagStore(file).write(file, {
+            info: {
+                title: "Title",
+                artist: "Artist",
+                album: "A",
+                year: "2024",
+            },
+            coverData: Buffer.from("cover"),
+        });
+    }
+    const report = createReport(files, directory);
+
+    await processBatch(files, {
+        context: { sourceRoot: directory, metadataChain: createTestChain() },
+        report,
+        stopSignal: new AbortController().signal,
+        renameFiles: true,
+    });
+
+    assert.deepEqual(report.renamed, { "a.mp3": "Artist - Title.mp3" });
+    await fs.access(files[1]);
+    assert.ok(
+        output.logs.includes("Not renamed: Artist - Title.mp3 already exists.")
+    );
+});

@@ -1,5 +1,9 @@
 import * as path from "node:path";
-import { isSameFilename, renameIfFree } from "../library/file.js";
+import { renameIfFree } from "../library/file.js";
+import {
+    isSameFilename,
+    type FolderNameCache,
+} from "../library/folder-names.js";
 import { buildTrackFilename } from "../library/track-filename.js";
 import { getErrorMessage } from "../shared/errors.js";
 import { getTagStore, isProperlyTagged } from "../tags/audio-tags.js";
@@ -48,11 +52,12 @@ async function getTargetFilename(
 
 async function moveToFilename(
     source: string,
-    filename: string
+    filename: string,
+    folderNames: FolderNameCache
 ): Promise<string | null> {
     const destination = path.join(path.dirname(source), filename);
 
-    if (!(await renameIfFree(source, destination))) {
+    if (!(await renameIfFree(source, destination, folderNames))) {
         console.log(`Not renamed: ${filename} already exists.`);
         return null;
     }
@@ -63,11 +68,14 @@ async function moveToFilename(
 
 export async function renameTrack(
     source: string,
-    status: TrackStatus
+    status: TrackStatus,
+    folderNames: FolderNameCache
 ): Promise<string | null> {
     try {
         const filename = await getTargetFilename(source, status);
-        return filename ? await moveToFilename(source, filename) : null;
+        return filename
+            ? await moveToFilename(source, filename, folderNames)
+            : null;
     } catch (error) {
         console.error(`Rename error: ${getErrorMessage(error)}`);
         return null;

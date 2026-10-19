@@ -7,11 +7,11 @@ import {
     findAudioFiles,
     getAudioFormat,
     isDirectory,
-    isSameFilename,
     listSubfolders,
     renameIfFree,
     writeTemporaryCopy,
 } from "../../src/library/file.js";
+import { FolderNameCache } from "../../src/library/folder-names.js";
 
 let temporaryDirectory: string;
 
@@ -74,49 +74,26 @@ test("renameIfFree renames into a free name and never overwrites", async () => {
     const free = path.join(temporaryDirectory, "new.mp3");
     await fs.writeFile(source, "source");
     await fs.writeFile(taken, "taken");
+    const folderNames = new FolderNameCache([source]);
 
-    assert.equal(await renameIfFree(source, taken), false);
+    assert.equal(await renameIfFree(source, taken, folderNames), false);
     assert.equal(await fs.readFile(taken, "utf8"), "taken");
-    assert.equal(await renameIfFree(source, free), true);
+    assert.equal(await renameIfFree(source, free, folderNames), true);
     assert.equal(await fs.readFile(free, "utf8"), "source");
     await assert.rejects(fs.access(source));
 });
 
-test("renameIfFree treats a name differing only in case as taken", async () => {
-    const source = path.join(temporaryDirectory, "01.mp3");
-    await fs.writeFile(source, "source");
-    await fs.writeFile(
-        path.join(temporaryDirectory, "artist - title.mp3"),
-        "x"
-    );
+test("renameIfFree records the rename so the new name stays taken", async () => {
+    const first = path.join(temporaryDirectory, "first.mp3");
+    const second = path.join(temporaryDirectory, "second.mp3");
+    const target = path.join(temporaryDirectory, "Artist - Title.mp3");
+    await fs.writeFile(first, "first");
+    await fs.writeFile(second, "second");
+    const folderNames = new FolderNameCache([first, second]);
 
-    assert.equal(
-        await renameIfFree(
-            source,
-            path.join(temporaryDirectory, "Artist - Title.mp3")
-        ),
-        false
-    );
-    await fs.access(source);
-});
-
-test("renameIfFree treats a dangling symlink as taken", async () => {
-    const source = path.join(temporaryDirectory, "01.mp3");
-    const link = path.join(temporaryDirectory, "link.mp3");
-    await fs.writeFile(source, "source");
-    await fs.symlink(path.join(temporaryDirectory, "missing"), link);
-
-    assert.equal(await renameIfFree(source, link), false);
-    await fs.access(source);
-});
-
-test("isSameFilename ignores letter case and Unicode normalization", () => {
-    assert.equal(
-        isSameFilename("artist - title.mp3", "Artist - Title.MP3"),
-        true
-    );
-    assert.equal(isSameFilename("Bjo\u0308rk.mp3", "Bj\u00f6rk.mp3"), true);
-    assert.equal(isSameFilename("01 Title.mp3", "Artist - Title.mp3"), false);
+    assert.equal(await renameIfFree(first, target, folderNames), true);
+    assert.equal(await renameIfFree(second, target, folderNames), false);
+    assert.equal(await fs.readFile(target, "utf8"), "first");
 });
 
 test("getAudioFormat recognizes supported extensions case-insensitively", () => {

@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { FolderNameCache } from "../library/folder-names.js";
 import { processTrack, type ProcessingContext } from "./processing.js";
 import { renameTrack } from "./rename.js";
 import type {
@@ -31,6 +32,10 @@ export interface BatchRun {
     renameFiles: boolean;
 }
 
+interface ActiveBatch extends BatchRun {
+    folderNames: FolderNameCache;
+}
+
 function recordRename(
     source: string,
     destination: string,
@@ -47,13 +52,13 @@ function recordRename(
 async function renameProcessedFile(
     source: string,
     status: TrackStatus,
-    run: BatchRun
+    run: ActiveBatch
 ): Promise<void> {
     if (!run.renameFiles) {
         return;
     }
 
-    const destination = await renameTrack(source, status);
+    const destination = await renameTrack(source, status, run.folderNames);
 
     if (destination) {
         recordRename(source, destination, run);
@@ -63,19 +68,17 @@ async function renameProcessedFile(
 async function processFile(
     source: string,
     position: string,
-    run: BatchRun
+    run: ActiveBatch
 ): Promise<void> {
     const relativePath = path.relative(run.context.sourceRoot, source);
     logTrackHeader(`[${position}] ${relativePath}`, source);
     const status = await processTrack(source, run.context);
     run.report.files[relativePath] = status;
     await renameProcessedFile(source, status, run);
+    run.folderNames.markProcessed(source);
 }
 
-export async function processBatch(
-    files: string[],
-    run: BatchRun
-): Promise<void> {
+async function processFiles(files: string[], run: ActiveBatch): Promise<void> {
     for (const [index, source] of files.entries()) {
         if (run.stopSignal.aborted) {
             console.log("Stopped before processing the remaining files.");
@@ -83,6 +86,19 @@ export async function processBatch(
         }
 
         await processFile(source, `${index + 1}/${files.length}`, run);
+    }
+}
+
+export async function processBatch(
+    files: string[],
+    run: BatchRun
+): Promise<void> {
+    const folderNames = new FolderNameCache(files);
+
+    try {
+        await processFiles(files, { ...run, folderNames });
+    } finally {
+        folderNames.clear();
     }
 }
 

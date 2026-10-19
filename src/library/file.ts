@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { constants, type Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import type { FolderNameCache } from "./folder-names.js";
 
 const AUDIO_FORMATS = ["mp3", "ogg", "flac", "wav"] as const;
 
@@ -114,29 +115,17 @@ export async function listSubfolders(directory: string): Promise<string[]> {
         .toSorted((first, second) => first.localeCompare(second));
 }
 
-function normalizeFilename(name: string): string {
-    return name.normalize("NFC").toLowerCase();
-}
-
-export function isSameFilename(first: string, second: string): boolean {
-    return normalizeFilename(first) === normalizeFilename(second);
-}
-
-async function isFilenameTaken(destination: string): Promise<boolean> {
-    const filename = normalizeFilename(path.basename(destination));
-    const names = await fs.readdir(path.dirname(destination));
-    return names.some((name) => normalizeFilename(name) === filename);
-}
-
 export async function renameIfFree(
     source: string,
-    destination: string
+    destination: string,
+    folderNames: FolderNameCache
 ): Promise<boolean> {
-    if (await isFilenameTaken(destination)) {
+    if (await folderNames.isTaken(destination)) {
         return false;
     }
 
     await fs.rename(source, destination);
+    folderNames.recordRename(source, destination);
     return true;
 }
 
