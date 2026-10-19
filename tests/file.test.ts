@@ -28,7 +28,10 @@ test("isDirectory recognizes directories and missing paths", async () => {
     await fs.mkdir(directory);
 
     assert.equal(await isDirectory(directory), true);
-    assert.equal(await isDirectory(path.join(temporaryDirectory, "missing")), false);
+    assert.equal(
+        await isDirectory(path.join(temporaryDirectory, "missing")),
+        false
+    );
 });
 
 test("getAudioFormat recognizes supported extensions case-insensitively", () => {
@@ -75,14 +78,14 @@ test("findAudioFiles filters, recurses, sorts, and respects the file limit", asy
 });
 
 test("parseTrackFilename separates an artist and title when named with a hyphen", () => {
-    assert.deepEqual(
-        parseTrackFilename("Chumbawamba - Tubthumping.mp3"),
-        { artist: "Chumbawamba", title: "Tubthumping" }
-    );
-    assert.deepEqual(
-        parseTrackFilename("Artist_Name - Track.Title.mp3"),
-        { artist: "Artist Name", title: "Track Title" }
-    );
+    assert.deepEqual(parseTrackFilename("Chumbawamba - Tubthumping.mp3"), {
+        artist: "Chumbawamba",
+        title: "Tubthumping",
+    });
+    assert.deepEqual(parseTrackFilename("Artist_Name - Track.Title.mp3"), {
+        artist: "Artist Name",
+        title: "Track Title",
+    });
     assert.deepEqual(parseTrackFilename("AC-DC - Track-Title.mp3"), {
         artist: "AC-DC",
         title: "Track-Title",
@@ -187,7 +190,10 @@ test("findAudioFiles stops at the 3,000-file batch limit", async () => {
     await Promise.all(
         Array.from({ length: 3001 }, (_, index) =>
             fs.writeFile(
-                path.join(temporaryDirectory, `${index.toString().padStart(4, "0")}.mp3`),
+                path.join(
+                    temporaryDirectory,
+                    `${index.toString().padStart(4, "0")}.mp3`
+                ),
                 ""
             )
         )

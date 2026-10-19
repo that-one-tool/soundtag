@@ -48,7 +48,9 @@ async function requestItunesSearch(
         const response = await responsePromise;
 
         if (!response.ok) {
-            throw new Error(`iTunes Search request failed: HTTP ${response.status}`);
+            throw new Error(
+                `iTunes Search request failed: HTTP ${response.status}`
+            );
         }
 
         const data = (await response.json()) as ItunesSearchResponse;
@@ -69,7 +71,9 @@ async function requestItunesSearch(
     }
 }
 
-async function downloadArtwork(url: string | undefined): Promise<Buffer | null> {
+async function downloadArtwork(
+    url: string | undefined
+): Promise<Buffer | null> {
     if (!url) {
         return null;
     }

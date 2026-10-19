@@ -117,12 +117,12 @@ At the end of each run, `soundtag_output.json` is written inside the source
 folder used for that run. It maps each processed file's path relative to the
 source folder to its final status:
 
-| Status | Meaning |
-| --- | --- |
-| `READ` | The file was discovered and is awaiting processing. |
+| Status    | Meaning                                                                  |
+| --------- | ------------------------------------------------------------------------ |
+| `READ`    | The file was discovered and is awaiting processing.                      |
 | `SKIPPED` | The file was already tagged, or a complete metadata match was not found. |
-| `TAGGED` | Metadata was found and the source file was updated. |
-| `FAILED` | An error occurred while processing the file. |
+| `TAGGED`  | Metadata was found and the source file was updated.                      |
+| `FAILED`  | An error occurred while processing the file.                             |
 
 ## Development
 
@@ -142,3 +142,12 @@ Run the test suite:
 ```sh
 npm test
 ```
+
+Run every quality check (type checking, Oxlint, Prettier, and tests with
+coverage thresholds), as CI does:
+
+```sh
+npm run check
+```
+
+Apply Prettier formatting with `npm run format`.

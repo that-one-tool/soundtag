@@ -30,10 +30,7 @@ interface MusicBrainzSearchResponse {
     recordings?: MusicBrainzRecording[];
 }
 
-async function requestMusicBrainz<T>(
-    url: URL,
-    userAgent: string
-): Promise<T> {
+async function requestMusicBrainz<T>(url: URL, userAgent: string): Promise<T> {
     const request = musicBrainzRequestQueue.then(async () => {
         const timeSinceLastRequest = Date.now() - lastMusicBrainzRequestAt;
 
@@ -48,7 +45,9 @@ async function requestMusicBrainz<T>(
         });
 
         if (!response.ok) {
-            throw new Error(`MusicBrainz request failed: HTTP ${response.status}`);
+            throw new Error(
+                `MusicBrainz request failed: HTTP ${response.status}`
+            );
         }
 
         return (await response.json()) as T;
@@ -174,7 +173,10 @@ export async function findMusicBrainzMetadata(
                 "",
         },
         coverData: includeCover
-            ? await downloadMusicBrainzCover(recording.releases ?? [], userAgent)
+            ? await downloadMusicBrainzCover(
+                  recording.releases ?? [],
+                  userAgent
+              )
             : null,
     };
 }

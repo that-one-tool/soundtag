@@ -16,7 +16,10 @@ test("parseArguments supports scan and verbose options", () => {
         recursive: false,
         verbose: true,
     });
-    assert.equal(parseArguments(["--no-recursive", "--recursive"]).recursive, true);
+    assert.equal(
+        parseArguments(["--no-recursive", "--recursive"]).recursive,
+        true
+    );
 });
 
 test("parseArguments rejects unknown flags and multiple source paths", () => {

@@ -28,8 +28,9 @@ export async function readTrackInfo(source: string): Promise<TrackInfo> {
             return {
                 title: file.tag.title?.trim() ?? "",
                 artist:
-                    file.tag.performers.find((performer) => performer?.trim()) ??
-                    "",
+                    file.tag.performers.find((performer) =>
+                        performer?.trim()
+                    ) ?? "",
                 album: file.tag.album?.trim() ?? "",
                 year: file.tag.year > 0 ? String(file.tag.year) : "",
             };

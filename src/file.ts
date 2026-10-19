@@ -26,10 +26,7 @@ export function getAudioFormat(filename: string): AudioFormat | null {
 }
 
 function cleanFilenamePart(value: string): string {
-    return value
-        .replace(/[._]+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+    return value.replace(/[._]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function removeTrackNumber(name: string): string {
@@ -94,11 +91,12 @@ export function inferFolderSearchTerms(
         path.resolve(sourceRoot),
         path.dirname(path.resolve(filename))
     );
-    const directories = relativeDirectory === ""
-        ? []
-        : relativeDirectory
-              .split(path.sep)
-              .filter((directory) => !isStructuralDirectory(directory));
+    const directories =
+        relativeDirectory === ""
+            ? []
+            : relativeDirectory
+                  .split(path.sep)
+                  .filter((directory) => !isStructuralDirectory(directory));
 
     if (directories.length === 0) {
         return {};

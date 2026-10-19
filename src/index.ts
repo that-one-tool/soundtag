@@ -3,16 +3,10 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import * as readline from "node:readline/promises";
-import {
-    findAudioFiles,
-    isDirectory,
-} from "./file.js";
+import { findAudioFiles, isDirectory } from "./file.js";
 import { parseArguments } from "./cli-options.js";
 import { processTrack } from "./processing.js";
-import type {
-    ProcessingReport,
-    ProcessingStats,
-} from "./types.js";
+import type { ProcessingReport, ProcessingStats } from "./types.js";
 
 const MAX_FILES_PER_RUN = 3000;
 
@@ -39,7 +33,7 @@ async function main(): Promise<void> {
         const options = parseArguments(process.argv.slice(2));
         const apiKey = (
             process.env.LASTFM_API_KEY ??
-            await terminal.question("Enter your Last.fm API key: ")
+            (await terminal.question("Enter your Last.fm API key: "))
         ).trim();
 
         if (!apiKey) {
@@ -48,7 +42,7 @@ async function main(): Promise<void> {
 
         const sourceInput = (
             options.sourcePath ??
-            await terminal.question("Enter the source folder path: ")
+            (await terminal.question("Enter the source folder path: "))
         ).trim();
 
         if (!sourceInput) {
@@ -67,9 +61,7 @@ async function main(): Promise<void> {
         console.log(
             `Subfolders: ${options.recursive ? "included" : "excluded"}`
         );
-        console.log(
-            `Batch limit: ${MAX_FILES_PER_RUN} audio files per run\n`
-        );
+        console.log(`Batch limit: ${MAX_FILES_PER_RUN} audio files per run\n`);
 
         const audioFiles = await findAudioFiles(
             sourceRoot,

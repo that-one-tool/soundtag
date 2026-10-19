@@ -21,9 +21,11 @@ const temporaryDirectories: string[] = [];
 afterEach(async () => {
     globalThis.fetch = originalFetch;
     await Promise.all(
-        temporaryDirectories.splice(0).map((directory) =>
-            fs.rm(directory, { recursive: true, force: true })
-        )
+        temporaryDirectories
+            .splice(0)
+            .map((directory) =>
+                fs.rm(directory, { recursive: true, force: true })
+            )
     );
 });
 
@@ -217,7 +219,8 @@ test("findTrackMetadata uses MusicBrainz and Cover Art Archive when Last.fm miss
         const url = new URL(input.toString());
         requests.push({
             url,
-            userAgent: new Headers(init?.headers).get("user-agent") ?? undefined,
+            userAgent:
+                new Headers(init?.headers).get("user-agent") ?? undefined,
         });
 
         if (url.hostname === "ws.audioscrobbler.com") {
@@ -290,8 +293,8 @@ test("findTrackMetadata uses MusicBrainz and Cover Art Archive when Last.fm miss
         "SoundTag/1.0 (test@example.com)"
     );
     assert.equal(
-        requests.find(({ url }) => url.hostname === "coverartarchive.org")
-            ?.url.pathname,
+        requests.find(({ url }) => url.hostname === "coverartarchive.org")?.url
+            .pathname,
         "/release/release-id/front-500"
     );
 });
@@ -474,7 +477,12 @@ test("findTrackMetadata leaves Last.fm data intact when MusicBrainz has no resul
             "SoundTag/1.0 (test@example.com)"
         ),
         {
-            info: { title: "Title", artist: "Artist", album: "Album", year: "" },
+            info: {
+                title: "Title",
+                artist: "Artist",
+                album: "Album",
+                year: "",
+            },
             coverData: null,
         }
     );
@@ -630,10 +638,9 @@ test("findTrackMetadata falls back to medium when large cover is not under 500 K
 
         imageRequests.push(url.href);
         if (url.pathname.endsWith("large.jpg")) {
-            return new Response(
-                new Uint8Array(500 * 1024),
-                { headers: { "content-type": "image/jpeg" } }
-            );
+            return new Response(new Uint8Array(500 * 1024), {
+                headers: { "content-type": "image/jpeg" },
+            });
         }
 
         return new Response(mediumImage, {
@@ -831,7 +838,10 @@ test("findTrackMetadata uses iTunes to fill missing metadata and artwork", async
     );
     assert.ok(itunesRequest);
     assert.equal(itunesRequest.pathname, "/search");
-    assert.equal(itunesRequest.searchParams.get("term"), "search artist search title");
+    assert.equal(
+        itunesRequest.searchParams.get("term"),
+        "search artist search title"
+    );
     assert.equal(itunesRequest.searchParams.get("country"), "US");
     assert.equal(itunesRequest.searchParams.get("entity"), "song");
     assert.equal(itunesRequest.searchParams.get("limit"), "1");
@@ -913,7 +923,10 @@ test("iTunes fallback does not replace metadata already found by Last.fm", async
                 return Response.json({
                     results: {
                         trackmatches: {
-                            track: { name: "Last.fm title", artist: "Last.fm artist" },
+                            track: {
+                                name: "Last.fm title",
+                                artist: "Last.fm artist",
+                            },
                         },
                     },
                 });
@@ -1007,7 +1020,10 @@ test("findTrackMetadata uses a YouTube thumbnail only after provider artwork is 
                 return Response.json({
                     results: {
                         trackmatches: {
-                            track: { name: "Matched title", artist: "Matched artist" },
+                            track: {
+                                name: "Matched title",
+                                artist: "Matched artist",
+                            },
                         },
                     },
                 });
@@ -1157,7 +1173,8 @@ test("tagAudio preserves existing MP3 fields when metadata is unavailable", asyn
     assert.equal(tags.artist, "New artist");
     assert.equal(tags.album, "Existing album");
     assert.equal(tags.year, "2020");
-    assert.deepEqual(tags.image?.imageBuffer, cover);
+    assert.ok(typeof tags.image === "object");
+    assert.deepEqual(tags.image.imageBuffer, cover);
 });
 
 test("tagAudio preserves existing OGG fields when metadata is unavailable", async () => {

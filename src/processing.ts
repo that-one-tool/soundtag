@@ -1,14 +1,7 @@
 import * as path from "node:path";
-import {
-    inferFolderSearchTerms,
-    parseTrackFilename,
-} from "./file.js";
+import { inferFolderSearchTerms, parseTrackFilename } from "./file.js";
 import { readTrackInfo } from "./audio-tags.js";
-import {
-    findTrackMetadata,
-    isProperlyTagged,
-    tagAudio,
-} from "./tagger.js";
+import { findTrackMetadata, isProperlyTagged, tagAudio } from "./tagger.js";
 import type { ProcessingReport, ProcessingStats } from "./types.js";
 
 function getErrorMessage(error: unknown): string {

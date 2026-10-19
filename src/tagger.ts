@@ -71,7 +71,8 @@ export async function findTrackMetadata(
     }
 
     if (musicBrainzMetadata) {
-        info.title = info.title.trim() || musicBrainzMetadata.info.title || query;
+        info.title =
+            info.title.trim() || musicBrainzMetadata.info.title || query;
         info.artist =
             info.artist.trim() ||
             musicBrainzMetadata.info.artist ||

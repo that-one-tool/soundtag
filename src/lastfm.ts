@@ -95,7 +95,7 @@ async function searchTrack(
             return null;
         }
 
-        return Array.isArray(tracks) ? tracks[0] ?? null : tracks;
+        return Array.isArray(tracks) ? (tracks[0] ?? null) : tracks;
     } catch (error) {
         console.error(`Last.fm search failed: ${getErrorMessage(error)}`);
         return null;
@@ -249,9 +249,7 @@ export async function findLastFmMetadata(
     const info = await getTrackInfo(artist, title, apiKey, verbose);
     const album = info?.album?.title ?? "";
     const year =
-        info?.album?.year ??
-        info?.album?.date?.match(/\b\d{4}\b/)?.[0] ??
-        "";
+        info?.album?.year ?? info?.album?.date?.match(/\b\d{4}\b/)?.[0] ?? "";
     const coverImages = getCoverImages(info?.album?.image ?? []);
     const coverData =
         coverImages.length > 0 ? await downloadImage(coverImages) : null;

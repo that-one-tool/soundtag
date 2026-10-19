@@ -1,5 +1,3 @@
-import type { TrackMetadata } from "./types.js";
-
 const YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 
 interface YouTubeThumbnail {
@@ -44,7 +42,9 @@ async function findThumbnailUrl(
         });
 
         if (!response.ok) {
-            throw new Error(`YouTube Data API request failed: HTTP ${response.status}`);
+            throw new Error(
+                `YouTube Data API request failed: HTTP ${response.status}`
+            );
         }
 
         const data = (await response.json()) as YouTubeSearchResponse;
@@ -59,7 +59,9 @@ async function findThumbnailUrl(
             null
         );
     } catch (error) {
-        console.error(`YouTube thumbnail search failed: ${getErrorMessage(error)}`);
+        console.error(
+            `YouTube thumbnail search failed: ${getErrorMessage(error)}`
+        );
         return null;
     }
 }
@@ -71,7 +73,9 @@ async function downloadThumbnail(url: string): Promise<Buffer | null> {
         });
 
         if (!response.ok) {
-            throw new Error(`YouTube thumbnail request failed: HTTP ${response.status}`);
+            throw new Error(
+                `YouTube thumbnail request failed: HTTP ${response.status}`
+            );
         }
 
         const contentType = response.headers.get("content-type") ?? "";
@@ -83,7 +87,9 @@ async function downloadThumbnail(url: string): Promise<Buffer | null> {
         const data = Buffer.from(await response.arrayBuffer());
         return data.length > 0 ? data : null;
     } catch (error) {
-        console.error(`YouTube thumbnail download failed: ${getErrorMessage(error)}`);
+        console.error(
+            `YouTube thumbnail download failed: ${getErrorMessage(error)}`
+        );
         return null;
     }
 }

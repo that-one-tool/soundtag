@@ -12,9 +12,11 @@ const tsxLoader = path.join(projectRoot, "node_modules/tsx/dist/loader.mjs");
 
 afterEach(async () => {
     await Promise.all(
-        temporaryDirectories.splice(0).map((directory) =>
-            fs.rm(directory, { recursive: true, force: true })
-        )
+        temporaryDirectories
+            .splice(0)
+            .map((directory) =>
+                fs.rm(directory, { recursive: true, force: true })
+            )
     );
 });
 
@@ -33,7 +35,12 @@ function runCli(
     return new Promise((resolve, reject) => {
         const child = spawn(
             process.execPath,
-            ["--import", tsxLoader, path.join(projectRoot, "src/index.ts"), ...args],
+            [
+                "--import",
+                tsxLoader,
+                path.join(projectRoot, "src/index.ts"),
+                ...args,
+            ],
             {
                 cwd: workingDirectory,
                 env: { ...process.env, LASTFM_API_KEY: "test-key" },
@@ -50,7 +57,9 @@ function runCli(
             stderr += chunk;
         });
         child.once("error", reject);
-        child.once("close", (exitCode) => resolve({ exitCode, stdout, stderr }));
+        child.once("close", (exitCode) =>
+            resolve({ exitCode, stdout, stderr })
+        );
     });
 }
 
@@ -63,10 +72,10 @@ test("CLI writes a report and --no-recursive excludes nested audio files", async
         "audio"
     );
 
-    const { exitCode, stdout, stderr } = await runCli(
-        workingDirectory,
-        [sourceDirectory, "--no-recursive"]
-    );
+    const { exitCode, stdout, stderr } = await runCli(workingDirectory, [
+        sourceDirectory,
+        "--no-recursive",
+    ]);
 
     assert.equal(exitCode, 0);
     assert.equal(stderr, "");
@@ -126,10 +135,7 @@ test("CLI records a properly tagged file as skipped in the report", async () => 
 
 test("CLI reports invalid options and still writes the report", async () => {
     const workingDirectory = await createTemporaryDirectory();
-    const { exitCode, stdout, stderr } = await runCli(
-        workingDirectory,
-        ["--unknown"]
-    );
+    const { exitCode, stderr } = await runCli(workingDirectory, ["--unknown"]);
 
     assert.equal(exitCode, 1);
     assert.match(stderr, /Unknown option: --unknown/);
