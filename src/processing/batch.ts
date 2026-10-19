@@ -8,12 +8,13 @@ import {
 } from "./folder-covers.js";
 import { processTrack, type ProcessingContext } from "./processing.js";
 import { renameTrack } from "./rename.js";
+import type { StoredTags } from "../tags/types.js";
 import type {
     FileStatus,
     ProcessedTrack,
+    ProcessingTrack,
     ProcessingReport,
     ProcessingStats,
-    TrackStatus,
 } from "./types.js";
 
 export const MAX_FILES_PER_RUN = 3000;
@@ -46,9 +47,21 @@ export interface BatchRun {
     onTrackProcessed?: (result: ProcessedTrack) => void;
 }
 
+interface BatchTrack extends ProcessingTrack {
+    destination: string | null;
+}
+
+interface TaggedTrack extends BatchTrack {
+    tags: StoredTags;
+}
+
+function hasTags(track: BatchTrack): track is TaggedTrack {
+    return track.tags !== null;
+}
+
 interface ActiveBatch extends BatchRun {
     folderNames: FolderNameCache;
-    processed: ProcessedTrack[];
+    processed: BatchTrack[];
 }
 
 function recordRename(
@@ -65,21 +78,20 @@ function recordRename(
 }
 
 async function renameProcessedFile(
-    source: string,
-    status: TrackStatus,
+    track: ProcessingTrack,
     run: ActiveBatch
 ): Promise<string | null> {
     if (!run.renameFiles) {
         return null;
     }
 
-    const destination = await renameTrack(source, status, {
+    const destination = await renameTrack(track, {
         folderNames: run.folderNames,
         logger: run.context.logger,
     });
 
     if (destination) {
-        recordRename(source, destination, run);
+        recordRename(track.source, destination, run);
     }
 
     return destination;
@@ -92,16 +104,17 @@ async function processFile(
 ): Promise<void> {
     const relativePath = path.relative(run.context.sourceRoot, source);
     logTrackHeader(`[${position}] ${relativePath}`, source, run.context.logger);
-    const status = await processTrack(source, run.context);
-    run.report.files[relativePath] = status;
-    const destination = await renameProcessedFile(source, status, run);
+    const track = { source, ...(await processTrack(source, run.context)) };
+    run.report.files[relativePath] = track.status;
+    const destination = await renameProcessedFile(track, run);
     run.folderNames.markProcessed(source);
-    announceTrack({ source, status, destination }, run);
+    announceTrack({ ...track, destination }, run);
 }
 
-function announceTrack(track: ProcessedTrack, run: ActiveBatch): void {
+function announceTrack(track: BatchTrack, run: ActiveBatch): void {
+    const { source, status, destination } = track;
     run.processed.push(track);
-    run.onTrackProcessed?.(track);
+    run.onTrackProcessed?.({ source, status, destination });
 }
 
 async function processFiles(files: string[], run: ActiveBatch): Promise<void> {
@@ -118,7 +131,8 @@ async function processFiles(files: string[], run: ActiveBatch): Promise<void> {
 }
 
 async function markTaggedByCover(
-    { source, status }: ProcessedTrack,
+    { source, status }: BatchTrack,
+    tags: StoredTags,
     run: ActiveBatch
 ): Promise<void> {
     if (status !== "SKIPPED") {
@@ -126,24 +140,37 @@ async function markTaggedByCover(
     }
 
     run.report.files[path.relative(run.context.sourceRoot, source)] = "TAGGED";
+    const withCover = { ...tags, hasCover: true };
     // The track itself was not found, so its tags stay unverified.
-    const destination = await renameProcessedFile(source, "SKIPPED", run);
+    const destination = await renameProcessedFile(
+        { source, status: "SKIPPED", tags: withCover },
+        run
+    );
     run.onTrackProcessed?.({ source, status: "TAGGED", destination });
 }
 
+function getCurrentPath({ source, destination }: BatchTrack): string {
+    return destination ?? source;
+}
+
 async function shareFolderCover(
-    track: ProcessedTrack,
+    track: TaggedTrack,
     sharing: CoverSharing,
     run: ActiveBatch
 ): Promise<void> {
-    const current = track.destination ?? track.source;
-
-    if (await borrowFolderCover(current, sharing)) {
-        await markTaggedByCover(track, run);
+    const { tags } = track;
+    if (
+        await borrowFolderCover({ path: getCurrentPath(track), tags }, sharing)
+    ) {
+        await markTaggedByCover(track, tags, run);
     }
 }
 
-function logCoverSharingStart(candidates: ProcessedTrack[], logger: Logger) {
+function getKnownTags(tracks: TaggedTrack[]): Map<string, StoredTags> {
+    return new Map(tracks.map((track) => [getCurrentPath(track), track.tags]));
+}
+
+function logCoverSharingStart(candidates: BatchTrack[], logger: Logger) {
     if (candidates.length > 0) {
         logger.info("\nSharing covers between tracks of the same album...");
     }
@@ -151,10 +178,9 @@ function logCoverSharingStart(candidates: ProcessedTrack[], logger: Logger) {
 
 async function shareFolderCovers(run: ActiveBatch): Promise<void> {
     const { sourceRoot, logger } = run.context;
-    const sharing = { folderCovers: new FolderCovers(), sourceRoot, logger };
-    const candidates = run.processed.filter(
-        ({ status }) => status !== "FAILED"
-    );
+    const candidates = run.processed.filter(hasTags);
+    const folderCovers = new FolderCovers(getKnownTags(candidates));
+    const sharing = { folderCovers, sourceRoot, logger };
     logCoverSharingStart(candidates, logger);
 
     for (const track of candidates) {

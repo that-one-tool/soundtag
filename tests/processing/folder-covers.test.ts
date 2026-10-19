@@ -10,6 +10,7 @@ import {
 import type { Logger } from "../../src/shared/logger.js";
 import type { TrackInfo } from "../../src/metadata/types.js";
 import { getTagStore } from "../../src/tags/audio-tags.js";
+import type { StoredTags } from "../../src/tags/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
@@ -29,6 +30,12 @@ function createSharing(
     logger: Logger = createRecordingLogger()
 ): CoverSharing {
     return { folderCovers: new FolderCovers(), sourceRoot, logger };
+}
+
+async function readTaggedFile(
+    file: string
+): Promise<{ path: string; tags: StoredTags }> {
+    return { path: file, tags: await getTagStore(file).read(file) };
 }
 
 async function createTrack(
@@ -131,7 +138,10 @@ test("borrowFolderCover copies a sibling cover without touching other tags", asy
     const logger = createRecordingLogger();
 
     assert.equal(
-        await borrowFolderCover(target, createSharing(directory, logger)),
+        await borrowFolderCover(
+            await readTaggedFile(target),
+            createSharing(directory, logger)
+        ),
         true
     );
 
@@ -160,7 +170,10 @@ test("borrowFolderCover leaves a track that already has a cover", async () => {
     );
 
     assert.equal(
-        await borrowFolderCover(target, createSharing(directory)),
+        await borrowFolderCover(
+            await readTaggedFile(target),
+            createSharing(directory)
+        ),
         false
     );
     assert.deepEqual(
@@ -178,19 +191,31 @@ test("borrowFolderCover returns false when no sibling shares the album", async (
     );
 
     assert.equal(
-        await borrowFolderCover(target, createSharing(directory)),
+        await borrowFolderCover(
+            await readTaggedFile(target),
+            createSharing(directory)
+        ),
         false
     );
 });
 
-test("borrowFolderCover logs and returns false when the track cannot be read", async () => {
+test("borrowFolderCover logs and returns false when the cover cannot be written", async () => {
     const directory = await createTemporaryDirectory();
+    await createTrack(
+        path.join(directory, "holder.mp3"),
+        albumInfo,
+        Buffer.from("cover")
+    );
     const target = path.join(directory, "broken.flac");
     await fs.writeFile(target, "not really flac");
     const logger = createRecordingLogger();
+    const tags = { info: albumInfo, extras: {}, hasCover: false };
 
     assert.equal(
-        await borrowFolderCover(target, createSharing(directory, logger)),
+        await borrowFolderCover(
+            { path: target, tags },
+            createSharing(directory, logger)
+        ),
         false
     );
     assert.equal(logger.errors.length, 1);
@@ -274,4 +299,46 @@ test("FolderCovers scans a folder again after a failed scan", async () => {
         holder,
         coverData: Buffer.from("cover"),
     });
+});
+
+test("borrowFolderCover trusts the given tags instead of reading the track", async () => {
+    const directory = await createTemporaryDirectory();
+    await createTrack(
+        path.join(directory, "holder.mp3"),
+        albumInfo,
+        Buffer.from("cover")
+    );
+    const target = await createTrack(
+        path.join(directory, "target.mp3"),
+        albumInfo,
+        null
+    );
+    const tags = { info: albumInfo, extras: {}, hasCover: true };
+
+    assert.equal(
+        await borrowFolderCover(
+            { path: target, tags },
+            createSharing(directory)
+        ),
+        false
+    );
+});
+
+test("FolderCovers uses known tags instead of reading those files", async () => {
+    const directory = await createTemporaryDirectory();
+    const holder = await createTrack(
+        path.join(directory, "holder.mp3"),
+        { ...albumInfo, album: "Other" },
+        Buffer.from("cover")
+    );
+    const knownTags = new Map([
+        [holder, { info: albumInfo, extras: {}, hasCover: true }],
+    ]);
+
+    const shared = await new FolderCovers(knownTags).find(
+        path.join(directory, "target.mp3"),
+        albumInfo
+    );
+
+    assert.deepEqual(shared, { holder, coverData: Buffer.from("cover") });
 });

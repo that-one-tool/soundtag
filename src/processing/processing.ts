@@ -17,7 +17,8 @@ import type {
     TrackMetadata,
     TrackSearch,
 } from "../metadata/types.js";
-import type { TrackStatus } from "./types.js";
+import type { StoredTags } from "../tags/types.js";
+import type { TrackResult, TrackStatus } from "./types.js";
 
 export interface ProcessingContext {
     sourceRoot: string;
@@ -173,29 +174,49 @@ async function writeNewMetadata(
     return "TAGGED";
 }
 
+async function readWrittenTags(
+    source: string,
+    logger: Logger
+): Promise<StoredTags | null> {
+    try {
+        return await getTagStore(source).read(source);
+    } catch (error) {
+        logger.error(
+            `Could not read the written tags: ${getErrorMessage(error)}`
+        );
+        return null;
+    }
+}
+
 async function tagTrack(
     source: string,
     context: ProcessingContext
-): Promise<TrackStatus> {
+): Promise<TrackResult> {
     context.logger.info("Reading existing tags...");
     const storedTags = await getTagStore(source).read(source);
 
     if (isProperlyTagged(storedTags)) {
         context.logger.info("Already properly tagged. Skipping.");
-        return "SKIPPED";
+        return { status: "SKIPPED", tags: storedTags };
     }
 
-    return tagUntaggedTrack(source, storedTags, context);
+    const status = await tagUntaggedTrack(source, storedTags, context);
+    // Only a write changes the tags, so other tracks keep the ones already read.
+    const tags =
+        status === "TAGGED"
+            ? await readWrittenTags(source, context.logger)
+            : storedTags;
+    return { status, tags };
 }
 
 export async function processTrack(
     source: string,
     context: ProcessingContext
-): Promise<TrackStatus> {
+): Promise<TrackResult> {
     try {
         return await tagTrack(source, context);
     } catch (error) {
         context.logger.error(`Processing error: ${getErrorMessage(error)}`);
-        return "FAILED";
+        return { status: "FAILED", tags: null };
     }
 }

@@ -7,9 +7,9 @@ import {
 import { buildTrackFilename } from "../library/track-filename.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
-import { getTagStore, hasCoreTags } from "../tags/audio-tags.js";
+import { hasCoreTags } from "../tags/audio-tags.js";
 import type { StoredTags } from "../tags/types.js";
-import type { TrackStatus } from "./types.js";
+import type { ProcessingTrack, TrackStatus } from "./types.js";
 
 export interface RenameContext {
     folderNames: FolderNameCache;
@@ -28,27 +28,20 @@ const RENAME_CONDITIONS: Partial<
     SKIPPED: hasCoreTags,
 };
 
-async function readRenamableTags(
-    source: string,
-    status: TrackStatus
-): Promise<StoredTags | null> {
+function isRenamable(
+    status: TrackStatus,
+    tags: StoredTags | null
+): tags is StoredTags {
     const canRename = RENAME_CONDITIONS[status];
-
-    if (!canRename) {
-        return null;
-    }
-
-    const tags = await getTagStore(source).read(source);
-    return canRename(tags) ? tags : null;
+    return Boolean(tags && canRename?.(tags));
 }
 
-async function getTargetFilename(
-    source: string,
-    status: TrackStatus
-): Promise<string | null> {
-    const tags = await readRenamableTags(source, status);
-
-    if (!tags) {
+function getTargetFilename({
+    source,
+    status,
+    tags,
+}: ProcessingTrack): string | null {
+    if (!isRenamable(status, tags)) {
         return null;
     }
 
@@ -73,14 +66,13 @@ async function moveToFilename(
 }
 
 export async function renameTrack(
-    source: string,
-    status: TrackStatus,
+    track: ProcessingTrack,
     context: RenameContext
 ): Promise<string | null> {
     try {
-        const filename = await getTargetFilename(source, status);
+        const filename = getTargetFilename(track);
         return filename
-            ? await moveToFilename(source, filename, context)
+            ? await moveToFilename(track.source, filename, context)
             : null;
     } catch (error) {
         context.logger.error(`Rename error: ${getErrorMessage(error)}`);

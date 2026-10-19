@@ -1,3 +1,4 @@
+import { Id3TagStore } from "../../src/tags/id3-tag-store.js";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -76,7 +77,7 @@ test("processTrack writes OGG Vorbis comments and embedded cover art", async () 
         });
     };
 
-    const status = await processTrack(source, {
+    const { status } = await processTrack(source, {
         sourceRoot: directory,
         logger: consoleLogger,
         metadataChain: createTestChain(),
@@ -163,7 +164,7 @@ test("processTrack combines embedded tags with artist and album folder context",
         throw new Error(`Unexpected request: ${url}`);
     };
 
-    const status = await processTrack(source, {
+    const { status } = await processTrack(source, {
         sourceRoot: directory,
         logger: consoleLogger,
         metadataChain: createTestChain({
@@ -229,7 +230,7 @@ test("processTrack writes available tags when year and cover art are unavailable
         return Response.json({ track: { album: { title: "Album" } } });
     };
 
-    const status = await processTrack(source, {
+    const { status } = await processTrack(source, {
         sourceRoot: directory,
         logger: consoleLogger,
         metadataChain: createTestChain({
@@ -256,13 +257,14 @@ test("processTrack marks unreadable audio files as failed without searching", as
         return new Response(null, { status: 500 });
     };
 
-    const status = await processTrack(source, {
+    const { status, tags } = await processTrack(source, {
         sourceRoot: directory,
         logger: consoleLogger,
         metadataChain: createTestChain(),
     });
 
     assert.equal(status, "FAILED");
+    assert.equal(tags, null);
     assert.equal(fetchCalls, 0);
     assert.ok(
         output.errors.some((line) => line.startsWith("Processing error: "))
@@ -283,11 +285,13 @@ test("processTrack skips files that are already properly tagged", async () => {
     };
 
     assert.equal(
-        await processTrack(source, {
-            sourceRoot: directory,
-            logger: consoleLogger,
-            metadataChain: createTestChain(),
-        }),
+        (
+            await processTrack(source, {
+                sourceRoot: directory,
+                logger: consoleLogger,
+                metadataChain: createTestChain(),
+            })
+        ).status,
         "SKIPPED"
     );
     assert.ok(output.logs.includes("Already properly tagged. Skipping."));
@@ -303,11 +307,13 @@ test("processTrack skips tracks no provider can identify", async () => {
             : Response.json({ results: { trackmatches: { track: [] } } });
 
     assert.equal(
-        await processTrack(source, {
-            sourceRoot: directory,
-            logger: consoleLogger,
-            metadataChain: createTestChain(),
-        }),
+        (
+            await processTrack(source, {
+                sourceRoot: directory,
+                logger: consoleLogger,
+                metadataChain: createTestChain(),
+            })
+        ).status,
         "SKIPPED"
     );
     assert.ok(
@@ -327,11 +333,13 @@ test("processTrack skips matches without a title and artist", async () => {
             : Response.json({ results: { trackmatches: { track: [] } } });
 
     assert.equal(
-        await processTrack(source, {
-            sourceRoot: directory,
-            logger: consoleLogger,
-            metadataChain: createTestChain(),
-        }),
+        (
+            await processTrack(source, {
+                sourceRoot: directory,
+                logger: consoleLogger,
+                metadataChain: createTestChain(),
+            })
+        ).status,
         "SKIPPED"
     );
     assert.ok(
@@ -407,11 +415,13 @@ test("processTrack logs its search and the metadata it could not find", async ()
     };
 
     assert.equal(
-        await processTrack(source, {
-            sourceRoot: directory,
-            logger: consoleLogger,
-            metadataChain: createTestChain(),
-        }),
+        (
+            await processTrack(source, {
+                sourceRoot: directory,
+                logger: consoleLogger,
+                metadataChain: createTestChain(),
+            })
+        ).status,
         "TAGGED"
     );
     assert.ok(
@@ -479,13 +489,15 @@ test("processTrack adds a missing genre and keeps the existing tags and cover", 
               })
             : Response.json({ results: { trackmatches: { track: [] } } });
 
-    const status = await processTrack(source, {
+    const result = await processTrack(source, {
         sourceRoot: directory,
         logger: consoleLogger,
         metadataChain: createTestChain(),
     });
+    const { status } = result;
 
     assert.equal(status, "TAGGED");
+    assert.deepEqual(result.tags, await getTagStore(source).read(source));
     const tags = await NodeID3.Promise.read(source);
     assert.equal(tags.title, "Title");
     assert.equal(tags.genre, "Rock");
@@ -561,7 +573,7 @@ test("processTrack leaves a file unchanged when the services add nothing new", a
             ? Response.json({ results: [{ trackName: "Other" }] })
             : Response.json({ results: { trackmatches: { track: [] } } });
 
-    const status = await processTrack(source, {
+    const { status } = await processTrack(source, {
         sourceRoot: directory,
         logger: consoleLogger,
         metadataChain: createTestChain(),
@@ -572,4 +584,68 @@ test("processTrack leaves a file unchanged when the services add nothing new", a
     assert.ok(
         output.logs.includes("No new metadata found. Leaving source unchanged.")
     );
+});
+
+test("processTrack returns the tags it read from a skipped track", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "tagged.mp3");
+    await fs.writeFile(source, "audio bytes");
+    await getTagStore(source).write(source, {
+        info: { title: "Title", artist: "Artist", album: "", year: "2024" },
+        extras: { genre: "Rock" },
+        coverData: Buffer.from("cover"),
+    });
+
+    const result = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: createTestChain(),
+    });
+
+    assert.deepEqual(result, {
+        status: "SKIPPED",
+        tags: await getTagStore(source).read(source),
+    });
+});
+
+test("processTrack still reports a tagged track whose tags cannot be read back", async (context) => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "Artist - Title.mp3");
+    await fs.writeFile(source, "audio bytes");
+    globalThis.fetch = async (input) =>
+        new URL(input.toString()).hostname === "itunes.apple.com"
+            ? Response.json({
+                  results: [
+                      {
+                          trackName: "Title",
+                          artistName: "Artist",
+                          primaryGenreName: "Rock",
+                      },
+                  ],
+              })
+            : Response.json({ results: { trackmatches: { track: [] } } });
+    const readTags = Id3TagStore.prototype.read;
+    let reads = 0;
+    context.mock.method(
+        Id3TagStore.prototype,
+        "read",
+        function (this: Id3TagStore, file: string) {
+            reads += 1;
+            return reads === 1
+                ? readTags.call(this, file)
+                : Promise.reject(new Error("unreadable"));
+        }
+    );
+
+    const logger = createRecordingLogger();
+    const result = await processTrack(source, {
+        sourceRoot: directory,
+        logger,
+        metadataChain: createTestChain(),
+    });
+
+    assert.deepEqual(result, { status: "TAGGED", tags: null });
+    assert.deepEqual(logger.errors, [
+        "Could not read the written tags: unreadable",
+    ]);
 });

@@ -23,17 +23,17 @@ npm run build      # compile to dist/
 `tests/tags/audio-tags.test.ts`); the tag stores are tested through
 `tests/tags/audio-tags.test.ts`.
 
-| Folder                    | Responsibility                                                                                                                                                                               |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/index.ts`            | Entry point and `soundtag` bin: loads `.env` and wires the terminal session and browser launcher to `runApp`.                                                                                |
-| `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, terminal prompts and Ctrl+C handling, banner, summary, exit codes, and the lazy launch of the TUI.                           |
-| `src/tui/`                | Ink terminal UI: folder browser reducer, metadata panel, log pane, background `TaggingQueue`, session status dots. React components live in `components/` and hooks in `hooks/`.             |
-| `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file and returns `SKIPPED`, `TAGGED` or `FAILED`; `renameTrack` then renames it from its tags. |
-| `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, renames with a per-batch folder name cache, track filenames, and search terms derived from filenames and folders.                   |
-| `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                                                   |
-| `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `create-metadata-chain.ts` is the composition root; pure merge helpers.                                               |
-| `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                                                          |
-| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, per-batch `ImageCache`, rate limiter with an injectable `Clock`, errors, `Logger`.                                               |
+| Folder                    | Responsibility                                                                                                                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/index.ts`            | Entry point and `soundtag` bin: loads `.env` and wires the terminal session and browser launcher to `runApp`.                                                                      |
+| `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, terminal prompts and Ctrl+C handling, banner, summary, exit codes, and the lazy launch of the TUI.                 |
+| `src/tui/`                | Ink terminal UI: folder browser reducer, metadata panel, log pane, background `TaggingQueue`, session status dots. React components live in `components/` and hooks in `hooks/`.   |
+| `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file and returns its status and tags; `renameTrack` then renames it from those tags. |
+| `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, renames with a per-batch folder name cache, track filenames, and search terms derived from filenames and folders.         |
+| `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                                         |
+| `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `create-metadata-chain.ts` is the composition root; pure merge helpers.                                     |
+| `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                                                |
+| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, per-batch `ImageCache`, rate limiter with an injectable `Clock`, errors, `Logger`.                                     |
 
 Each domain owns its contracts in its own `types.ts`. Imports only point toward
 lower layers, and a layer may skip levels: `cli` → `tui` → `processing` → `tags` /

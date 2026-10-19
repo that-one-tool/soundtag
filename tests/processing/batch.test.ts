@@ -1,3 +1,4 @@
+import { Id3TagStore } from "../../src/tags/id3-tag-store.js";
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -663,5 +664,42 @@ test("processBatch stops sharing covers once a stop is requested", async () => {
     assert.equal(
         logger.infos.at(-1),
         "Stopped before sharing the remaining covers."
+    );
+});
+
+test("processBatch shares a renamed holder's cover without reading it again", async (context) => {
+    const directory = await createTemporaryDirectory();
+    const notFound = path.join(directory, "a.mp3");
+    const found = path.join(directory, "b.mp3");
+    await writeAlbumTrack(notFound, "Lost");
+    await writeAlbumTrack(found, "Found");
+    const renamedHolder = path.join(directory, "Artist - Found.mp3");
+    const readTags = Id3TagStore.prototype.read;
+    const readFiles: string[] = [];
+    context.mock.method(
+        Id3TagStore.prototype,
+        "read",
+        function (this: Id3TagStore, file: string) {
+            readFiles.push(file);
+            return readTags.call(this, file);
+        }
+    );
+
+    await processBatch([notFound, found], {
+        context: {
+            sourceRoot: directory,
+            metadataChain: createChainWithCoverFor("Found"),
+            logger: consoleLogger,
+        },
+        report: createReport([notFound, found], directory),
+        stopSignal: new AbortController().signal,
+        renameFiles: true,
+    });
+
+    const renamedBorrower = path.join(directory, "Artist - Lost.mp3");
+    assert.ok(!readFiles.includes(renamedHolder));
+    assert.deepEqual(
+        await getTagStore(renamedBorrower).readCover(renamedBorrower),
+        Buffer.from("cover")
     );
 });

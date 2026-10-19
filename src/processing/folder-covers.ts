@@ -4,8 +4,15 @@ import type { TrackInfo } from "../metadata/types.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
 import { getTagStore } from "../tags/audio-tags.js";
+import type { StoredTags } from "../tags/types.js";
 
 type CoverHolders = Map<string, string>;
+type KnownTags = ReadonlyMap<string, StoredTags>;
+
+export interface TaggedFile {
+    path: string;
+    tags: StoredTags;
+}
 
 export interface SharedCover {
     holder: string;
@@ -23,27 +30,34 @@ function getAlbumKey({ artist, album }: TrackInfo): string | null {
     return fields.every(Boolean) ? fields.join("\u0000") : null;
 }
 
-async function readCoverAlbumKey(file: string): Promise<string | null> {
-    const tags = await getTagStore(file).read(file);
+async function readCoverAlbumKey(
+    file: string,
+    knownTags: KnownTags
+): Promise<string | null> {
+    const tags = knownTags.get(file) ?? (await getTagStore(file).read(file));
     return tags.hasCover ? getAlbumKey(tags.info) : null;
 }
 
 async function addCoverHolder(
     holders: CoverHolders,
-    file: string
+    file: string,
+    knownTags: KnownTags
 ): Promise<void> {
-    const key = await readCoverAlbumKey(file).catch(() => null);
+    const key = await readCoverAlbumKey(file, knownTags).catch(() => null);
 
     if (key && !holders.has(key)) {
         holders.set(key, file);
     }
 }
 
-async function findCoverHolders(folder: string): Promise<CoverHolders> {
+async function findCoverHolders(
+    folder: string,
+    knownTags: KnownTags
+): Promise<CoverHolders> {
     const holders: CoverHolders = new Map();
 
     for (const file of await findAudioFiles(folder, false)) {
-        await addCoverHolder(holders, file);
+        await addCoverHolder(holders, file, knownTags);
     }
 
     return holders;
@@ -80,6 +94,8 @@ export class FolderCovers {
         Promise<SharedCover | null>
     >();
 
+    constructor(private readonly knownTags: KnownTags = new Map()) {}
+
     async find(source: string, info: TrackInfo): Promise<SharedCover | null> {
         const key = getAlbumKey(info);
 
@@ -92,7 +108,9 @@ export class FolderCovers {
     }
 
     private getHolders(folder: string): Promise<CoverHolders> {
-        return getCached(this.holdersByFolder, folder, findCoverHolders);
+        return getCached(this.holdersByFolder, folder, (key) =>
+            findCoverHolders(key, this.knownTags)
+        );
     }
 
     private getCover(holder: string): Promise<SharedCover | null> {
@@ -107,10 +125,9 @@ export interface CoverSharing {
 }
 
 async function findMissingCover(
-    source: string,
+    { path: source, tags }: TaggedFile,
     folderCovers: FolderCovers
 ): Promise<SharedCover | null> {
-    const tags = await getTagStore(source).read(source);
     return tags.hasCover ? null : folderCovers.find(source, tags.info);
 }
 
@@ -127,10 +144,11 @@ function logCopiedCover(
 }
 
 async function copyFolderCover(
-    source: string,
+    file: TaggedFile,
     sharing: CoverSharing
 ): Promise<boolean> {
-    const shared = await findMissingCover(source, sharing.folderCovers);
+    const source = file.path;
+    const shared = await findMissingCover(file, sharing.folderCovers);
 
     if (!shared) {
         return false;
@@ -147,11 +165,11 @@ async function copyFolderCover(
 }
 
 export async function borrowFolderCover(
-    source: string,
+    file: TaggedFile,
     sharing: CoverSharing
 ): Promise<boolean> {
     try {
-        return await copyFolderCover(source, sharing);
+        return await copyFolderCover(file, sharing);
     } catch (error) {
         sharing.logger.error(`Cover sharing error: ${getErrorMessage(error)}`);
         return false;

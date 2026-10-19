@@ -11,6 +11,7 @@ import { emptyInfo } from "../helpers/metadata-chain.js";
 import { FolderNameCache } from "../../src/library/folder-names.js";
 import type { TrackStatus } from "../../src/processing/types.js";
 import type { TrackMetadata } from "../../src/metadata/types.js";
+import type { StoredTags } from "../../src/tags/types.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 const output = captureConsole();
@@ -18,11 +19,21 @@ const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-rename-test-"
 );
 
-function renameAlone(source: string, status: TrackStatus) {
-    return renameTrack(source, status, {
-        folderNames: new FolderNameCache([source]),
-        logger: consoleLogger,
-    });
+function readTagsOrNull(source: string): Promise<StoredTags | null> {
+    return getTagStore(source)
+        .read(source)
+        .catch(() => null);
+}
+
+async function renameAlone(
+    source: string,
+    status: TrackStatus,
+    tags?: StoredTags
+) {
+    return renameTrack(
+        { source, status, tags: tags ?? (await readTagsOrNull(source)) },
+        { folderNames: new FolderNameCache([source]), logger: consoleLogger }
+    );
 }
 
 const thunderstruck = { ...emptyInfo, artist: "AC/DC", title: "Thunderstruck" };
@@ -96,7 +107,11 @@ test("renameTrack reports errors without throwing", async () => {
     const directory = await createTemporaryDirectory();
 
     assert.equal(
-        await renameAlone(path.join(directory, "missing.flac"), "TAGGED"),
+        await renameAlone(path.join(directory, "missing.flac"), "TAGGED", {
+            info: thunderstruck,
+            extras: {},
+            hasCover: false,
+        }),
         null
     );
     assert.match(output.errors[0] ?? "", /^Rename error: /);
@@ -169,11 +184,24 @@ test("renameTrack logs to the injected logger", async () => {
     const source = await createTaggedMp3(directory, "01 track.mp3");
     const logger = createRecordingLogger();
 
-    await renameTrack(source, "TAGGED", {
-        folderNames: new FolderNameCache([source]),
-        logger,
-    });
+    await renameTrack(
+        { source, status: "TAGGED", tags: await readTagsOrNull(source) },
+        { folderNames: new FolderNameCache([source]), logger }
+    );
 
     assert.deepEqual(logger.infos, ["Renamed to: AC_DC - Thunderstruck.mp3"]);
     assert.deepEqual(output.logs, []);
+});
+
+test("renameTrack names the file from the given tags without reading it", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = await createTaggedMp3(directory, "01 track.mp3");
+
+    const renamed = await renameAlone(source, "TAGGED", {
+        info: { ...thunderstruck, title: "Back In Black" },
+        extras: {},
+        hasCover: false,
+    });
+
+    assert.equal(renamed, path.join(directory, "AC_DC - Back In Black.mp3"));
 });
