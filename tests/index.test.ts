@@ -153,7 +153,11 @@ test("CLI records a properly tagged file as skipped in the report", async () => 
             "utf8"
         )
     ) as { files: Record<string, string> };
-    assert.deepEqual(report, { files: { "already-tagged.mp3": "SKIPPED" } });
+    assert.deepEqual(report, {
+        files: { "already-tagged.mp3": "SKIPPED" },
+        renamed: { "already-tagged.mp3": "Artist - Title.mp3" },
+    });
+    await fs.access(path.join(sourceDirectory, "Artist - Title.mp3"));
 });
 
 test("CLI reports invalid options and still writes the report", async () => {

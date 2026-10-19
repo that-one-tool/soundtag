@@ -64,6 +64,7 @@ export async function loadSessionConfig(
             lastFmApiKey: await resolveApiKey(sources),
             recursive: options.recursive,
             verbose: options.verbose,
+            renameFiles: options.renameFiles,
             musicBrainzUserAgent: sources.env.MUSICBRAINZ_USER_AGENT,
             youtubeApiKey: sources.env.YOUTUBE_API_KEY,
         },

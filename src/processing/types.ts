@@ -10,4 +10,5 @@ export type TrackStatus = Exclude<FileStatus, "READ">;
 
 export interface ProcessingReport {
     files: Record<string, FileStatus>;
+    renamed?: Record<string, string>;
 }

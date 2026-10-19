@@ -4,6 +4,7 @@ import {
     countStatuses,
     createReport,
     processBatch,
+    type BatchRun,
 } from "../processing/batch.js";
 import {
     loadSessionConfig,
@@ -49,7 +50,7 @@ function printBanner(): void {
     console.log("                SOUNDTAG");
     console.log(`${SEPARATOR}\n`);
     console.log(
-        "Usage: npm start -- [source-folder] [--recursive | --no-recursive] [-v | --verbose]"
+        "Usage: npm start -- [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--no-rename]"
     );
 }
 
@@ -96,6 +97,19 @@ function createRun(
     };
 }
 
+function createBatchRun(
+    config: AppConfig,
+    run: TaggingRun,
+    metadataChain: MetadataChain
+): BatchRun {
+    return {
+        context: { sourceRoot: config.sourceRoot, metadataChain },
+        report: run.report,
+        stopSignal: run.stopSignal,
+        renameFiles: config.renameFiles,
+    };
+}
+
 async function tagLibrary(
     config: AppConfig,
     run: TaggingRun,
@@ -111,11 +125,7 @@ async function tagLibrary(
 
     printProcessingStart(audioFiles.length);
     run.report = createReport(audioFiles, config.sourceRoot);
-    await processBatch(audioFiles, {
-        context: { sourceRoot: config.sourceRoot, metadataChain },
-        report: run.report,
-        stopSignal: run.stopSignal,
-    });
+    await processBatch(audioFiles, createBatchRun(config, run, metadataChain));
     printSummary(countStatuses(run.report), run);
 }
 

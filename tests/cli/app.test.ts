@@ -72,10 +72,37 @@ test("runApp tags a library and prints a summary", async () => {
     assert.equal(await runAppIn(workingDirectory, ["."]), 0);
     assert.deepEqual(await readReport(workingDirectory), {
         files: { "tagged.mp3": "SKIPPED" },
+        renamed: { "tagged.mp3": "Artist - Title.mp3" },
     });
     assert.equal(output.logs[1], "                SOUNDTAG");
     assert.ok(output.logs.includes("Skipped:    1"));
     assert.ok(output.logs.includes("PROCESSING COMPLETE"));
+});
+
+test("runApp keeps file names with --no-rename", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const source = path.join(workingDirectory, "tagged.mp3");
+    await fs.writeFile(source, "audio bytes");
+    NodeID3.write(
+        {
+            title: "Title",
+            artist: "Artist",
+            year: "2024",
+            image: {
+                mime: "image/jpeg",
+                type: { id: 3, name: "front cover" },
+                description: "Cover",
+                imageBuffer: Buffer.from("cover"),
+            },
+        },
+        source
+    );
+
+    assert.equal(await runAppIn(workingDirectory, [".", "--no-rename"]), 0);
+    await fs.access(source);
+    assert.deepEqual(await readReport(workingDirectory), {
+        files: { "tagged.mp3": "SKIPPED" },
+    });
 });
 
 test("runApp reports an empty library without a summary", async () => {

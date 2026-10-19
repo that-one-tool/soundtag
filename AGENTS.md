@@ -23,16 +23,16 @@ npm run build      # compile to dist/
 `tests/tags/audio-tags.test.ts`); the tag stores are tested through
 `tests/tags/audio-tags.test.ts`.
 
-| Folder                    | Responsibility                                                                                                                                                  |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/index.ts`            | Entry point: loads `.env` and wires the terminal session to `runApp`.                                                                                           |
-| `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, folder browser, terminal prompts and Ctrl+C handling, banner, summary, report file, exit codes. |
-| `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file and returns `SKIPPED`, `TAGGED` or `FAILED`.                 |
-| `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, and search terms derived from filenames and folders.                                                   |
-| `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                      |
-| `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `create-metadata-chain.ts` is the composition root; pure merge helpers.                  |
-| `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                             |
-| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, rate limiter with an injectable `Clock`, errors.                                                    |
+| Folder                    | Responsibility                                                                                                                                                                               |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/index.ts`            | Entry point: loads `.env` and wires the terminal session to `runApp`.                                                                                                                        |
+| `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, folder browser, terminal prompts and Ctrl+C handling, banner, summary, report file, exit codes.                              |
+| `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file and returns `SKIPPED`, `TAGGED` or `FAILED`; `renameTrack` then renames it from its tags. |
+| `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, renames, track filenames, and search terms derived from filenames and folders.                                                      |
+| `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                                                   |
+| `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `create-metadata-chain.ts` is the composition root; pure merge helpers.                                               |
+| `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                                                          |
+| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, rate limiter with an injectable `Clock`, errors.                                                                                 |
 
 Each domain owns its contracts in its own `types.ts`. Imports only point toward
 lower layers, and a layer may skip levels: `cli` → `processing` → `tags` /

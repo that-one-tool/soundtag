@@ -1,6 +1,12 @@
 import * as path from "node:path";
 import { processTrack, type ProcessingContext } from "./processing.js";
-import type { FileStatus, ProcessingReport, ProcessingStats } from "./types.js";
+import { renameTrack } from "./rename.js";
+import type {
+    FileStatus,
+    ProcessingReport,
+    ProcessingStats,
+    TrackStatus,
+} from "./types.js";
 
 export function createReport(
     files: string[],
@@ -22,16 +28,48 @@ export interface BatchRun {
     context: ProcessingContext;
     report: ProcessingReport;
     stopSignal: AbortSignal;
+    renameFiles: boolean;
+}
+
+function recordRename(
+    source: string,
+    destination: string,
+    run: BatchRun
+): void {
+    const { sourceRoot } = run.context;
+    const renamed = (run.report.renamed ??= {});
+    renamed[path.relative(sourceRoot, source)] = path.relative(
+        sourceRoot,
+        destination
+    );
+}
+
+async function renameProcessedFile(
+    source: string,
+    status: TrackStatus,
+    run: BatchRun
+): Promise<void> {
+    if (!run.renameFiles) {
+        return;
+    }
+
+    const destination = await renameTrack(source, status);
+
+    if (destination) {
+        recordRename(source, destination, run);
+    }
 }
 
 async function processFile(
     source: string,
     position: string,
-    { context, report }: BatchRun
+    run: BatchRun
 ): Promise<void> {
-    const relativePath = path.relative(context.sourceRoot, source);
+    const relativePath = path.relative(run.context.sourceRoot, source);
     logTrackHeader(`[${position}] ${relativePath}`, source);
-    report.files[relativePath] = await processTrack(source, context);
+    const status = await processTrack(source, run.context);
+    run.report.files[relativePath] = status;
+    await renameProcessedFile(source, status, run);
 }
 
 export async function processBatch(

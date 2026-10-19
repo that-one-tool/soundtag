@@ -114,6 +114,32 @@ export async function listSubfolders(directory: string): Promise<string[]> {
         .toSorted((first, second) => first.localeCompare(second));
 }
 
+function normalizeFilename(name: string): string {
+    return name.normalize("NFC").toLowerCase();
+}
+
+export function isSameFilename(first: string, second: string): boolean {
+    return normalizeFilename(first) === normalizeFilename(second);
+}
+
+async function isFilenameTaken(destination: string): Promise<boolean> {
+    const filename = normalizeFilename(path.basename(destination));
+    const names = await fs.readdir(path.dirname(destination));
+    return names.some((name) => normalizeFilename(name) === filename);
+}
+
+export async function renameIfFree(
+    source: string,
+    destination: string
+): Promise<boolean> {
+    if (await isFilenameTaken(destination)) {
+        return false;
+    }
+
+    await fs.rename(source, destination);
+    return true;
+}
+
 export async function writeTemporaryCopy(
     source: string,
     destination: string,

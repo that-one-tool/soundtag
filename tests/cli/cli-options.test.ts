@@ -7,15 +7,20 @@ test("parseArguments keeps the recursive default and reads a source path", () =>
         sourcePath: "./music",
         recursive: true,
         verbose: false,
+        renameFiles: true,
     });
 });
 
 test("parseArguments supports scan and verbose options", () => {
-    assert.deepEqual(parseArguments(["./music", "--no-recursive", "-v"]), {
-        sourcePath: "./music",
-        recursive: false,
-        verbose: true,
-    });
+    assert.deepEqual(
+        parseArguments(["./music", "--no-recursive", "-v", "--no-rename"]),
+        {
+            sourcePath: "./music",
+            recursive: false,
+            verbose: true,
+            renameFiles: false,
+        }
+    );
     assert.equal(
         parseArguments(["--no-recursive", "--recursive"]).recursive,
         true
@@ -39,5 +44,6 @@ test("parseArguments accepts the long and short option aliases", () => {
     assert.deepEqual(parseArguments(["--no-recursive", "-r", "--verbose"]), {
         recursive: true,
         verbose: true,
+        renameFiles: true,
     });
 });

@@ -14,12 +14,17 @@ const enableVerboseOutput: OptionHandler = (options) => {
     options.verbose = true;
 };
 
+const disableRenaming: OptionHandler = (options) => {
+    options.renameFiles = false;
+};
+
 const OPTION_HANDLERS = new Map<string, OptionHandler>([
     ["--recursive", enableRecursion],
     ["-r", enableRecursion],
     ["--no-recursive", disableRecursion],
     ["--verbose", enableVerboseOutput],
     ["-v", enableVerboseOutput],
+    ["--no-rename", disableRenaming],
 ]);
 
 function setSourcePath(options: CommandLineOptions, sourcePath: string): void {
@@ -45,7 +50,11 @@ function applyArgument(options: CommandLineOptions, arg: string): void {
 }
 
 export function parseArguments(args: string[]): CommandLineOptions {
-    const options: CommandLineOptions = { recursive: true, verbose: false };
+    const options: CommandLineOptions = {
+        recursive: true,
+        verbose: false,
+        renameFiles: true,
+    };
 
     for (const arg of args) {
         applyArgument(options, arg);

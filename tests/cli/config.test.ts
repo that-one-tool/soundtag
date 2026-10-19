@@ -32,7 +32,7 @@ test("loadSessionConfig reads arguments and environment without prompting", asyn
     const { ask, questions } = createAsk({});
 
     const config = await loadSessionConfig({
-        argv: ["music", "--no-recursive", "-v"],
+        argv: ["music", "--no-recursive", "-v", "--no-rename"],
         env: {
             LASTFM_API_KEY: " lastfm-key ",
             MUSICBRAINZ_USER_AGENT: "SoundTag/1.0",
@@ -48,6 +48,7 @@ test("loadSessionConfig reads arguments and environment without prompting", asyn
             lastFmApiKey: "lastfm-key",
             recursive: false,
             verbose: true,
+            renameFiles: false,
             musicBrainzUserAgent: "SoundTag/1.0",
             youtubeApiKey: "youtube-key",
         },

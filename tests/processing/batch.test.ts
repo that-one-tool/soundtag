@@ -64,11 +64,14 @@ test("processBatch records each file status and logs its position", async () => 
         context: { sourceRoot: directory, metadataChain: createTestChain() },
         report,
         stopSignal: new AbortController().signal,
+        renameFiles: true,
     });
 
     assert.deepEqual(report, {
         files: { "broken.flac": "FAILED", "tagged.mp3": "SKIPPED" },
+        renamed: { "tagged.mp3": "Artist - Title.mp3" },
     });
+    await fs.access(broken);
     assert.deepEqual(
         output.logs.filter((line) => /^\n?\[|^Format:/.test(line)),
         [
@@ -99,6 +102,7 @@ test("processBatch stops before the next file once a stop is requested", async (
         context: { sourceRoot: directory, metadataChain: stoppingChain },
         report,
         stopSignal: stop.signal,
+        renameFiles: true,
     });
 
     assert.deepEqual(report, {
@@ -107,4 +111,72 @@ test("processBatch stops before the next file once a stop is requested", async (
     assert.ok(
         output.logs.includes("Stopped before processing the remaining files.")
     );
+});
+
+test("processBatch keeps file names when renaming is disabled", async () => {
+    const directory = await createTemporaryDirectory();
+    const tagged = path.join(directory, "tagged.mp3");
+    await fs.writeFile(tagged, "audio bytes");
+    await getTagStore(tagged).write(tagged, {
+        info: { title: "Title", artist: "Artist", album: "A", year: "2024" },
+        coverData: Buffer.from("cover"),
+    });
+    const report = createReport([tagged], directory);
+
+    await processBatch([tagged], {
+        context: { sourceRoot: directory, metadataChain: createTestChain() },
+        report,
+        stopSignal: new AbortController().signal,
+        renameFiles: false,
+    });
+
+    assert.deepEqual(report, { files: { "tagged.mp3": "SKIPPED" } });
+    await fs.access(tagged);
+});
+
+test("processBatch renames newly tagged files but not tracks that were not found", async () => {
+    const directory = await createTemporaryDirectory();
+    const found = path.join(directory, "found.mp3");
+    const notFound = path.join(directory, "Daft Punk - One More Time.mp3");
+    await Promise.all(
+        [found, notFound].map((file) => fs.writeFile(file, "audio bytes"))
+    );
+    await getTagStore(notFound).write(notFound, {
+        info: { title: "Track 01", artist: "Unknown", album: "", year: "" },
+        coverData: null,
+    });
+    const chain = new MetadataChain([
+        {
+            findMetadata: async (search) =>
+                search.title === "found"
+                    ? {
+                          info: {
+                              title: "Title",
+                              artist: "Artist",
+                              album: "Album",
+                              year: "2024",
+                          },
+                          coverData: Buffer.from("cover"),
+                      }
+                    : null,
+        },
+    ]);
+    const files = [found, notFound];
+    const report = createReport(files, directory);
+
+    await processBatch(files, {
+        context: { sourceRoot: directory, metadataChain: chain },
+        report,
+        stopSignal: new AbortController().signal,
+        renameFiles: true,
+    });
+
+    assert.deepEqual(report, {
+        files: {
+            "found.mp3": "TAGGED",
+            "Daft Punk - One More Time.mp3": "SKIPPED",
+        },
+        renamed: { "found.mp3": "Artist - Title.mp3" },
+    });
+    await fs.access(notFound);
 });

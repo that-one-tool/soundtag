@@ -96,6 +96,19 @@ When you leave the folder browser with `q` or when input ends, SoundTag exits
 with code 1 if any run failed, otherwise 0. Stopped runs do not count as
 failures.
 
+After a file is tagged, or skipped because it was already fully tagged,
+SoundTag renames it to `<Artist> - <Title>.<extension>` from its tags when the
+name differs (letter case is ignored). Files skipped because no service found
+them keep their name, since their tags are unverified. Characters that
+filenames cannot hold, such as `/` or `?`, become `_`, a leading `.` becomes
+`_`, and names are shortened to 200 bytes. An existing file is never
+overwritten, even one whose name differs only in letter case. Renames are
+listed under `renamed` in the report. Use `--no-rename` to keep file names:
+
+```sh
+npm start -- /path/to/music --no-rename
+```
+
 Pass `-v` or `--verbose` to log the Last.fm `track.getInfo` request URL:
 
 ```sh
@@ -139,6 +152,9 @@ source folder to its final status:
 | `SKIPPED` | The file was already tagged, or a complete metadata match was not found. |
 | `TAGGED`  | Metadata was found and the source file was updated.                      |
 | `FAILED`  | An error occurred while processing the file.                             |
+
+Statuses are keyed by each file's original path. Renamed files are also listed
+under `renamed`, which maps the original path to the new one.
 
 ## Development
 
