@@ -60,7 +60,7 @@ function printBanner(): void {
     console.log("                SOUNDTAG");
     console.log(`${SEPARATOR}\n`);
     console.log(
-        "Usage: npm start -- [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--no-rename]"
+        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--no-rename]"
     );
 }
 

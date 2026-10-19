@@ -44,6 +44,7 @@ function runCli(
                     LASTFM_API_KEY: "test-key",
                     MUSICBRAINZ_USER_AGENT: undefined,
                     YOUTUBE_API_KEY: undefined,
+                    XDG_CONFIG_HOME: workingDirectory,
                     ...environment,
                 },
                 stdio: ["pipe", "pipe", "pipe"],
@@ -224,6 +225,25 @@ test("CLI needs a terminal to browse folders and does not prompt first", async (
         stderr,
         "Error: Browsing folders needs an interactive terminal; pass a source folder instead.\n"
     );
+});
+
+test("CLI reads the API key from the user config .env", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    await fs.mkdir(path.join(workingDirectory, "soundtag"));
+    await fs.writeFile(
+        path.join(workingDirectory, "soundtag", ".env"),
+        "LASTFM_API_KEY=from-config\n"
+    );
+
+    const { exitCode, stdout } = await runCli(workingDirectory, ["."], {
+        environment: {
+            LASTFM_API_KEY: undefined,
+            MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
+        },
+    });
+
+    assert.equal(exitCode, 0);
+    assert.doesNotMatch(stdout, /Enter your Last\.fm API key: /);
 });
 
 test("CLI fails cleanly when input ends during a prompt", async () => {

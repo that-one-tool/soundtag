@@ -25,7 +25,7 @@ npm run build      # compile to dist/
 
 | Folder                    | Responsibility                                                                                                                                                                               |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/index.ts`            | Entry point: loads `.env` and wires the terminal session and browser launcher to `runApp`.                                                                                                   |
+| `src/index.ts`            | Entry point and `soundtag` bin: loads `.env` and wires the terminal session and browser launcher to `runApp`.                                                                                |
 | `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, terminal prompts and Ctrl+C handling, banner, summary, exit codes, and the lazy launch of the TUI.                           |
 | `src/tui/`                | Ink terminal UI: folder browser reducer, metadata panel, log pane, background `TaggingQueue`, session status dots. React components live in `components/` and hooks in `hooks/`.             |
 | `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file and returns `SKIPPED`, `TAGGED` or `FAILED`; `renameTrack` then renames it from its tags. |
@@ -43,7 +43,11 @@ graph free of cycles.
 
 ## Configuration
 
-- Environment variables, loaded from `.env` by `dotenv` in `src/index.ts`:
+- Environment variables, loaded by `src/cli/env-file.ts` from `./.env`, then
+  from `$XDG_CONFIG_HOME/soundtag/.env` (default `~/.config/soundtag/.env`).
+  Only the keys below are taken, the first file wins key by key, and variables
+  already set in the shell win over both. A new key must be added to
+  `SOUNDTAG_KEYS`:
   - `LASTFM_API_KEY` is required (prompted when missing).
   - `MUSICBRAINZ_USER_AGENT` enables MusicBrainz.
   - `YOUTUBE_API_KEY` enables the YouTube cover fallback.

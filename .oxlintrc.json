@@ -36,12 +36,7 @@
         "eqeqeq": "error",
         "react/react-in-jsx-scope": "off",
         "typescript/no-explicit-any": "error",
-        "import/no-unassigned-import": [
-            "warn",
-            {
-                "allow": ["dotenv/config"]
-            }
-        ]
+        "import/no-unassigned-import": "warn"
     },
     "overrides": [
         {

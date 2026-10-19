@@ -12,13 +12,26 @@ when a match is found.
 
 ## Setup
 
-Install the dependencies:
+Install the dependencies, build, and link the `soundtag` command so it can be
+run from any folder:
 
 ```sh
 npm install
+npm run build
+npm link
 ```
 
-Provide your Last.fm API key using either a `.env` file in the project root:
+The link points at this checkout, so run `npm run build` again after pulling
+changes. `npm unlink -g soundtag` removes the command. `npm link` needs a
+writable global npm prefix, as with Volta, nvm or a user-level
+`npm config set prefix`; with a system-wide Node it may need `sudo`.
+
+Provide your API keys in a `.env` file. SoundTag reads `.env` from the folder
+you run it in and from `~/.config/soundtag/.env` (or
+`$XDG_CONFIG_HOME/soundtag/.env`). A key in the local file wins over the same
+key in the config file, and variables already set in your shell win over both.
+Only the three keys below are read from these files; other variables are
+ignored:
 
 ```env
 LASTFM_API_KEY=your_lastfm_api_key
@@ -46,17 +59,13 @@ The Last.fm API key can also be entered when prompted at startup.
 
 ## Usage
 
-Build the TypeScript project:
-
-```sh
-npm run build
-```
-
 Run SoundTag with a source folder:
 
 ```sh
-npm start -- /path/to/music
+soundtag /path/to/music
 ```
+
+From the project folder, `npm start -- /path/to/music` works too.
 
 Paths containing spaces should be quoted.
 
@@ -93,14 +102,14 @@ By default, SoundTag scans subfolders. Use `--no-recursive` to scan only the
 source folder itself:
 
 ```sh
-npm start -- /path/to/music --no-recursive
+soundtag /path/to/music --no-recursive
 ```
 
 Use `--recursive` or `-r` to explicitly include subfolders:
 
 ```sh
-npm start -- /path/to/music --recursive
-npm start -- /path/to/music -r
+soundtag /path/to/music --recursive
+soundtag /path/to/music -r
 ```
 
 Each run processes at most 3,000 MP3, OGG, FLAC, or WAV files. Hidden files and
@@ -130,13 +139,13 @@ overwritten, even one whose name differs only in letter case. Renames are
 listed under `renamed` in the report. Use `--no-rename` to keep file names:
 
 ```sh
-npm start -- /path/to/music --no-rename
+soundtag /path/to/music --no-rename
 ```
 
 Pass `-v` or `--verbose` to log the Last.fm `track.getInfo` request URL:
 
 ```sh
-npm start -- /path/to/music -v
+soundtag /path/to/music -v
 ```
 
 For filenames in the common `Artist - Title.<extension>` format, SoundTag

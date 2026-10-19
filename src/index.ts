@@ -1,12 +1,21 @@
-import "dotenv/config";
+#!/usr/bin/env node
+import { homedir } from "node:os";
 import { runApp } from "./cli/app.js";
 import {
     createBrowserLauncher,
     isInteractiveTerminal,
     runTuiLazily,
 } from "./cli/browser-launcher.js";
+import { loadEnvFiles } from "./cli/env-file.js";
 import { openTerminalSession } from "./cli/terminal.js";
+import { consoleLogger } from "./shared/logger.js";
 
+await loadEnvFiles({
+    workingDirectory: process.cwd(),
+    homeDirectory: homedir(),
+    env: process.env,
+    warn: consoleLogger.error,
+});
 const session = openTerminalSession();
 
 try {
