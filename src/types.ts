@@ -1,0 +1,29 @@
+export interface ProcessingStats {
+    ok: number;
+    skipped: number;
+    errors: number;
+}
+
+export type FileStatus = "READ" | "SKIPPED" | "TAGGED" | "FAILED";
+
+export interface ProcessingReport {
+    files: Record<string, FileStatus>;
+}
+
+export interface CommandLineOptions {
+    sourcePath?: string;
+    recursive: boolean;
+    verbose: boolean;
+}
+
+export interface TrackInfo {
+    title: string;
+    artist: string;
+    album: string;
+    year: string;
+}
+
+export interface TrackMetadata {
+    info: TrackInfo;
+    coverData: Buffer | null;
+}
