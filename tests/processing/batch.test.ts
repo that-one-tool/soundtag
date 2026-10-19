@@ -99,6 +99,7 @@ test("processBatch stops before the next file once a stop is requested", async (
     const stoppingChain = new MetadataChain(
         [
             {
+                name: "Fake",
                 findMetadata: async () => {
                     stop.abort();
                     return null;
@@ -170,6 +171,7 @@ test("processBatch renames newly tagged files but not tracks that were not found
     const chain = new MetadataChain(
         [
             {
+                name: "Fake",
                 findMetadata: async (search) =>
                     search.title === "found"
                         ? {
@@ -265,7 +267,11 @@ test("processBatch logs to the context logger", async () => {
         renameFiles: false,
     });
 
-    assert.deepEqual(logger.infos, ["\n[1/1] broken.flac", "Format: FLAC"]);
+    assert.deepEqual(logger.infos, [
+        "\n[1/1] broken.flac",
+        "Format: FLAC",
+        "Reading existing tags...",
+    ]);
     assert.deepEqual(output.logs, []);
 });
 
@@ -316,6 +322,7 @@ function createChainWithCoverFor(title: string): MetadataChain {
     return new MetadataChain(
         [
             {
+                name: "Fake",
                 findMetadata: async (search) =>
                     search.title === title
                         ? {
@@ -400,6 +407,7 @@ test("processBatch keeps a borrowed cover on a tagged track without announcing i
     const chain = new MetadataChain(
         [
             {
+                name: "Fake",
                 findMetadata: async () => ({
                     info: { ...albumInfo, title: "Tagged" },
                     extras: {},
@@ -448,6 +456,7 @@ test("processBatch does not share covers once a stop is requested", async () => 
     const stoppingChain = new MetadataChain(
         [
             {
+                name: "Fake",
                 findMetadata: async () => {
                     stop.abort();
                     return null;
@@ -541,6 +550,11 @@ test("processBatch shares covers without renaming or touching failed tracks", as
 
     assert.equal(logger.errors.length, 1);
     assert.match(logger.errors[0], /^Processing error: /);
+    assert.ok(
+        logger.infos.includes(
+            "\nSharing covers between tracks of the same album..."
+        )
+    );
     assert.deepEqual(results.at(-1), {
         source: notFound,
         status: "TAGGED",

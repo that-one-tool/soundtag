@@ -123,6 +123,7 @@ function getCoverArtRequest(
 }
 
 export class MusicBrainzProvider implements MetadataProvider {
+    readonly name = "MusicBrainz";
     private readonly schedule: RateLimiter;
 
     constructor(

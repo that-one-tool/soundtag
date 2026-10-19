@@ -104,6 +104,7 @@ async function downloadThumbnail(
 }
 
 export class YouTubeCoverProvider implements CoverProvider {
+    readonly name = "YouTube";
     constructor(
         private readonly apiKey: string,
         private readonly logger: Logger

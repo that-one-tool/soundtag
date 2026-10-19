@@ -64,12 +64,10 @@ export async function saveReport(
     report: ProcessingReport,
     logger: Logger
 ): Promise<boolean> {
+    logger.info("\nSaving report...");
+    const content = `${JSON.stringify(report, null, 2)}\n`;
     try {
-        await fs.writeFile(
-            reportPath,
-            `${JSON.stringify(report, null, 2)}\n`,
-            "utf8"
-        );
+        await fs.writeFile(reportPath, content, "utf8");
         logger.info(`Processing report written to ${reportPath}`);
         return true;
     } catch (error) {
@@ -77,5 +75,30 @@ export async function saveReport(
             `Could not write processing report to ${reportPath}: ${getErrorMessage(error)}`
         );
         return false;
+    }
+}
+
+function logDeletionFailure(
+    reportPath: string,
+    error: unknown,
+    logger: Logger
+): void {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        logger.info(`No report to delete in ${path.dirname(reportPath)}.`);
+        return;
+    }
+
+    logger.error(`Could not delete ${reportPath}: ${getErrorMessage(error)}`);
+}
+
+export async function deleteReport(
+    reportPath: string,
+    logger: Logger
+): Promise<void> {
+    try {
+        await fs.unlink(reportPath);
+        logger.info(`Deleted ${reportPath}`);
+    } catch (error) {
+        logDeletionFailure(reportPath, error, logger);
     }
 }

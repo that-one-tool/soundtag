@@ -36,3 +36,21 @@ test("createTuiServices routes job results to the status store and logs", async 
     );
     assert.ok(logText.some((text) => text.startsWith("Searching:")));
 });
+
+test("createTuiServices deletes a folder report and logs it", async () => {
+    const directory = await createTemporaryDirectory();
+    const reportPath = path.join(directory, "soundtag_output.json");
+    await fs.writeFile(reportPath, "{}");
+    const services = createTuiServices({
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: true,
+        renameFiles: false,
+    });
+
+    await services.deleteReport(directory);
+
+    await assert.rejects(fs.access(reportPath));
+    const logText = services.logBuffer.getSnapshot().map((line) => line.text);
+    assert.ok(logText.includes(`Deleted ${reportPath}`));
+});

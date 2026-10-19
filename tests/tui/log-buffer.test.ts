@@ -14,14 +14,27 @@ test("LogBuffer keeps info and error lines in order", () => {
     ]);
 });
 
-test("LogBuffer splits multi-line messages and drops blank lines", () => {
+test("LogBuffer splits multi-line messages and keeps blank lines", () => {
     const buffer = new LogBuffer();
 
+    buffer.info("Searching");
     buffer.info("\n[1/2] a.mp3\nFormat: MP3");
 
     assert.deepEqual(
         buffer.getSnapshot().map((line) => line.text),
-        ["[1/2] a.mp3", "Format: MP3"]
+        ["Searching", "", "[1/2] a.mp3", "Format: MP3"]
+    );
+});
+
+test("LogBuffer collapses consecutive blank lines", () => {
+    const buffer = new LogBuffer();
+
+    buffer.info("one\n");
+    buffer.info("\n  \ntwo");
+
+    assert.deepEqual(
+        buffer.getSnapshot().map((line) => line.text),
+        ["one", "", "two"]
     );
 });
 

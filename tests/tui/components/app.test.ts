@@ -40,12 +40,12 @@ async function createLibrary(): Promise<string> {
 }
 
 async function renderApp(directory: string) {
-    const { services, jobs } = createControlledServices();
+    const { services, jobs, deletedReports } = createControlledServices();
     const instance = render(
         createElement(App, { startDirectory: directory, services })
     );
     await waitForFrame(instance.lastFrame, "song.mp3");
-    return { ...instance, services, jobs };
+    return { ...instance, services, jobs, deletedReports };
 }
 
 test("App lists the folder with the cursor on the first entry", async () => {
@@ -137,6 +137,29 @@ test("App stops the running job with s", async () => {
 
     await waitForFrame(lastFrame, "stopping after the current file");
     assert.equal(jobs[0].stopSignal.aborted, true);
+});
+
+test("App deletes the report of the folder being browsed with d", async () => {
+    const directory = await createLibrary();
+    const { stdin, deletedReports } = await renderApp(directory);
+
+    stdin.write("d");
+
+    await waitFor(() => deletedReports.length === 1);
+    assert.deepEqual(deletedReports, [directory]);
+});
+
+test("App keeps the report while a job is running", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, jobs, deletedReports } =
+        await renderApp(directory);
+    stdin.write("a");
+    await waitFor(() => jobs.length === 1);
+
+    stdin.write("d");
+
+    await waitForFrame(lastFrame, "Cannot delete the report while tagging.");
+    assert.deepEqual(deletedReports, []);
 });
 
 test("App marks processed files and their folders with a dot", async () => {

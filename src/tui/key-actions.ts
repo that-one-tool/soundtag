@@ -10,6 +10,7 @@ export type KeyAction =
     | "tag"
     | "tagFolder"
     | "stop"
+    | "deleteReport"
     | "quit";
 
 type KeyMatcher = (input: string, key: Key) => boolean;
@@ -24,6 +25,7 @@ const KEY_BINDINGS: [KeyMatcher, KeyAction][] = [
     [(input) => input === "t", "tag"],
     [(input) => input === "a", "tagFolder"],
     [(input) => input === "s", "stop"],
+    [(input) => input === "d", "deleteReport"],
     [(input) => input === "q", "quit"],
     [(input, key) => key.ctrl && input === "c", "quit"],
 ];

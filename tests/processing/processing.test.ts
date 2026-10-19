@@ -425,6 +425,8 @@ test("processTrack logs its search and the metadata it could not find", async ()
         )
     );
     assert.ok(output.logs.includes("Successfully tagged source file."));
+    assert.ok(output.logs.includes("Reading existing tags..."));
+    assert.ok(output.logs.includes("Writing tags..."));
 });
 
 test("processTrack logs to the context logger", async () => {

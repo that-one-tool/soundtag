@@ -19,5 +19,8 @@ test("StatusBar shows the queue state and the key hints", () => {
     ).lastFrame();
 
     assert.match(frame ?? "", /Idle/);
-    assert.match(frame ?? "", /t tag {2}a tag folder {2}s stop {2}q quit/);
+    assert.match(
+        frame ?? "",
+        /t tag {2}a tag folder {2}s stop {2}d delete report {2}q quit/
+    );
 });

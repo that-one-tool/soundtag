@@ -87,10 +87,13 @@ folder, its file counts). Processing messages appear in the log pane below.
 | `t`                    | Tag the file or folder under the cursor         |
 | `a`                    | Tag the folder being browsed                    |
 | `s`                    | Stop the current run after the file in progress |
+| `d`                    | Delete the report of the folder being browsed   |
 | `q`, Ctrl+C            | Quit (press again during a run to quit at once) |
 
 Tagging runs in the background, so you can keep browsing; further `t` and `a`
 presses are queued and run one after another, and are ignored once you quit.
+`d` deletes the report without confirmation, and is refused while a run is in
+progress.
 Once processed in this session, files get a colored dot: green for `TAGGED`,
 yellow for `SKIPPED`, red for `FAILED`. A folder shows the worst status of the
 files inside it. Folders are tagged with the `--recursive`/`--no-recursive`

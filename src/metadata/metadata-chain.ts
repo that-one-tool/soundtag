@@ -71,10 +71,27 @@ export class MetadataChain {
         let state = createInitialState(existing);
 
         for (const provider of this.providers) {
-            state = await applyProvider(provider, search, state);
+            state = await this.applyProvider(provider, search, state);
         }
 
         return state;
+    }
+
+    private async applyProvider(
+        provider: MetadataProvider,
+        search: TrackSearch,
+        state: ChainState
+    ): Promise<ChainState> {
+        if (isComplete(state.metadata, state.hasExistingCover)) {
+            return state;
+        }
+
+        this.logger.info(`Querying ${provider.name}...`);
+        const candidate = await provider.findMetadata(
+            buildProviderSearch(search, state.metadata.info),
+            needsCover(state)
+        );
+        return mergeCandidate(state, candidate);
     }
 
     private async addFallbackCover(
@@ -85,27 +102,12 @@ export class MetadataChain {
             return state;
         }
 
+        this.logger.info(`Searching ${this.coverProvider.name} for a cover...`);
         const coverData = await this.coverProvider.findCover(
             buildProviderSearch(search, state.metadata.info)
         );
         return { ...state, metadata: { ...state.metadata, coverData } };
     }
-}
-
-async function applyProvider(
-    provider: MetadataProvider,
-    search: TrackSearch,
-    state: ChainState
-): Promise<ChainState> {
-    if (isComplete(state.metadata, state.hasExistingCover)) {
-        return state;
-    }
-
-    const candidate = await provider.findMetadata(
-        buildProviderSearch(search, state.metadata.info),
-        needsCover(state)
-    );
-    return mergeCandidate(state, candidate);
 }
 
 function mergeCandidate(

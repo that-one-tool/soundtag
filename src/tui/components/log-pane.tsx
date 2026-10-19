@@ -6,9 +6,19 @@ import { ERROR_COLOR, PANE_COLOR } from "../theme.js";
 function LogLineText({ line }: { line: LogLine }) {
     return (
         <Text color={line.isError ? ERROR_COLOR : undefined} wrap="truncate">
-            {line.text}
+            {line.text || " "}
         </Text>
     );
+}
+
+function getVisibleLines(lines: readonly LogLine[], height: number) {
+    const visible = lines.slice(-height);
+
+    if (visible[0]?.text !== "") {
+        return visible;
+    }
+
+    return [...lines.slice(-height - 1, -height), ...visible.slice(1)];
 }
 
 export interface LogPaneProps {
@@ -17,7 +27,7 @@ export interface LogPaneProps {
 }
 
 export function LogPane({ logBuffer, height }: LogPaneProps) {
-    const lines = useStore(logBuffer).slice(-height);
+    const lines = getVisibleLines(useStore(logBuffer), height);
     return (
         <Box
             flexDirection="column"

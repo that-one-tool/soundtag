@@ -8,6 +8,14 @@ export interface LogLine {
 
 const DEFAULT_MAX_LINES = 200;
 
+function isKeptLine(
+    line: LogLine,
+    index: number,
+    lines: readonly LogLine[]
+): boolean {
+    return Boolean(line.text) || index === 0 || Boolean(lines[index - 1].text);
+}
+
 export class LogBuffer implements Logger {
     private readonly listeners = new Listeners();
     private lines: readonly LogLine[] = [];
@@ -30,9 +38,10 @@ export class LogBuffer implements Logger {
     private append(message: string, isError: boolean): void {
         const added = message
             .split("\n")
-            .filter((text) => text.trim())
-            .map((text) => ({ text, isError }));
-        this.lines = [...this.lines, ...added].slice(-this.maxLines);
+            .map((text) => ({ text: text.trim() ? text : "", isError }));
+        this.lines = [...this.lines, ...added]
+            .filter(isKeptLine)
+            .slice(-this.maxLines);
         this.listeners.notify();
     }
 }

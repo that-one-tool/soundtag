@@ -16,6 +16,7 @@ const createTemporaryDirectory = useTemporaryDirectories(
 const foundChain = new MetadataChain(
     [
         {
+            name: "Fake",
             findMetadata: async () => ({
                 info: {
                     title: "Title",
@@ -181,6 +182,7 @@ test("a job announces its target", async () => {
     );
 
     assert.equal(logger.infos[0], `Tagging 1 audio files in ${directory}`);
+    assert.ok(logger.infos.includes("\nSaving report..."));
 });
 
 test("a job without audio files writes no report", async () => {

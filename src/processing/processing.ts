@@ -167,6 +167,7 @@ async function writeNewMetadata(
         return "SKIPPED";
     }
 
+    logger.info("Writing tags...");
     await getTagStore(source).write(source, metadata);
     logger.info("Successfully tagged source file.");
     return "TAGGED";
@@ -176,6 +177,7 @@ async function tagTrack(
     source: string,
     context: ProcessingContext
 ): Promise<TrackStatus> {
+    context.logger.info("Reading existing tags...");
     const storedTags = await getTagStore(source).read(source);
 
     if (isProperlyTagged(storedTags)) {

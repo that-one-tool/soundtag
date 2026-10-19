@@ -2,6 +2,7 @@ import {
     createMetadataChain,
     type MetadataChainConfig,
 } from "../metadata/create-metadata-chain.js";
+import { deleteReport, getReportPath } from "../processing/report-file.js";
 import { systemClock } from "../shared/rate-limiter.js";
 import { LogBuffer } from "./log-buffer.js";
 import { createTagJobRunner } from "./tag-job.js";
@@ -17,6 +18,7 @@ export interface TuiServices {
     queue: TaggingQueue;
     logBuffer: LogBuffer;
     statusStore: TrackStatusStore;
+    deleteReport(directory: string): Promise<void>;
 }
 
 export function createTuiServices(options: TaggingOptions): TuiServices {
@@ -29,5 +31,11 @@ export function createTuiServices(options: TaggingOptions): TuiServices {
         renameFiles: options.renameFiles,
         onTrackProcessed: (result) => statusStore.record(result),
     });
-    return { queue: new TaggingQueue(runJob), logBuffer, statusStore };
+    return {
+        queue: new TaggingQueue(runJob),
+        logBuffer,
+        statusStore,
+        deleteReport: (directory) =>
+            deleteReport(getReportPath(directory), logBuffer),
+    };
 }

@@ -233,6 +233,7 @@ function logAlbumDetails(
 }
 
 export class LastFmProvider implements MetadataProvider {
+    readonly name = "Last.fm";
     constructor(
         private readonly apiKey: string,
         private readonly verbose: boolean,

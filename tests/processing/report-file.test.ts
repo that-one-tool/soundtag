@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { test } from "node:test";
 import {
+    deleteReport,
     getReportPath,
     mergeReports,
     readReport,
@@ -37,6 +38,7 @@ test("saveReport writes the report as JSON and logs its path", async () => {
         files: { "a.mp3": "TAGGED" },
     });
     assert.deepEqual(logger.infos, [
+        "\nSaving report...",
         `Processing report written to ${reportPath}`,
     ]);
 });
@@ -127,4 +129,39 @@ test("readReport drops renames that are not an object", async () => {
     assert.deepEqual(await readReport(reportPath), {
         files: { "a.mp3": "TAGGED" },
     });
+});
+
+test("deleteReport removes the report and logs it", async () => {
+    const reportPath = getReportPath(await createTemporaryDirectory());
+    await fs.writeFile(reportPath, "{}");
+    const logger = createRecordingLogger();
+
+    await deleteReport(reportPath, logger);
+
+    await assert.rejects(fs.access(reportPath));
+    assert.deepEqual(logger.infos, [`Deleted ${reportPath}`]);
+});
+
+test("deleteReport logs when there is no report to delete", async () => {
+    const directory = await createTemporaryDirectory();
+    const logger = createRecordingLogger();
+
+    await deleteReport(getReportPath(directory), logger);
+
+    assert.deepEqual(logger.infos, [`No report to delete in ${directory}.`]);
+    assert.deepEqual(logger.errors, []);
+});
+
+test("deleteReport logs an error when the report cannot be deleted", async () => {
+    const reportPath = getReportPath(await createTemporaryDirectory());
+    await fs.mkdir(reportPath);
+    const logger = createRecordingLogger();
+
+    await deleteReport(reportPath, logger);
+
+    assert.equal(logger.errors.length, 1);
+    assert.match(
+        logger.errors[0],
+        /^Could not delete .*soundtag_output\.json: /
+    );
 });

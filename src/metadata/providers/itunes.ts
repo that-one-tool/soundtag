@@ -139,6 +139,7 @@ function downloadArtwork(url: string | undefined): Promise<Buffer | null> {
 }
 
 export class ItunesProvider implements MetadataProvider {
+    readonly name = "iTunes";
     private readonly schedule: RateLimiter;
 
     constructor(

@@ -33,6 +33,7 @@ export interface TrackSearch {
 }
 
 export interface MetadataProvider {
+    readonly name: string;
     findMetadata(
         search: TrackSearch,
         needsCover: boolean
@@ -40,5 +41,6 @@ export interface MetadataProvider {
 }
 
 export interface CoverProvider {
+    readonly name: string;
     findCover(search: TrackSearch): Promise<Buffer | null>;
 }

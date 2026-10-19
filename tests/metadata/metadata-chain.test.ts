@@ -38,7 +38,10 @@ afterEach(() => {
 class FakeMetadataProvider implements MetadataProvider {
     readonly calls: { search: TrackSearch; needsCover: boolean }[] = [];
 
-    constructor(private readonly result: TrackMetadata | null) {}
+    constructor(
+        private readonly result: TrackMetadata | null,
+        readonly name = "Fake"
+    ) {}
 
     async findMetadata(
         providerSearch: TrackSearch,
@@ -50,6 +53,7 @@ class FakeMetadataProvider implements MetadataProvider {
 }
 
 class FakeCoverProvider implements CoverProvider {
+    readonly name = "FakeCover";
     readonly searches: TrackSearch[] = [];
 
     constructor(private readonly foundCover: Buffer | null) {}
@@ -191,7 +195,11 @@ test("MetadataChain reports whether a cover was found", async () => {
     );
 
     assert.equal((await chain.find(search, emptyTags))?.coverData, null);
-    assert.deepEqual(output, ["Cover: unavailable"]);
+    assert.deepEqual(output, [
+        "Querying Fake...",
+        "Searching FakeCover for a cover...",
+        "Cover: unavailable",
+    ]);
 
     output = [];
     await new MetadataChain(
@@ -199,7 +207,7 @@ test("MetadataChain reports whether a cover was found", async () => {
         undefined,
         consoleLogger
     ).find(search, emptyTags);
-    assert.deepEqual(output, ["Cover: downloaded"]);
+    assert.deepEqual(output, ["Querying Fake...", "Cover: downloaded"]);
 });
 
 test("MetadataChain reports the cover result to the injected logger", async () => {
@@ -212,7 +220,7 @@ test("MetadataChain reports the cover result to the injected logger", async () =
 
     await chain.find(search, emptyTags);
 
-    assert.deepEqual(logger.infos, ["Cover: downloaded"]);
+    assert.deepEqual(logger.infos, ["Querying Fake...", "Cover: downloaded"]);
     assert.deepEqual(output, []);
 });
 
@@ -247,7 +255,7 @@ test("MetadataChain keeps an existing cover without downloading another", async 
     assert.equal(metadata?.coverData, null);
     assert.equal(provider.calls[0].needsCover, false);
     assert.deepEqual(coverProvider.searches, []);
-    assert.deepEqual(logger.infos, ["Cover: kept"]);
+    assert.deepEqual(logger.infos, ["Querying Fake...", "Cover: kept"]);
 });
 
 test("MetadataChain counts an existing cover towards complete metadata", async () => {
@@ -270,4 +278,25 @@ test("MetadataChain counts an existing cover towards complete metadata", async (
     await chain.find(search, { ...emptyTags, hasCover: true });
 
     assert.deepEqual(lastProvider.calls, []);
+});
+
+test("MetadataChain logs each provider it queries and the cover search", async () => {
+    const logger = createRecordingLogger();
+    const chain = new MetadataChain(
+        [
+            new FakeMetadataProvider(null, "First"),
+            new FakeMetadataProvider(createMetadata({ title: "T" }), "Second"),
+        ],
+        new FakeCoverProvider(cover),
+        logger
+    );
+
+    await chain.find(search, emptyTags);
+
+    assert.deepEqual(logger.infos, [
+        "Querying First...",
+        "Querying Second...",
+        "Searching FakeCover for a cover...",
+        "Cover: downloaded",
+    ]);
 });

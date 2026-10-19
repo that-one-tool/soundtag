@@ -143,12 +143,19 @@ async function shareFolderCover(
     }
 }
 
+function logCoverSharingStart(candidates: ProcessedTrack[], logger: Logger) {
+    if (candidates.length > 0) {
+        logger.info("\nSharing covers between tracks of the same album...");
+    }
+}
+
 async function shareFolderCovers(run: ActiveBatch): Promise<void> {
     const { sourceRoot, logger } = run.context;
     const sharing = { folderCovers: new FolderCovers(), sourceRoot, logger };
     const candidates = run.processed.filter(
         ({ status }) => status !== "FAILED"
     );
+    logCoverSharingStart(candidates, logger);
 
     for (const track of candidates) {
         if (run.stopSignal.aborted) {

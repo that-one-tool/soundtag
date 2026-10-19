@@ -34,7 +34,7 @@ function useBrowsing(startDirectory: string, statusStore: TrackStatusStore) {
 }
 
 function useAppState({ startDirectory, services }: AppProps) {
-    const { queue, statusStore } = services;
+    const { queue, statusStore, logBuffer } = services;
     const layout = useLayout();
     const queueState = useStore(queue);
     const browsing = useBrowsing(startDirectory, statusStore);
@@ -46,8 +46,9 @@ function useAppState({ startDirectory, services }: AppProps) {
         quitting,
         requestQuit,
         pageSize: layout.listHeight,
+        logger: logBuffer,
+        deleteReport: services.deleteReport,
     });
-    const { logBuffer } = services;
     return { ...layout, ...browsing, queueState, quitting, logBuffer };
 }
 
