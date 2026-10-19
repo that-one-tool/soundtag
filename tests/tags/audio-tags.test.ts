@@ -139,6 +139,24 @@ test("tag stores report whether cover art is embedded", async () => {
     }
 });
 
+test("tag stores read back the embedded cover", async () => {
+    const sources = [
+        await createMp3(),
+        await copyFixture("flac"),
+        await copyFixture("ogg"),
+        await copyFixture("wav"),
+    ];
+
+    for (const source of sources) {
+        assert.equal(await getTagStore(source).readCover(source), null);
+        await writeTags(source, completeInfo, Buffer.from("cover"));
+        assert.deepEqual(
+            await getTagStore(source).readCover(source),
+            Buffer.from("cover")
+        );
+    }
+});
+
 test("tag stores write MP3 tags that make the file properly tagged", async () => {
     const directory = await createTemporaryDirectory();
     const source = path.join(directory, "source.mp3");

@@ -1,6 +1,11 @@
 import * as path from "node:path";
 import { FolderNameCache } from "../library/folder-names.js";
 import type { Logger } from "../shared/logger.js";
+import {
+    borrowFolderCover,
+    FolderCovers,
+    type CoverSharing,
+} from "./folder-covers.js";
 import { processTrack, type ProcessingContext } from "./processing.js";
 import { renameTrack } from "./rename.js";
 import type {
@@ -43,6 +48,7 @@ export interface BatchRun {
 
 interface ActiveBatch extends BatchRun {
     folderNames: FolderNameCache;
+    processed: ProcessedTrack[];
 }
 
 function recordRename(
@@ -90,7 +96,12 @@ async function processFile(
     run.report.files[relativePath] = status;
     const destination = await renameProcessedFile(source, status, run);
     run.folderNames.markProcessed(source);
-    run.onTrackProcessed?.({ source, status, destination });
+    announceTrack({ source, status, destination }, run);
+}
+
+function announceTrack(track: ProcessedTrack, run: ActiveBatch): void {
+    run.processed.push(track);
+    run.onTrackProcessed?.(track);
 }
 
 async function processFiles(files: string[], run: ActiveBatch): Promise<void> {
@@ -106,14 +117,65 @@ async function processFiles(files: string[], run: ActiveBatch): Promise<void> {
     }
 }
 
+async function markTaggedByCover(
+    { source, status }: ProcessedTrack,
+    run: ActiveBatch
+): Promise<void> {
+    if (status !== "SKIPPED") {
+        return;
+    }
+
+    run.report.files[path.relative(run.context.sourceRoot, source)] = "TAGGED";
+    // The track itself was not found, so its tags stay unverified.
+    const destination = await renameProcessedFile(source, "SKIPPED", run);
+    run.onTrackProcessed?.({ source, status: "TAGGED", destination });
+}
+
+async function shareFolderCover(
+    track: ProcessedTrack,
+    sharing: CoverSharing,
+    run: ActiveBatch
+): Promise<void> {
+    const current = track.destination ?? track.source;
+
+    if (await borrowFolderCover(current, sharing)) {
+        await markTaggedByCover(track, run);
+    }
+}
+
+async function shareFolderCovers(run: ActiveBatch): Promise<void> {
+    const { sourceRoot, logger } = run.context;
+    const sharing = { folderCovers: new FolderCovers(), sourceRoot, logger };
+    const candidates = run.processed.filter(
+        ({ status }) => status !== "FAILED"
+    );
+
+    for (const track of candidates) {
+        if (run.stopSignal.aborted) {
+            logger.info("Stopped before sharing the remaining covers.");
+            return;
+        }
+
+        await shareFolderCover(track, sharing, run);
+    }
+}
+
+async function shareFolderCoversUnlessStopped(run: ActiveBatch): Promise<void> {
+    if (!run.stopSignal.aborted) {
+        await shareFolderCovers(run);
+    }
+}
+
 export async function processBatch(
     files: string[],
     run: BatchRun
 ): Promise<void> {
     const folderNames = new FolderNameCache(files);
+    const batch: ActiveBatch = { ...run, folderNames, processed: [] };
 
     try {
-        await processFiles(files, { ...run, folderNames });
+        await processFiles(files, batch);
+        await shareFolderCoversUnlessStopped(batch);
     } finally {
         folderNames.clear();
     }

@@ -179,6 +179,11 @@ Fields that the services did not find are left unchanged if the source file
 already has values for them.
 When the services add nothing the file lacks, it is not rewritten and is
 reported as skipped.
+After all files are processed, a track still without cover art takes the cover
+of another track in the same folder with the same artist and album (ignoring
+case), even when the services did not find the track itself. A skipped track
+that gets a cover this way is reported as tagged, and is renamed only when it
+also has a title, artist and year.
 Because the file is not considered fully tagged until year, genre and cover
 art are present, later runs can retry to fill those gaps. SoundTag gets the year from
 Last.fm or, when needed, from the MusicBrainz recording or release date. Each

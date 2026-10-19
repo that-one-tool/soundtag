@@ -4,6 +4,7 @@ export type StoredTags = ExistingTags;
 
 export interface TagStore {
     read(source: string): Promise<StoredTags>;
+    readCover(source: string): Promise<Buffer | null>;
     write(source: string, metadata: TrackMetadata): Promise<void>;
 }
 

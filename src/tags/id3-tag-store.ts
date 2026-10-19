@@ -102,6 +102,11 @@ export class Id3TagStore implements TagStore {
         };
     }
 
+    async readCover(source: string): Promise<Buffer | null> {
+        const { image } = await NodeID3.Promise.read(source);
+        return typeof image === "object" ? image.imageBuffer : null;
+    }
+
     async write(source: string, metadata: TrackMetadata): Promise<void> {
         await writeTemporaryCopy(source, source, async (temporary) =>
             updateId3Tags(buildId3Tags(metadata), temporary)

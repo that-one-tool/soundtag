@@ -123,6 +123,11 @@ function buildCoverPicture(coverData: Buffer): Picture {
     );
 }
 
+function readFirstPicture(tag: Tag): Buffer | null {
+    const [picture] = tag.pictures;
+    return picture ? Buffer.from(picture.data.toByteArray()) : null;
+}
+
 function writeTagLibMetadata(
     file: TagLibFile,
     { info, extras, coverData }: TrackMetadata
@@ -144,6 +149,10 @@ export class TagLibTagStore implements TagStore {
             extras: readTagLibExtras(file.tag),
             hasCover: file.tag.pictures.length > 0,
         }));
+    }
+
+    async readCover(source: string): Promise<Buffer | null> {
+        return useTagLibFile(source, ({ tag }) => readFirstPicture(tag));
     }
 
     async write(source: string, metadata: TrackMetadata): Promise<void> {
