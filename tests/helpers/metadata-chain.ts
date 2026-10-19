@@ -1,9 +1,13 @@
 import {
     createMetadataChain,
     type MetadataChainConfig,
-} from "../../src/create-metadata-chain.js";
-import type { MetadataChain } from "../../src/metadata-chain.js";
-import type { TrackInfo, TrackMetadata, TrackSearch } from "../../src/types.js";
+} from "../../src/metadata/create-metadata-chain.js";
+import type { MetadataChain } from "../../src/metadata/metadata-chain.js";
+import type {
+    TrackInfo,
+    TrackMetadata,
+    TrackSearch,
+} from "../../src/metadata/types.js";
 import { instantClock } from "./clock.js";
 
 export const emptyInfo: TrackInfo = {

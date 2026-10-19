@@ -131,19 +131,9 @@ source folder to its final status:
 
 ## Development
 
-The source is organized by responsibility: `index.ts` wires the terminal to
-`app.ts`, which loads settings through `config.ts` (with `cli-options.ts` for
-command-line arguments), runs `batch.ts` over the discovered files, and writes
-the report. `processing.ts` handles a single file and returns its status.
-`file.ts` handles audio-file discovery and temporary copies, and
-`track-name-parser.ts` and `folder-context.ts` derive search terms from
-filenames and folders. `audio-tags.ts` picks the tag store for each format:
-`id3-tag-store.ts` for MP3 and `taglib-tag-store.ts` for OGG, FLAC, and WAV.
-Metadata lookup is a chain of providers (`lastfm.ts`, `musicbrainz.ts`,
-`itunes.ts`, and the cover-only `youtube.ts`) run by `metadata-chain.ts`, which
-fills missing fields in order until the metadata is complete.
-`create-metadata-chain.ts` assembles the chain from configuration. Shared
-helpers live in `http.ts`, `rate-limiter.ts`, and `track-metadata.ts`.
+The source is organized by domain under `src/` (`cli`, `processing`, `library`,
+`tags`, `metadata`, `shared`), and `tests/` mirrors that layout. See
+[AGENTS.md](AGENTS.md) for the architecture and contribution conventions.
 
 Build the application:
 

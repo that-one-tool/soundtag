@@ -1,4 +1,4 @@
-import type { Clock } from "../../src/rate-limiter.js";
+import type { Clock } from "../../src/shared/rate-limiter.js";
 
 export const instantClock: Clock = {
     now: () => 0,

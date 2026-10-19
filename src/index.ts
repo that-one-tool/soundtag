@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { runApp } from "./app.js";
-import { openTerminalSession } from "./terminal.js";
+import { runApp } from "./cli/app.js";
+import { openTerminalSession } from "./cli/terminal.js";
 
 const session = openTerminalSession();
 
