@@ -235,7 +235,11 @@ test("processBatch renames only the first of two files with the same tags", asyn
     await processBatch(files, {
         context: {
             sourceRoot: directory,
-            metadataChain: createTestChain(),
+            metadataChain: new MetadataChain(
+                [{ name: "Fake", findMetadata: async () => null }],
+                undefined,
+                consoleLogger
+            ),
             logger: consoleLogger,
         },
         report,
