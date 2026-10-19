@@ -4,6 +4,7 @@ import * as path from "node:path";
 import NodeID3 from "node-id3";
 import { test } from "node:test";
 import { runApp } from "../src/app.js";
+import { InputCancelledError } from "../src/errors.js";
 import { captureConsole } from "./helpers/console.js";
 import { useTemporaryDirectories } from "./helpers/temporary-directories.js";
 
@@ -20,12 +21,17 @@ async function readReport(directory: string): Promise<unknown> {
     );
 }
 
-function runAppIn(workingDirectory: string, argv: string[]): Promise<number> {
+function runAppIn(
+    workingDirectory: string,
+    argv: string[],
+    stopSignal = new AbortController().signal
+): Promise<number> {
     return runApp({
         argv,
         env: environment,
         ask: async () => "",
         workingDirectory,
+        stopSignal,
     });
 }
 
@@ -99,4 +105,51 @@ test("runApp writes the report into the source folder", async () => {
     await assert.rejects(
         fs.access(path.join(workingDirectory, "soundtag_output.json"))
     );
+});
+
+test("runApp exits with 130 and keeps unprocessed files as read when stopped", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    await fs.writeFile(path.join(workingDirectory, "song.mp3"), "audio bytes");
+
+    assert.equal(
+        await runAppIn(workingDirectory, ["."], AbortSignal.abort()),
+        130
+    );
+    assert.deepEqual(await readReport(workingDirectory), {
+        files: { "song.mp3": "READ" },
+    });
+    assert.ok(output.logs.includes("PROCESSING STOPPED"));
+    assert.ok(!output.logs.includes("PROCESSING COMPLETE"));
+});
+
+test("runApp exits with 130 without an error when stopped at a prompt", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const stop = new AbortController();
+
+    const exitCode = await runApp({
+        argv: [],
+        env: {},
+        ask: async () => {
+            stop.abort();
+            throw new InputCancelledError();
+        },
+        workingDirectory,
+        stopSignal: stop.signal,
+    });
+
+    assert.equal(exitCode, 130);
+    assert.deepEqual(output.errors, []);
+    assert.deepEqual(await readReport(workingDirectory), { files: {} });
+});
+
+test("runApp still reports real errors after a stop was requested", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+
+    assert.equal(
+        await runAppIn(workingDirectory, ["missing"], AbortSignal.abort()),
+        1
+    );
+    assert.deepEqual(output.errors, [
+        "Error: The source folder does not exist.",
+    ]);
 });

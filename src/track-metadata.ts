@@ -22,6 +22,10 @@ export function getFirstFilled(...values: (string | undefined)[]): string {
     return values.find(Boolean) ?? "";
 }
 
+export function valueOrEmpty(value: string | undefined): string {
+    return value ?? "";
+}
+
 export function trimOrEmpty(value: string | undefined): string {
     return value?.trim() ?? "";
 }

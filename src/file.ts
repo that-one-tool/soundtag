@@ -31,12 +31,20 @@ function isSearchFull(search: AudioFileSearch): boolean {
     return search.files.length >= search.maxFiles;
 }
 
+function isHidden(entry: Dirent): boolean {
+    return entry.name.startsWith(".");
+}
+
 function isWalkableDirectory(entry: Dirent, search: AudioFileSearch): boolean {
-    return search.recursive && entry.isDirectory();
+    return search.recursive && entry.isDirectory() && !isHidden(entry);
+}
+
+function isVisibleFile(entry: Dirent): boolean {
+    return entry.isFile() && !isHidden(entry);
 }
 
 function isAudioFile(entry: Dirent): boolean {
-    return entry.isFile() && getAudioFormat(entry.name) !== null;
+    return isVisibleFile(entry) && getAudioFormat(entry.name) !== null;
 }
 
 async function collectEntry(
@@ -75,7 +83,9 @@ export async function findAudioFiles(
 ): Promise<string[]> {
     const search: AudioFileSearch = { recursive, maxFiles, files: [] };
     await collectAudioFiles(directory, search);
-    return search.files.sort((first, second) => first.localeCompare(second));
+    return search.files.toSorted((first, second) =>
+        first.localeCompare(second)
+    );
 }
 
 export async function writeTemporaryCopy(

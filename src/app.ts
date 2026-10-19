@@ -3,7 +3,8 @@ import * as path from "node:path";
 import { countStatuses, createReport, processBatch } from "./batch.js";
 import { loadConfig, type ConfigSources } from "./config.js";
 import { createMetadataChain } from "./create-metadata-chain.js";
-import { getErrorMessage } from "./errors.js";
+import { getErrorMessage, InputCancelledError } from "./errors.js";
+import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_SUCCESS } from "./exit-codes.js";
 import { findAudioFiles } from "./file.js";
 import type { AppConfig, ProcessingReport, ProcessingStats } from "./types.js";
 
@@ -11,9 +12,14 @@ const MAX_FILES_PER_RUN = 3000;
 const REPORT_FILENAME = "soundtag_output.json";
 const SEPARATOR = "========================================";
 
-interface RunState {
+export interface AppEnvironment extends ConfigSources {
+    stopSignal: AbortSignal;
+}
+
+interface TaggingRun {
     reportPath: string;
     report: ProcessingReport;
+    stopSignal: AbortSignal;
 }
 
 function printBanner(): void {
@@ -32,13 +38,15 @@ function printRunSettings({ sourceRoot, recursive }: AppConfig): void {
     console.log(`Batch limit: ${MAX_FILES_PER_RUN} audio files per run\n`);
 }
 
-function printSummary(stats: ProcessingStats, reportPath: string): void {
+function printSummary(stats: ProcessingStats, run: TaggingRun): void {
     console.log(`\n${SEPARATOR}`);
-    console.log("PROCESSING COMPLETE");
+    console.log(
+        run.stopSignal.aborted ? "PROCESSING STOPPED" : "PROCESSING COMPLETE"
+    );
     console.log(`Successful: ${stats.ok}`);
     console.log(`Skipped:    ${stats.skipped}`);
     console.log(`Errors:     ${stats.errors}`);
-    console.log(`Report:     ${reportPath}`);
+    console.log(`Report:     ${run.reportPath}`);
     console.log(SEPARATOR);
 }
 
@@ -49,7 +57,7 @@ function findLibraryFiles({
     return findAudioFiles(sourceRoot, recursive, MAX_FILES_PER_RUN);
 }
 
-async function tagLibrary(config: AppConfig, run: RunState): Promise<void> {
+async function tagLibrary(config: AppConfig, run: TaggingRun): Promise<void> {
     const metadataChain = createMetadataChain(config);
     printRunSettings(config);
     const audioFiles = await findLibraryFiles(config);
@@ -63,27 +71,48 @@ async function tagLibrary(config: AppConfig, run: RunState): Promise<void> {
         `Processing ${audioFiles.length} audio files. Starting tagging...\n`
     );
     run.report = createReport(audioFiles, config.sourceRoot);
-    const context = { sourceRoot: config.sourceRoot, metadataChain };
-    await processBatch(audioFiles, context, run.report);
-    printSummary(countStatuses(run.report), run.reportPath);
+    await processBatch(audioFiles, {
+        context: { sourceRoot: config.sourceRoot, metadataChain },
+        report: run.report,
+        stopSignal: run.stopSignal,
+    });
+    printSummary(countStatuses(run.report), run);
+}
+
+function getCompletionExitCode({ stopSignal }: TaggingRun): number {
+    return stopSignal.aborted ? EXIT_INTERRUPTED : EXIT_SUCCESS;
+}
+
+function getFailureExitCode(
+    error: unknown,
+    { stopSignal }: TaggingRun
+): number {
+    if (error instanceof InputCancelledError && stopSignal.aborted) {
+        return EXIT_INTERRUPTED;
+    }
+
+    console.error(`Error: ${getErrorMessage(error)}`);
+    return EXIT_FAILURE;
 }
 
 async function runTagging(
     sources: ConfigSources,
-    run: RunState
+    run: TaggingRun
 ): Promise<number> {
     try {
         const config = await loadConfig(sources);
         run.reportPath = path.join(config.sourceRoot, REPORT_FILENAME);
         await tagLibrary(config, run);
-        return 0;
+        return getCompletionExitCode(run);
     } catch (error) {
-        console.error(`Error: ${getErrorMessage(error)}`);
-        return 1;
+        return getFailureExitCode(error, run);
     }
 }
 
-async function writeReport({ reportPath, report }: RunState): Promise<number> {
+async function writeReport({
+    reportPath,
+    report,
+}: TaggingRun): Promise<number> {
     try {
         await fs.writeFile(
             reportPath,
@@ -91,22 +120,23 @@ async function writeReport({ reportPath, report }: RunState): Promise<number> {
             "utf8"
         );
         console.log(`Processing report written to ${reportPath}`);
-        return 0;
+        return EXIT_SUCCESS;
     } catch (error) {
         console.error(
             `Could not write processing report to ${reportPath}: ${getErrorMessage(error)}`
         );
-        return 1;
+        return EXIT_FAILURE;
     }
 }
 
-export async function runApp(sources: ConfigSources): Promise<number> {
+export async function runApp(environment: AppEnvironment): Promise<number> {
     printBanner();
-    const run: RunState = {
-        reportPath: path.resolve(sources.workingDirectory, REPORT_FILENAME),
+    const run: TaggingRun = {
+        reportPath: path.resolve(environment.workingDirectory, REPORT_FILENAME),
         report: { files: {} },
+        stopSignal: environment.stopSignal,
     };
-    const taggingExitCode = await runTagging(sources, run);
+    const taggingExitCode = await runTagging(environment, run);
     const reportExitCode = await writeReport(run);
     return Math.max(taggingExitCode, reportExitCode);
 }

@@ -65,3 +65,96 @@ test("LastFmProvider logs empty album details when nothing matches", async () =>
     );
     assert.deepEqual(output, ["Album: ", "Year: "]);
 });
+
+test("LastFmProvider reads the first match from a result list with a plain artist", async () => {
+    const requests: URL[] = [];
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+        requests.push(url);
+
+        if (url.searchParams.get("method") === "track.search") {
+            return Response.json({
+                results: {
+                    trackmatches: {
+                        track: [
+                            {
+                                name: "Plain Artist: Song",
+                                artist: "Plain Artist",
+                            },
+                            { name: "Other", artist: "Other artist" },
+                        ],
+                    },
+                },
+            });
+        }
+
+        return Response.json({
+            track: { album: { title: "Album", year: "1999" } },
+        });
+    };
+
+    const metadata = await new LastFmProvider("key").findMetadata(
+        { title: "Song", artist: "", album: "" },
+        false
+    );
+
+    assert.deepEqual(metadata?.info, {
+        title: "Song",
+        artist: "Plain Artist",
+        album: "Album",
+        year: "1999",
+    });
+    assert.equal(requests[0].searchParams.has("artist"), false);
+    assert.equal(requests[1].searchParams.get("track"), "Song");
+    assert.equal(requests[1].searchParams.get("autocorrect"), "1");
+});
+
+test("LastFmProvider keeps titles that only start like the artist name", async () => {
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+
+        if (url.searchParams.get("method") === "track.search") {
+            return Response.json({
+                results: {
+                    trackmatches: {
+                        track: { name: "Abbaesque", artist: "Abba" },
+                    },
+                },
+            });
+        }
+
+        return Response.json({});
+    };
+
+    const metadata = await new LastFmProvider("key").findMetadata(
+        { title: "Abbaesque", artist: "Abba", album: "" },
+        false
+    );
+
+    assert.equal(metadata?.info.title, "Abbaesque");
+});
+
+test("LastFmProvider removes a repeated artist prefix regardless of case", async () => {
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+
+        if (url.searchParams.get("method") === "track.search") {
+            return Response.json({
+                results: {
+                    trackmatches: {
+                        track: { name: "ABBA - Waterloo", artist: "Abba" },
+                    },
+                },
+            });
+        }
+
+        return Response.json({});
+    };
+
+    const metadata = await new LastFmProvider("key").findMetadata(
+        { title: "Waterloo", artist: "Abba", album: "" },
+        false
+    );
+
+    assert.equal(metadata?.info.title, "Waterloo");
+});

@@ -10,7 +10,7 @@ import {
     type Clock,
     type RateLimiter,
 } from "./rate-limiter.js";
-import { extractYear } from "./track-metadata.js";
+import { extractYear, valueOrEmpty } from "./track-metadata.js";
 import type {
     MetadataProvider,
     TrackInfo,
@@ -51,9 +51,9 @@ function getFirstItunesTrack(data: ItunesSearchResponse): ItunesTrack | null {
 
 function getItunesTrackInfo(track: ItunesTrack): TrackInfo {
     return {
-        title: track.trackName ?? "",
-        artist: track.artistName ?? "",
-        album: track.collectionName ?? "",
+        title: valueOrEmpty(track.trackName),
+        artist: valueOrEmpty(track.artistName),
+        album: valueOrEmpty(track.collectionName),
         year: extractYear(track.releaseDate),
     };
 }

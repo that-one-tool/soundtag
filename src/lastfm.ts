@@ -5,7 +5,7 @@ import {
     readJsonResponse,
     type ImageRequest,
 } from "./http.js";
-import { extractYear } from "./track-metadata.js";
+import { extractYear, valueOrEmpty } from "./track-metadata.js";
 import type {
     MetadataProvider,
     TrackInfo,
@@ -52,75 +52,102 @@ interface CoverImage {
     url: string;
 }
 
-async function requestLastFm<T>(
-    params: Record<string, string>,
-    logUrl = false
-): Promise<T> {
+function buildLastFmUrl(params: Record<string, string>): URL {
     const url = new URL(LASTFM_BASE);
 
     for (const [key, value] of Object.entries(params)) {
         url.searchParams.set(key, value);
     }
 
+    return url;
+}
+
+function logRequestUrl(url: URL): void {
+    const loggedUrl = new URL(url);
+    loggedUrl.searchParams.set("api_key", "[REDACTED]");
+    console.log(`Last.fm track.getInfo URL: ${loggedUrl}`);
+}
+
+async function requestLastFm<T>(
+    params: Record<string, string>,
+    logUrl: boolean
+): Promise<T> {
+    const url = buildLastFmUrl(params);
+
     if (logUrl) {
-        const loggedUrl = new URL(url);
-        loggedUrl.searchParams.set("api_key", "[REDACTED]");
-        console.log(`Last.fm track.getInfo URL: ${loggedUrl}`);
+        logRequestUrl(url);
     }
 
     return readJsonResponse<T>(await fetchWithTimeout(url), "Last.fm");
 }
 
+function buildSearchParams(
+    query: string,
+    apiKey: string,
+    artist: string
+): Record<string, string> {
+    return {
+        method: "track.search",
+        track: query,
+        api_key: apiKey,
+        format: "json",
+        limit: "1",
+        ...(artist ? { artist } : {}),
+    };
+}
+
+function getTrackMatches(
+    data: LastFmSearchResponse
+): LastFmTrack | LastFmTrack[] | undefined {
+    return data.results?.trackmatches?.track;
+}
+
+function getFirstMatch(data: LastFmSearchResponse): LastFmTrack | null {
+    const matches = [getTrackMatches(data) ?? []].flat();
+    return matches[0] ?? null;
+}
+
 async function searchTrack(
     query: string,
     apiKey: string,
-    artist?: string
+    artist: string
 ): Promise<LastFmTrack | null> {
     try {
-        const params: Record<string, string> = {
-            method: "track.search",
-            track: query,
-            api_key: apiKey,
-            format: "json",
-            limit: "1",
-        };
-
-        if (artist) {
-            params.artist = artist;
-        }
-
-        const data = await requestLastFm<LastFmSearchResponse>(params);
-        const tracks = data.results?.trackmatches?.track;
-
-        if (!tracks) {
-            return null;
-        }
-
-        return Array.isArray(tracks) ? (tracks[0] ?? null) : tracks;
+        const data = await requestLastFm<LastFmSearchResponse>(
+            buildSearchParams(query, apiKey, artist),
+            false
+        );
+        return getFirstMatch(data);
     } catch (error) {
         console.error(`Last.fm search failed: ${getErrorMessage(error)}`);
         return null;
     }
 }
 
-async function getTrackInfo(
+function buildTrackInfoParams(
     { artist, title }: Pick<TrackInfo, "title" | "artist">,
+    apiKey: string
+): Record<string, string> {
+    return {
+        method: "track.getInfo",
+        artist,
+        track: title,
+        api_key: apiKey,
+        format: "json",
+        autocorrect: "1",
+    };
+}
+
+async function getTrackInfo(
+    matched: Pick<TrackInfo, "title" | "artist">,
     apiKey: string,
     verbose: boolean
 ): Promise<LastFmTrack | null> {
     try {
         const data = await requestLastFm<LastFmInfoResponse>(
-            {
-                method: "track.getInfo",
-                artist,
-                track: title,
-                api_key: apiKey,
-                format: "json",
-                autocorrect: "1",
-            },
+            buildTrackInfoParams(matched, apiKey),
             verbose
         );
-
         return data.track ?? null;
     } catch (error) {
         console.error(
@@ -135,20 +162,21 @@ function getArtistName(artist: LastFmTrack["artist"]): string {
         return artist;
     }
 
-    return artist?.name ?? "";
+    return valueOrEmpty(artist?.name);
+}
+
+function startsWithArtist(title: string, artist: string): boolean {
+    const titleStart = title.slice(0, artist.length);
+    return Boolean(artist) && titleStart.toLowerCase() === artist.toLowerCase();
 }
 
 function removeArtistPrefix(title: string, artist: string): string {
-    if (
-        !artist ||
-        title.slice(0, artist.length).toLowerCase() !== artist.toLowerCase()
-    ) {
+    if (!startsWithArtist(title, artist)) {
         return title;
     }
 
     const remainder = title.slice(artist.length);
-    const separator = remainder.match(/^\s*[-–—:]\s*/);
-
+    const separator = /^\s*[-–—:]\s*/.exec(remainder);
     return separator ? remainder.slice(separator[0].length).trim() : title;
 }
 

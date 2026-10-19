@@ -6,7 +6,7 @@ when a match is found.
 
 ## Requirements
 
-- Node.js 18 or later
+- Node.js 24 or later
 - A Last.fm API key
 - A MusicBrainz User-Agent string to enable the MusicBrainz fallback lookup
 
@@ -75,10 +75,15 @@ npm start -- /path/to/music --recursive
 npm start -- /path/to/music -r
 ```
 
-Each run processes at most 3,000 MP3, OGG, FLAC, or WAV files. OGG files use
-Vorbis comments, FLAC files use their supported native tags and picture
-metadata, and MP3 files use ID3 tags. WAV metadata is written through TagLib's
-RIFF/ID3 support; embedded artwork compatibility can vary between players.
+Each run processes at most 3,000 MP3, OGG, FLAC, or WAV files. Hidden files and
+folders (names starting with a dot) are ignored. OGG files use Vorbis comments,
+FLAC files use their supported native tags and picture metadata, and MP3 files
+use ID3 tags. WAV metadata is written through TagLib's RIFF/ID3 support;
+embedded artwork compatibility can vary between players.
+
+Press Ctrl+C to stop a run: SoundTag finishes the file it is working on, writes
+the report (unprocessed files stay `READ`), and exits with code 130. Press
+Ctrl+C a second time to quit immediately without writing the report.
 
 Pass `-v` or `--verbose` to log the Last.fm `track.getInfo` request URL:
 

@@ -1,31 +1,17 @@
 import "dotenv/config";
-import { stdin as input, stdout as output } from "node:process";
-import * as readline from "node:readline/promises";
 import { runApp } from "./app.js";
+import { openTerminalSession } from "./terminal.js";
 
-const terminal = readline.createInterface({ input, output });
-const inputClosed = new AbortController();
-terminal.once("close", () => inputClosed.abort());
-
-async function askTerminal(question: string): Promise<string> {
-    try {
-        return await terminal.question(question, {
-            signal: inputClosed.signal,
-        });
-    } catch (error) {
-        throw new Error("Input ended before an answer was given.", {
-            cause: error,
-        });
-    }
-}
+const session = openTerminalSession();
 
 try {
     process.exitCode = await runApp({
         argv: process.argv.slice(2),
         env: process.env,
-        ask: askTerminal,
+        ask: session.ask,
         workingDirectory: process.cwd(),
+        stopSignal: session.stopSignal,
     });
 } finally {
-    terminal.close();
+    session.close();
 }

@@ -18,18 +18,33 @@ function logTrackHeader(position: string, source: string): void {
     console.log(`Format: ${path.extname(source).slice(1).toUpperCase()}`);
 }
 
+export interface BatchRun {
+    context: ProcessingContext;
+    report: ProcessingReport;
+    stopSignal: AbortSignal;
+}
+
+async function processFile(
+    source: string,
+    position: string,
+    { context, report }: BatchRun
+): Promise<void> {
+    const relativePath = path.relative(context.sourceRoot, source);
+    logTrackHeader(`[${position}] ${relativePath}`, source);
+    report.files[relativePath] = await processTrack(source, context);
+}
+
 export async function processBatch(
     files: string[],
-    context: ProcessingContext,
-    report: ProcessingReport
+    run: BatchRun
 ): Promise<void> {
     for (const [index, source] of files.entries()) {
-        const relativePath = path.relative(context.sourceRoot, source);
-        logTrackHeader(
-            `[${index + 1}/${files.length}] ${relativePath}`,
-            source
-        );
-        report.files[relativePath] = await processTrack(source, context);
+        if (run.stopSignal.aborted) {
+            console.log("Stopped before processing the remaining files.");
+            return;
+        }
+
+        await processFile(source, `${index + 1}/${files.length}`, run);
     }
 }
 

@@ -12,7 +12,7 @@ import {
     type Clock,
     type RateLimiter,
 } from "./rate-limiter.js";
-import { extractYear } from "./track-metadata.js";
+import { extractYear, valueOrEmpty } from "./track-metadata.js";
 import type {
     MetadataProvider,
     TrackInfo,
@@ -67,8 +67,8 @@ function buildRecordingSearchUrl({ title, artist, album }: TrackSearch): URL {
     return url;
 }
 
-function getCreditName(credit: MusicBrainzArtistCredit): string {
-    return credit.name ?? credit.artist?.name ?? "";
+function getCreditName({ name, artist }: MusicBrainzArtistCredit): string {
+    return name ?? valueOrEmpty(artist?.name);
 }
 
 function getMusicBrainzArtist(credits: MusicBrainzArtistCredit[] = []): string {

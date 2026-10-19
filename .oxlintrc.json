@@ -7,13 +7,13 @@
     },
     "rules": {
         "complexity": [
-            "warn",
+            "error",
             {
                 "max": 3
             }
         ],
         "max-lines-per-function": [
-            "warn",
+            "error",
             {
                 "max": 20,
                 "skipBlankLines": true,
@@ -21,13 +21,13 @@
             }
         ],
         "max-params": [
-            "warn",
+            "error",
             {
                 "max": 3
             }
         ],
         "max-depth": [
-            "warn",
+            "error",
             {
                 "max": 2
             }

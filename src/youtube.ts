@@ -8,49 +8,73 @@ interface YouTubeThumbnail {
     url?: string;
 }
 
+interface YouTubeThumbnails {
+    maxres?: YouTubeThumbnail;
+    standard?: YouTubeThumbnail;
+    high?: YouTubeThumbnail;
+    medium?: YouTubeThumbnail;
+    default?: YouTubeThumbnail;
+}
+
+interface YouTubeSnippet {
+    thumbnails?: YouTubeThumbnails;
+}
+
 interface YouTubeSearchItem {
-    snippet?: {
-        thumbnails?: {
-            maxres?: YouTubeThumbnail;
-            standard?: YouTubeThumbnail;
-            high?: YouTubeThumbnail;
-            medium?: YouTubeThumbnail;
-            default?: YouTubeThumbnail;
-        };
-    };
+    snippet?: YouTubeSnippet;
 }
 
 interface YouTubeSearchResponse {
     items?: YouTubeSearchItem[];
 }
 
-async function findThumbnailUrl(
-    title: string,
-    artist: string,
+const THUMBNAIL_SIZES = [
+    "maxres",
+    "standard",
+    "high",
+    "medium",
+    "default",
+] as const;
+
+function buildYouTubeSearchUrl(
+    { title, artist }: TrackSearch,
     apiKey: string
-): Promise<string | null> {
+): URL {
     const url = new URL(YOUTUBE_SEARCH_URL);
     url.searchParams.set("part", "snippet");
     url.searchParams.set("type", "video");
     url.searchParams.set("maxResults", "1");
     url.searchParams.set("q", [artist, title].filter(Boolean).join(" "));
     url.searchParams.set("key", apiKey);
+    return url;
+}
 
+function getFirstSnippet(
+    data: YouTubeSearchResponse
+): YouTubeSnippet | undefined {
+    return data.items?.[0]?.snippet;
+}
+
+function getThumbnails(data: YouTubeSearchResponse): YouTubeThumbnails {
+    return getFirstSnippet(data)?.thumbnails ?? {};
+}
+
+function getBestThumbnailUrl(data: YouTubeSearchResponse): string | null {
+    const thumbnails = getThumbnails(data);
+    const urls = THUMBNAIL_SIZES.map((size) => thumbnails[size]?.url);
+    return urls.find(Boolean) ?? null;
+}
+
+async function findThumbnailUrl(
+    search: TrackSearch,
+    apiKey: string
+): Promise<string | null> {
     try {
         const data = await readJsonResponse<YouTubeSearchResponse>(
-            await fetchWithTimeout(url),
+            await fetchWithTimeout(buildYouTubeSearchUrl(search, apiKey)),
             "YouTube Data API"
         );
-        const thumbnails = data.items?.[0]?.snippet?.thumbnails;
-
-        return (
-            thumbnails?.maxres?.url ??
-            thumbnails?.standard?.url ??
-            thumbnails?.high?.url ??
-            thumbnails?.medium?.url ??
-            thumbnails?.default?.url ??
-            null
-        );
+        return getBestThumbnailUrl(data);
     } catch (error) {
         console.error(
             `YouTube thumbnail search failed: ${getErrorMessage(error)}`
@@ -74,11 +98,7 @@ export class YouTubeCoverProvider implements CoverProvider {
     constructor(private readonly apiKey: string) {}
 
     async findCover(search: TrackSearch): Promise<Buffer | null> {
-        const thumbnailUrl = await findThumbnailUrl(
-            search.title,
-            search.artist,
-            this.apiKey
-        );
+        const thumbnailUrl = await findThumbnailUrl(search, this.apiKey);
         return thumbnailUrl ? downloadThumbnail(thumbnailUrl) : null;
     }
 }

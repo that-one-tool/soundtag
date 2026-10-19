@@ -11,9 +11,11 @@ const tsxLoader = path.join(projectRoot, "node_modules/tsx/dist/loader.mjs");
 
 const createTemporaryDirectory = useTemporaryDirectories("soundtag-cli-test-");
 
+const INTERRUPT = Symbol("interrupt");
+
 interface CliRunOptions {
     environment?: NodeJS.ProcessEnv;
-    answers?: string[];
+    answers?: (string | typeof INTERRUPT)[];
 }
 
 function runCli(
@@ -55,7 +57,14 @@ function runCli(
             stdout += chunk;
 
             if (stdout.endsWith(": ") && pendingAnswers.length > 0) {
-                child.stdin.write(`${pendingAnswers.shift()}\n`);
+                const answer = pendingAnswers.shift();
+
+                if (answer === INTERRUPT) {
+                    child.kill("SIGINT");
+                    return;
+                }
+
+                child.stdin.write(`${answer}\n`);
             }
 
             if (pendingAnswers.length === 0) {
@@ -234,4 +243,21 @@ test("CLI fails cleanly when input ends during a prompt", async () => {
         )
     ) as { files: Record<string, string> };
     assert.deepEqual(report, { files: {} });
+});
+
+test("CLI stops with exit code 130 when interrupted at a prompt", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+
+    const { exitCode, stdout, stderr } = await runCli(workingDirectory, [], {
+        environment: { LASTFM_API_KEY: undefined },
+        answers: [INTERRUPT],
+    });
+
+    assert.equal(exitCode, 130);
+    assert.equal(stderr, "");
+    assert.match(
+        stdout,
+        /Interrupted\. Press Ctrl\+C again to quit immediately\./
+    );
+    assert.match(stdout, /Processing report written to /);
 });

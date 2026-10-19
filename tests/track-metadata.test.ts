@@ -9,6 +9,7 @@ import {
     trimOrEmpty,
     getFilledFields,
     getFirstFilled,
+    valueOrEmpty,
 } from "../src/track-metadata.js";
 
 const completeInfo = {
@@ -108,4 +109,9 @@ test("getFilledFields ignores keys that are not track fields", () => {
 test("getFirstFilled returns the first non-empty value", () => {
     assert.equal(getFirstFilled("", undefined, "second", "third"), "second");
     assert.equal(getFirstFilled(undefined, ""), "");
+});
+
+test("valueOrEmpty turns missing values into empty strings", () => {
+    assert.equal(valueOrEmpty(" kept "), " kept ");
+    assert.equal(valueOrEmpty(undefined), "");
 });

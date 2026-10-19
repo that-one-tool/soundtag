@@ -6,6 +6,7 @@ import { getTagStore } from "../src/audio-tags.js";
 import { countStatuses, createReport, processBatch } from "../src/batch.js";
 import { captureConsole } from "./helpers/console.js";
 import { restoreFetchAfterEach } from "./helpers/fetch.js";
+import { MetadataChain } from "../src/metadata-chain.js";
 import { createTestChain } from "./helpers/metadata-chain.js";
 import { useTemporaryDirectories } from "./helpers/temporary-directories.js";
 
@@ -55,11 +56,11 @@ test("processBatch records each file status and logs its position", async () => 
     const files = [broken, tagged];
     const report = createReport(files, directory);
 
-    await processBatch(
-        files,
-        { sourceRoot: directory, metadataChain: createTestChain() },
-        report
-    );
+    await processBatch(files, {
+        context: { sourceRoot: directory, metadataChain: createTestChain() },
+        report,
+        stopSignal: new AbortController().signal,
+    });
 
     assert.deepEqual(report, {
         files: { "broken.flac": "FAILED", "tagged.mp3": "SKIPPED" },
@@ -72,5 +73,34 @@ test("processBatch records each file status and logs its position", async () => 
             "\n[2/2] tagged.mp3",
             "Format: MP3",
         ]
+    );
+});
+
+test("processBatch stops before the next file once a stop is requested", async () => {
+    const directory = await createTemporaryDirectory();
+    const files = ["a.mp3", "b.mp3"].map((name) => path.join(directory, name));
+    await Promise.all(files.map((file) => fs.writeFile(file, "audio bytes")));
+    const stop = new AbortController();
+    const stoppingChain = new MetadataChain([
+        {
+            findMetadata: async () => {
+                stop.abort();
+                return null;
+            },
+        },
+    ]);
+    const report = createReport(files, directory);
+
+    await processBatch(files, {
+        context: { sourceRoot: directory, metadataChain: stoppingChain },
+        report,
+        stopSignal: stop.signal,
+    });
+
+    assert.deepEqual(report, {
+        files: { "a.mp3": "SKIPPED", "b.mp3": "READ" },
+    });
+    assert.ok(
+        output.logs.includes("Stopped before processing the remaining files.")
     );
 });

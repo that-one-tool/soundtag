@@ -29,3 +29,15 @@ test("parseArguments rejects unknown flags and multiple source paths", () => {
         /Only one source folder path/
     );
 });
+
+test("parseArguments treats names of object properties as source paths", () => {
+    assert.equal(parseArguments(["constructor"]).sourcePath, "constructor");
+    assert.equal(parseArguments(["toString"]).sourcePath, "toString");
+});
+
+test("parseArguments accepts the long and short option aliases", () => {
+    assert.deepEqual(parseArguments(["--no-recursive", "-r", "--verbose"]), {
+        recursive: true,
+        verbose: true,
+    });
+});

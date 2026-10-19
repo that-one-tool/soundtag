@@ -93,6 +93,33 @@ test("findAudioFiles stops walking nested folders once the limit is reached", as
     );
 });
 
+test("findAudioFiles skips hidden files such as leftover temporary copies", async () => {
+    await fs.writeFile(path.join(temporaryDirectory, "song.mp3"), "");
+    await fs.writeFile(path.join(temporaryDirectory, ".song.0b6f8c1e.mp3"), "");
+    await fs.writeFile(path.join(temporaryDirectory, "._song.mp3"), "");
+
+    assert.deepEqual(
+        (await findAudioFiles(temporaryDirectory)).map((file) =>
+            path.basename(file)
+        ),
+        ["song.mp3"]
+    );
+});
+
+test("findAudioFiles does not walk hidden folders", async () => {
+    const hidden = path.join(temporaryDirectory, ".AppleDouble");
+    await fs.mkdir(hidden);
+    await fs.writeFile(path.join(hidden, "song.mp3"), "");
+    await fs.writeFile(path.join(temporaryDirectory, "song.mp3"), "");
+
+    assert.deepEqual(
+        (await findAudioFiles(temporaryDirectory)).map((file) =>
+            path.relative(temporaryDirectory, file)
+        ),
+        ["song.mp3"]
+    );
+});
+
 test("findAudioFiles stops at the 3,000-file batch limit", async () => {
     await Promise.all(
         Array.from({ length: 3001 }, (_, index) =>
