@@ -92,7 +92,6 @@ function getMovedFocusPath(
     return movedPath === focusPath ? state.focusPath : movedPath;
 }
 
-// Names stay stale until the next listing load, which focuses the moved entry.
 function applyMove(state: BrowserState, move: PathMove): BrowserState {
     return {
         ...state,
@@ -102,9 +101,15 @@ function applyMove(state: BrowserState, move: PathMove): BrowserState {
     };
 }
 
+function getMovedName(entry: BrowserEntry, movedPath: string): string {
+    return entry.kind === "parent" ? entry.name : path.basename(movedPath);
+}
+
 function moveEntry(entry: BrowserEntry, move: PathMove): BrowserEntry {
     const movedPath = movePath(entry.path, move);
-    return movedPath === entry.path ? entry : { ...entry, path: movedPath };
+    return movedPath === entry.path
+        ? entry
+        : { ...entry, path: movedPath, name: getMovedName(entry, movedPath) };
 }
 
 const OPENERS: Record<

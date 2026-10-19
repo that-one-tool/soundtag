@@ -220,3 +220,28 @@ test("moved follows the folder of a listing that is still loading", () => {
     assert.equal(state.directory, "/music/A - B");
     assert.equal(state.focusPath, undefined);
 });
+
+test("moved shows the new name of a renamed folder after reloading", () => {
+    const moved = reduceBrowserState(loadedState(1), {
+        type: "moved",
+        move: renamedAlbum,
+    });
+    const renamed = { ...album, name: "A - B", path: "/music/A - B" };
+
+    const state = reduceBrowserState(moved, {
+        type: "loaded",
+        directory: "/music",
+        listing: { entries: [parent, renamed, song, other] },
+    });
+
+    assert.equal(state.entries[1].name, "A - B");
+});
+
+test("moved keeps the name of the parent entry", () => {
+    const state = reduceBrowserState(loadedState(), {
+        type: "moved",
+        move: { source: "/", destination: "/renamed" },
+    });
+
+    assert.equal(state.entries[0].name, "..");
+});

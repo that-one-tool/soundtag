@@ -210,6 +210,29 @@ test("App follows the browsed folder when it is renamed", async () => {
     assert.match(findFrameLine(lastFrame, "Artist - Album/"), /▸/);
 });
 
+test("App refreshes the listing after a subfolder is renamed", async () => {
+    const directory = await createTemporaryDirectory();
+    await fs.mkdir(path.join(directory, "Album"));
+    const { services } = createControlledServices();
+    services.pathMoves.subscribe((move) =>
+        services.statusStore.recordMove(move)
+    );
+    const { lastFrame } = render(
+        createElement(App, { startDirectory: directory, services })
+    );
+    await waitForFrame(lastFrame, "Album/");
+    const renamed = path.join(directory, "Black Sabbath - Paranoid");
+    await fs.rename(path.join(directory, "Album"), renamed);
+
+    services.pathMoves.record({
+        source: path.join(directory, "Album"),
+        destination: renamed,
+    });
+
+    await waitForFrame(lastFrame, "Black Sabbath - Paranoid/");
+    assert.equal(findFrameLine(lastFrame, "Album/"), "");
+});
+
 test("App shows the latest log lines", async () => {
     const directory = await createLibrary();
     const { lastFrame, services } = await renderApp(directory);
