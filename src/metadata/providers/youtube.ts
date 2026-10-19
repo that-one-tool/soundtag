@@ -1,4 +1,5 @@
 import { getErrorMessage } from "../../shared/errors.js";
+import type { Logger } from "../../shared/logger.js";
 import {
     downloadImage,
     fetchWithTimeout,
@@ -71,7 +72,8 @@ function getBestThumbnailUrl(data: YouTubeSearchResponse): string | null {
 
 async function findThumbnailUrl(
     search: TrackSearch,
-    apiKey: string
+    apiKey: string,
+    logger: Logger
 ): Promise<string | null> {
     try {
         const data = await readJsonResponse<YouTubeSearchResponse>(
@@ -80,18 +82,21 @@ async function findThumbnailUrl(
         );
         return getBestThumbnailUrl(data);
     } catch (error) {
-        console.error(
+        logger.error(
             `YouTube thumbnail search failed: ${getErrorMessage(error)}`
         );
         return null;
     }
 }
 
-async function downloadThumbnail(url: string): Promise<Buffer | null> {
+async function downloadThumbnail(
+    url: string,
+    logger: Logger
+): Promise<Buffer | null> {
     try {
         return await downloadImage({ url });
     } catch (error) {
-        console.error(
+        logger.error(
             `YouTube thumbnail download failed: ${getErrorMessage(error)}`
         );
         return null;
@@ -99,10 +104,19 @@ async function downloadThumbnail(url: string): Promise<Buffer | null> {
 }
 
 export class YouTubeCoverProvider implements CoverProvider {
-    constructor(private readonly apiKey: string) {}
+    constructor(
+        private readonly apiKey: string,
+        private readonly logger: Logger
+    ) {}
 
     async findCover(search: TrackSearch): Promise<Buffer | null> {
-        const thumbnailUrl = await findThumbnailUrl(search, this.apiKey);
-        return thumbnailUrl ? downloadThumbnail(thumbnailUrl) : null;
+        const thumbnailUrl = await findThumbnailUrl(
+            search,
+            this.apiKey,
+            this.logger
+        );
+        return thumbnailUrl
+            ? downloadThumbnail(thumbnailUrl, this.logger)
+            : null;
     }
 }

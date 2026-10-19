@@ -1,0 +1,32 @@
+import { Box, Text } from "ink";
+import { useStore } from "../hooks/use-store.js";
+import type { LogBuffer, LogLine } from "../log-buffer.js";
+
+function LogLineText({ line }: { line: LogLine }) {
+    return (
+        <Text color={line.isError ? "red" : undefined} wrap="truncate">
+            {line.text}
+        </Text>
+    );
+}
+
+export interface LogPaneProps {
+    logBuffer: LogBuffer;
+    height: number;
+}
+
+export function LogPane({ logBuffer, height }: LogPaneProps) {
+    const lines = useStore(logBuffer).slice(-height);
+    return (
+        <Box
+            flexDirection="column"
+            height={height + 2}
+            borderStyle="round"
+            paddingX={1}
+        >
+            {lines.map((line, index) => (
+                <LogLineText key={index} line={line} />
+            ))}
+        </Box>
+    );
+}

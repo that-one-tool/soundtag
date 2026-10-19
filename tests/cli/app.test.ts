@@ -3,32 +3,24 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import NodeID3 from "node-id3";
 import { test } from "node:test";
-import { runApp } from "../../src/cli/app.js";
+import { runApp, type AppEnvironment } from "../../src/cli/app.js";
+import type { TuiOptions } from "../../src/tui/run-tui.js";
+import type { TuiOutcome } from "../../src/tui/types.js";
 import { InputCancelledError } from "../../src/shared/errors.js";
 import { captureConsole } from "../helpers/console.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 const output = captureConsole();
 const createTemporaryDirectory = useTemporaryDirectories("soundtag-app-test-");
+const withoutBrowser = {
+    canBrowse: false,
+    openBrowser: async (): Promise<TuiOutcome> =>
+        assert.fail("The browser should not open."),
+};
 const environment = {
     LASTFM_API_KEY: "test-key",
     MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
 };
-
-function browseIn(
-    workingDirectory: string,
-    answers: string[],
-    stopSignals: AbortSignal[] = []
-): Promise<number> {
-    return runApp({
-        argv: [],
-        env: environment,
-        ask: async () => answers.shift() ?? "q",
-        workingDirectory,
-        renewStopSignal: () =>
-            stopSignals.shift() ?? new AbortController().signal,
-    });
-}
 
 async function readReport(directory: string): Promise<unknown> {
     return JSON.parse(
@@ -47,6 +39,7 @@ function runAppIn(
         ask: async () => "",
         workingDirectory,
         renewStopSignal: () => stopSignal,
+        ...withoutBrowser,
     });
 }
 
@@ -177,6 +170,8 @@ test("runApp exits with 130 without an error when stopped at a prompt", async ()
         },
         workingDirectory,
         renewStopSignal: () => stop.signal,
+        canBrowse: true,
+        openBrowser: withoutBrowser.openBrowser,
     });
 
     assert.equal(exitCode, 130);
@@ -196,131 +191,88 @@ test("runApp still reports real errors after a stop was requested", async () => 
     ]);
 });
 
-test("runApp browses to a folder, tags it, then returns to the browser", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    const firstAlbum = path.join(workingDirectory, "First");
-    const secondAlbum = path.join(workingDirectory, "Second");
-    await fs.mkdir(firstAlbum);
-    await fs.mkdir(secondAlbum);
-
-    assert.equal(
-        await browseIn(workingDirectory, ["1", "s", "0", "2", "s", "q"]),
-        0
-    );
-    assert.deepEqual(await readReport(firstAlbum), { files: {} });
-    assert.deepEqual(await readReport(secondAlbum), { files: {} });
-    await assert.rejects(
-        fs.access(path.join(workingDirectory, "soundtag_output.json"))
-    );
-    assert.equal(
-        output.logs.filter((line) => line.startsWith("\nSource: ")).length,
-        2
-    );
-});
-
-test("runApp reopens the browser on the processed folder", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    const album = path.join(workingDirectory, "Album");
-    await fs.mkdir(album);
-
-    await browseIn(workingDirectory, ["1", "s", "q"]);
-
-    const headers = output.logs.filter((line) =>
-        line.endsWith("(0 audio files)")
-    );
-    assert.equal(headers.at(-1), `\n${album}  (0 audio files)`);
-});
-
-test("runApp returns to the browser after a stopped run without failing", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    await fs.writeFile(path.join(workingDirectory, "song.mp3"), "audio bytes");
-    let currentStop = new AbortController();
-    const answers = ["s", "q"];
-
-    const exitCode = await runApp({
-        argv: [],
+function browseWith(
+    workingDirectory: string,
+    openBrowser: AppEnvironment["openBrowser"]
+): Promise<number> {
+    return runApp({
+        argv: ["--no-recursive", "--no-rename"],
         env: environment,
-        ask: async () => {
-            const answer = answers.shift() ?? "q";
-            if (answer === "s") currentStop.abort();
-            return answer;
-        },
-        workingDirectory,
-        renewStopSignal: () => {
-            currentStop = new AbortController();
-            return currentStop.signal;
-        },
-    });
-
-    assert.equal(exitCode, 0);
-    assert.deepEqual(await readReport(workingDirectory), {
-        files: { "song.mp3": "READ" },
-    });
-    assert.ok(output.logs.includes("PROCESSING STOPPED"));
-    assert.equal(answers.length, 0);
-});
-
-test("runApp keeps browsing after a failed run", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    await fs.mkdir(path.join(workingDirectory, "soundtag_output.json"));
-
-    assert.equal(await browseIn(workingDirectory, ["s", "q"]), 1);
-    assert.match(
-        output.errors.at(-1) ?? "",
-        /^Could not write processing report to /
-    );
-});
-
-test("runApp exits with 130 without a report when stopped at the browser", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    const stop = new AbortController();
-
-    const exitCode = await runApp({
-        argv: [],
-        env: environment,
-        ask: async () => {
-            stop.abort();
-            throw new InputCancelledError();
-        },
-        workingDirectory,
-        renewStopSignal: () => stop.signal,
-    });
-
-    assert.equal(exitCode, 130);
-    assert.deepEqual(output.errors, []);
-    await assert.rejects(
-        fs.access(path.join(workingDirectory, "soundtag_output.json"))
-    );
-});
-
-test("runApp quits the browser when input ends", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-
-    const exitCode = await runApp({
-        argv: [],
-        env: environment,
-        ask: async () => {
-            throw new InputCancelledError();
-        },
+        ask: async () => "",
         workingDirectory,
         renewStopSignal: () => new AbortController().signal,
+        canBrowse: true,
+        openBrowser,
+    });
+}
+
+test("runApp opens the folder browser in the working directory", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const opened: TuiOptions[] = [];
+
+    const exitCode = await browseWith(workingDirectory, async (options) => {
+        opened.push(options);
+        return "success";
     });
 
     assert.equal(exitCode, 0);
+    assert.deepEqual(opened, [
+        {
+            startDirectory: workingDirectory,
+            lastFmApiKey: "test-key",
+            recursive: false,
+            verbose: false,
+            renameFiles: false,
+            musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
+            youtubeApiKey: undefined,
+        },
+    ]);
     assert.deepEqual(output.errors, []);
+    await assert.rejects(
+        fs.access(path.join(workingDirectory, "soundtag_output.json"))
+    );
+});
+
+test("runApp maps the browser outcome to an exit code", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+
+    assert.equal(await browseWith(workingDirectory, async () => "failure"), 1);
+    assert.equal(await browseWith(workingDirectory, async () => "forced"), 130);
+    assert.equal(
+        await browseWith(
+            workingDirectory,
+            async () => undefined as unknown as TuiOutcome
+        ),
+        1
+    );
+});
+
+test("runApp needs an interactive terminal to browse folders", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+
+    const exitCode = await runApp({
+        argv: [],
+        env: {},
+        ask: async () => assert.fail("No prompt without a terminal."),
+        workingDirectory,
+        renewStopSignal: () => new AbortController().signal,
+        ...withoutBrowser,
+    });
+
+    assert.equal(exitCode, 1);
+    assert.deepEqual(output.errors, [
+        "Error: Browsing folders needs an interactive terminal; pass a source folder instead.",
+    ]);
+    await assert.rejects(
+        fs.access(path.join(workingDirectory, "soundtag_output.json"))
+    );
 });
 
 test("runApp still fails on unexpected browser errors", async () => {
     const workingDirectory = await createTemporaryDirectory();
 
-    const exitCode = await runApp({
-        argv: [],
-        env: environment,
-        ask: async () => {
-            throw new Error("terminal broke");
-        },
-        workingDirectory,
-        renewStopSignal: () => new AbortController().signal,
+    const exitCode = await browseWith(workingDirectory, async () => {
+        throw new Error("terminal broke");
     });
 
     assert.equal(exitCode, 1);

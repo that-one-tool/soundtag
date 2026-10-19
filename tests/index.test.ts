@@ -207,34 +207,29 @@ test("CLI warns at startup when MusicBrainz is not configured", async () => {
     );
 });
 
-test("CLI prompts for the API key and browses folders when not provided", async () => {
+test("CLI needs a terminal to browse folders and does not prompt first", async () => {
     const workingDirectory = await createTemporaryDirectory();
-    const sourceDirectory = path.join(workingDirectory, "source");
-    await fs.mkdir(sourceDirectory);
 
     const { exitCode, stdout, stderr } = await runCli(workingDirectory, [], {
         environment: {
             LASTFM_API_KEY: undefined,
             MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
         },
-        answers: ["prompted-key", "1", "s", "q"],
+        answers: ["prompted-key"],
     });
 
-    assert.equal(exitCode, 0);
-    assert.equal(stderr, "");
-    assert.match(stdout, /Enter your Last\.fm API key: /);
-    assert.match(stdout, /1\) source\n/);
-    assert.match(stdout, /Choose a folder: /);
-    assert.match(
-        stdout,
-        /No supported audio files found in the source folder\./
+    assert.equal(exitCode, 1);
+    assert.doesNotMatch(stdout, /Enter your Last\.fm API key: /);
+    assert.equal(
+        stderr,
+        "Error: Browsing folders needs an interactive terminal; pass a source folder instead.\n"
     );
 });
 
 test("CLI fails cleanly when input ends during a prompt", async () => {
     const workingDirectory = await createTemporaryDirectory();
 
-    const { exitCode, stderr } = await runCli(workingDirectory, [], {
+    const { exitCode, stderr } = await runCli(workingDirectory, ["."], {
         environment: { LASTFM_API_KEY: undefined },
     });
 
@@ -253,7 +248,7 @@ test("CLI fails cleanly when input ends during a prompt", async () => {
 test("CLI stops with exit code 130 when interrupted at a prompt", async () => {
     const workingDirectory = await createTemporaryDirectory();
 
-    const { exitCode, stdout, stderr } = await runCli(workingDirectory, [], {
+    const { exitCode, stdout, stderr } = await runCli(workingDirectory, ["."], {
         environment: { LASTFM_API_KEY: undefined },
         answers: [INTERRUPT],
     });
@@ -263,31 +258,4 @@ test("CLI stops with exit code 130 when interrupted at a prompt", async () => {
     assert.match(stdout, /Interrupted\./);
     assert.doesNotMatch(stdout, /Press Ctrl\+C again/);
     assert.match(stdout, /Processing report written to /);
-});
-
-test("CLI stops with exit code 130 when interrupted at the folder browser", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-
-    const { exitCode, stderr } = await runCli(workingDirectory, [], {
-        answers: [INTERRUPT],
-    });
-
-    assert.equal(exitCode, 130);
-    assert.equal(stderr, "");
-    await assert.rejects(
-        fs.access(path.join(workingDirectory, "soundtag_output.json"))
-    );
-});
-
-test("CLI quits the folder browser when input ends", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-
-    const { exitCode, stdout, stderr } = await runCli(workingDirectory, []);
-
-    assert.equal(exitCode, 0);
-    assert.equal(stderr, "");
-    assert.match(stdout, /Choose a folder: /);
-    await assert.rejects(
-        fs.access(path.join(workingDirectory, "soundtag_output.json"))
-    );
 });

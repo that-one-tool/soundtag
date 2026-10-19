@@ -1,8 +1,10 @@
+import { consoleLogger } from "../../../src/shared/logger.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ItunesProvider } from "../../../src/metadata/providers/itunes.js";
 import { instantClock } from "../../helpers/clock.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
+import { createRecordingLogger } from "../../helpers/logger.js";
 import type { Clock } from "../../../src/shared/rate-limiter.js";
 
 restoreFetchAfterEach();
@@ -21,10 +23,10 @@ test("ItunesProvider skips the artwork download when no cover is needed", async 
         });
     };
 
-    const metadata = await new ItunesProvider(instantClock).findMetadata(
-        { title: "Title", artist: "", album: "" },
-        false
-    );
+    const metadata = await new ItunesProvider(
+        instantClock,
+        consoleLogger
+    ).findMetadata({ title: "Title", artist: "", album: "" }, false);
 
     assert.equal(metadata?.info.title, "Title");
     assert.equal(metadata?.coverData, null);
@@ -43,7 +45,7 @@ test("iTunes searches are rate-limited when requests run concurrently", async ()
         requestCount++;
         return Response.json({ results: [] });
     };
-    const provider = new ItunesProvider(clock);
+    const provider = new ItunesProvider(clock, consoleLogger);
     const search = { title: "title", artist: "artist", album: "" };
 
     await Promise.all([
@@ -53,4 +55,18 @@ test("iTunes searches are rate-limited when requests run concurrently", async ()
 
     assert.equal(requestCount, 2);
     assert.deepEqual(sleeps, [3000]);
+});
+
+test("ItunesProvider logs failures to the injected logger", async () => {
+    const logger = createRecordingLogger();
+    globalThis.fetch = async () => new Response(null, { status: 500 });
+
+    await new ItunesProvider(instantClock, logger).findMetadata(
+        { title: "Title", artist: "", album: "" },
+        false
+    );
+
+    assert.deepEqual(logger.errors, [
+        "iTunes Search failed: iTunes Search request failed: HTTP 500",
+    ]);
 });

@@ -1,49 +1,59 @@
-import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
     countStatuses,
     createReport,
+    MAX_FILES_PER_RUN,
     processBatch,
     type BatchRun,
 } from "../processing/batch.js";
+import { parseArguments } from "./cli-options.js";
 import {
     loadSessionConfig,
     resolveSourceRoot,
     type ConfigSources,
 } from "./config.js";
-import { browseFolder } from "./folder-browser.js";
 import { createMetadataChain } from "../metadata/create-metadata-chain.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
 import { getErrorMessage, InputCancelledError } from "../shared/errors.js";
+import type { TuiOutcome } from "../tui/types.js";
+import type { BrowserLauncher } from "./browser-launcher.js";
 import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_SUCCESS } from "./exit-codes.js";
 import { findAudioFiles } from "../library/file.js";
+import { consoleLogger } from "../shared/logger.js";
+import { systemClock } from "../shared/rate-limiter.js";
+import { getReportPath, saveReport } from "../processing/report-file.js";
 import type { ProcessingReport, ProcessingStats } from "../processing/types.js";
-import type { AppConfig, TaggingSettings } from "./types.js";
+import type { AppConfig, SessionConfig, TaggingSettings } from "./types.js";
 
-const MAX_FILES_PER_RUN = 3000;
-const REPORT_FILENAME = "soundtag_output.json";
 const SEPARATOR = "========================================";
 
 export interface AppEnvironment extends ConfigSources {
     renewStopSignal: () => AbortSignal;
+    canBrowse: boolean;
+    openBrowser: BrowserLauncher;
 }
 
 interface TaggingRun {
     reportPath: string;
     report: ProcessingReport;
     stopSignal: AbortSignal;
-    interruptedExitCode: number;
 }
 
 interface TaggingSession {
     settings: TaggingSettings;
     metadataChain: MetadataChain;
-    environment: AppEnvironment;
 }
 
 type SourceRootResolver = () => Promise<string>;
 
-type FolderPick = { sourceRoot: string } | { exitCode: number };
+const NO_TERMINAL_MESSAGE =
+    "Browsing folders needs an interactive terminal; pass a source folder instead.";
+
+const BROWSER_EXIT_CODES: Record<TuiOutcome, number> = {
+    success: EXIT_SUCCESS,
+    failure: EXIT_FAILURE,
+    forced: EXIT_INTERRUPTED,
+};
 
 function printBanner(): void {
     console.log(SEPARATOR);
@@ -84,17 +94,8 @@ function printProcessingStart(fileCount: number): void {
     console.log(`Processing ${fileCount} audio files. Starting tagging...\n`);
 }
 
-function createRun(
-    reportPath: string,
-    stopSignal: AbortSignal,
-    interruptedExitCode: number
-): TaggingRun {
-    return {
-        reportPath,
-        report: { files: {} },
-        stopSignal,
-        interruptedExitCode,
-    };
+function createRun(reportPath: string, stopSignal: AbortSignal): TaggingRun {
+    return { reportPath, report: { files: {} }, stopSignal };
 }
 
 function createBatchRun(
@@ -103,7 +104,11 @@ function createBatchRun(
     metadataChain: MetadataChain
 ): BatchRun {
     return {
-        context: { sourceRoot: config.sourceRoot, metadataChain },
+        context: {
+            sourceRoot: config.sourceRoot,
+            metadataChain,
+            logger: consoleLogger,
+        },
         report: run.report,
         stopSignal: run.stopSignal,
         renameFiles: config.renameFiles,
@@ -130,7 +135,7 @@ async function tagLibrary(
 }
 
 function getCompletionExitCode(run: TaggingRun): number {
-    return run.stopSignal.aborted ? run.interruptedExitCode : EXIT_SUCCESS;
+    return run.stopSignal.aborted ? EXIT_INTERRUPTED : EXIT_SUCCESS;
 }
 
 function getFailureExitCode(
@@ -152,7 +157,7 @@ async function runTagging(
 ): Promise<number> {
     try {
         const sourceRoot = await resolveSource();
-        run.reportPath = path.join(sourceRoot, REPORT_FILENAME);
+        run.reportPath = getReportPath(sourceRoot);
         const config = { ...session.settings, sourceRoot };
         await tagLibrary(config, run, session.metadataChain);
         return getCompletionExitCode(run);
@@ -165,20 +170,8 @@ async function writeReport({
     reportPath,
     report,
 }: TaggingRun): Promise<number> {
-    try {
-        await fs.writeFile(
-            reportPath,
-            `${JSON.stringify(report, null, 2)}\n`,
-            "utf8"
-        );
-        console.log(`Processing report written to ${reportPath}`);
-        return EXIT_SUCCESS;
-    } catch (error) {
-        console.error(
-            `Could not write processing report to ${reportPath}: ${getErrorMessage(error)}`
-        );
-        return EXIT_FAILURE;
-    }
+    const saved = await saveReport(reportPath, report, consoleLogger);
+    return saved ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 async function tagAndReport(
@@ -191,98 +184,71 @@ async function tagAndReport(
     return Math.max(taggingExitCode, reportExitCode);
 }
 
-function getBrowserExitCode(error: unknown, stopSignal: AbortSignal): number {
-    if (error instanceof InputCancelledError && !stopSignal.aborted) {
-        return EXIT_SUCCESS;
-    }
-
-    return getFailureExitCode(error, { stopSignal });
-}
-
-async function pickSourceFolder(
-    { environment }: TaggingSession,
-    directory: string,
-    stopSignal: AbortSignal
-): Promise<FolderPick> {
-    try {
-        const sourceRoot = await browseFolder(environment.ask, directory);
-        return sourceRoot ? { sourceRoot } : { exitCode: EXIT_SUCCESS };
-    } catch (error) {
-        return { exitCode: getBrowserExitCode(error, stopSignal) };
-    }
-}
-
-function tagFolder(
-    session: TaggingSession,
-    sourceRoot: string,
-    stopSignal: AbortSignal
+async function browseLibrary(
+    settings: TaggingSettings,
+    { openBrowser, workingDirectory }: AppEnvironment
 ): Promise<number> {
-    const reportPath = path.join(sourceRoot, REPORT_FILENAME);
-    // Ctrl+C during a browsed run only returns to the browser.
-    const run = createRun(reportPath, stopSignal, EXIT_SUCCESS);
-    return tagAndReport(session, run, async () => sourceRoot);
+    const outcome = await openBrowser({
+        ...settings,
+        startDirectory: workingDirectory,
+    });
+    return BROWSER_EXIT_CODES[outcome] ?? EXIT_FAILURE;
 }
 
-async function browseAndTag(session: TaggingSession): Promise<number> {
-    let directory = session.environment.workingDirectory;
-    let worstExitCode = EXIT_SUCCESS;
-
-    for (;;) {
-        const stopSignal = session.environment.renewStopSignal();
-        const pick = await pickSourceFolder(session, directory, stopSignal);
-
-        if ("exitCode" in pick) {
-            return Math.max(worstExitCode, pick.exitCode);
-        }
-
-        const exitCode = await tagFolder(session, pick.sourceRoot, stopSignal);
-        worstExitCode = Math.max(worstExitCode, exitCode);
-        directory = pick.sourceRoot;
+// Invalid options count as a source argument so the regular run reports them.
+function hasSourceArgument(argv: string[]): boolean {
+    try {
+        return parseArguments(argv).sourcePath !== undefined;
+    } catch {
+        return true;
     }
+}
+
+function isBrowsingWithoutTerminal(environment: AppEnvironment): boolean {
+    return !environment.canBrowse && !hasSourceArgument(environment.argv);
+}
+
+function createSession(settings: TaggingSettings): TaggingSession {
+    return {
+        settings,
+        metadataChain: createMetadataChain(
+            settings,
+            systemClock,
+            consoleLogger
+        ),
+    };
 }
 
 function runSession(
-    session: TaggingSession,
-    sourcePath: string | undefined,
+    { settings, sourcePath }: SessionConfig,
+    environment: AppEnvironment,
     setupRun: TaggingRun
 ): Promise<number> {
-    const { workingDirectory } = session.environment;
-
     if (sourcePath === undefined) {
-        return browseAndTag(session);
+        return browseLibrary(settings, environment);
     }
 
-    return tagAndReport(session, setupRun, () =>
-        resolveSourceRoot(sourcePath, workingDirectory)
+    return tagAndReport(createSession(settings), setupRun, () =>
+        resolveSourceRoot(sourcePath, environment.workingDirectory)
     );
-}
-
-function createSession(
-    settings: TaggingSettings,
-    environment: AppEnvironment
-): TaggingSession {
-    return {
-        settings,
-        metadataChain: createMetadataChain(settings),
-        environment,
-    };
 }
 
 export async function runApp(environment: AppEnvironment): Promise<number> {
     printBanner();
+
+    if (isBrowsingWithoutTerminal(environment)) {
+        console.error(`Error: ${NO_TERMINAL_MESSAGE}`);
+        return EXIT_FAILURE;
+    }
+
     const setupRun = createRun(
-        path.resolve(environment.workingDirectory, REPORT_FILENAME),
-        environment.renewStopSignal(),
-        EXIT_INTERRUPTED
+        getReportPath(path.resolve(environment.workingDirectory)),
+        environment.renewStopSignal()
     );
 
     try {
-        const { settings, sourcePath } = await loadSessionConfig(environment);
-        return await runSession(
-            createSession(settings, environment),
-            sourcePath,
-            setupRun
-        );
+        const sessionConfig = await loadSessionConfig(environment);
+        return await runSession(sessionConfig, environment, setupRun);
     } catch (error) {
         const setupExitCode = getFailureExitCode(error, setupRun);
         return Math.max(setupExitCode, await writeReport(setupRun));

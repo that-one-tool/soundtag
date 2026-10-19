@@ -1,4 +1,5 @@
 import { getErrorMessage } from "../../shared/errors.js";
+import type { Logger } from "../../shared/logger.js";
 import {
     downloadFirstImage,
     fetchWithTimeout,
@@ -62,20 +63,20 @@ function buildLastFmUrl(params: Record<string, string>): URL {
     return url;
 }
 
-function logRequestUrl(url: URL): void {
+function logRequestUrl(url: URL, logger: Logger): void {
     const loggedUrl = new URL(url);
     loggedUrl.searchParams.set("api_key", "[REDACTED]");
-    console.log(`Last.fm track.getInfo URL: ${loggedUrl}`);
+    logger.info(`Last.fm track.getInfo URL: ${loggedUrl}`);
 }
 
 async function requestLastFm<T>(
     params: Record<string, string>,
-    logUrl: boolean
+    urlLogger: Logger | null
 ): Promise<T> {
     const url = buildLastFmUrl(params);
 
-    if (logUrl) {
-        logRequestUrl(url);
+    if (urlLogger) {
+        logRequestUrl(url, urlLogger);
     }
 
     return readJsonResponse<T>(await fetchWithTimeout(url), "Last.fm");
@@ -108,18 +109,18 @@ function getFirstMatch(data: LastFmSearchResponse): LastFmTrack | null {
 }
 
 async function searchTrack(
-    query: string,
+    { title, artist }: TrackSearch,
     apiKey: string,
-    artist: string
+    logger: Logger
 ): Promise<LastFmTrack | null> {
     try {
         const data = await requestLastFm<LastFmSearchResponse>(
-            buildSearchParams(query, apiKey, artist),
-            false
+            buildSearchParams(title, apiKey, artist),
+            null
         );
         return getFirstMatch(data);
     } catch (error) {
-        console.error(`Last.fm search failed: ${getErrorMessage(error)}`);
+        logger.error(`Last.fm search failed: ${getErrorMessage(error)}`);
         return null;
     }
 }
@@ -136,25 +137,6 @@ function buildTrackInfoParams(
         format: "json",
         autocorrect: "1",
     };
-}
-
-async function getTrackInfo(
-    matched: Pick<TrackInfo, "title" | "artist">,
-    apiKey: string,
-    verbose: boolean
-): Promise<LastFmTrack | null> {
-    try {
-        const data = await requestLastFm<LastFmInfoResponse>(
-            buildTrackInfoParams(matched, apiKey),
-            verbose
-        );
-        return data.track ?? null;
-    } catch (error) {
-        console.error(
-            `Could not retrieve track information: ${getErrorMessage(error)}`
-        );
-        return null;
-    }
 }
 
 function getArtistName(artist: LastFmTrack["artist"]): string {
@@ -233,38 +215,38 @@ function downloadAlbumCover(album: LastFmAlbum = {}): Promise<Buffer | null> {
     );
 }
 
-function logMatch({
-    title,
-    artist,
-}: Pick<TrackInfo, "title" | "artist">): void {
-    console.log(`Match: ${artist} - ${title}`);
-    console.log(`Artist: ${artist}`);
-    console.log(`Title: ${title}`);
+function logMatch(
+    { title, artist }: Pick<TrackInfo, "title" | "artist">,
+    logger: Logger
+): void {
+    logger.info(`Match: ${artist} - ${title}`);
+    logger.info(`Artist: ${artist}`);
+    logger.info(`Title: ${title}`);
 }
 
-function logAlbumDetails(album: string, year: string): void {
-    console.log(`Album: ${album}`);
-    console.log(`Year: ${year}`);
+function logAlbumDetails(
+    { album, year }: Pick<TrackInfo, "album" | "year">,
+    logger: Logger
+): void {
+    logger.info(`Album: ${album}`);
+    logger.info(`Year: ${year}`);
 }
 
 export class LastFmProvider implements MetadataProvider {
     constructor(
         private readonly apiKey: string,
-        private readonly verbose = false
+        private readonly verbose: boolean,
+        private readonly logger: Logger
     ) {}
 
     async findMetadata(
         search: TrackSearch,
         needsCover: boolean
     ): Promise<TrackMetadata | null> {
-        const match = await searchTrack(
-            search.title,
-            this.apiKey,
-            search.artist
-        );
+        const match = await searchTrack(search, this.apiKey, this.logger);
 
         if (!match) {
-            logAlbumDetails("", "");
+            logAlbumDetails({ album: "", year: "" }, this.logger);
             return null;
         }
 
@@ -278,12 +260,33 @@ export class LastFmProvider implements MetadataProvider {
         matched: Pick<TrackInfo, "title" | "artist">,
         needsCover: boolean
     ): Promise<TrackMetadata> {
-        logMatch(matched);
-        const track = await getTrackInfo(matched, this.apiKey, this.verbose);
+        logMatch(matched, this.logger);
+        const track = await this.getTrackInfo(matched);
         const album = track?.album;
         const info = getAlbumInfo(matched, album);
         const coverData = needsCover ? await downloadAlbumCover(album) : null;
-        logAlbumDetails(info.album, info.year);
+        logAlbumDetails(info, this.logger);
         return { info, coverData };
+    }
+
+    private getUrlLogger(): Logger | null {
+        return this.verbose ? this.logger : null;
+    }
+
+    private async getTrackInfo(
+        matched: Pick<TrackInfo, "title" | "artist">
+    ): Promise<LastFmTrack | null> {
+        try {
+            const data = await requestLastFm<LastFmInfoResponse>(
+                buildTrackInfoParams(matched, this.apiKey),
+                this.getUrlLogger()
+            );
+            return data.track ?? null;
+        } catch (error) {
+            this.logger.error(
+                `Could not retrieve track information: ${getErrorMessage(error)}`
+            );
+            return null;
+        }
     }
 }

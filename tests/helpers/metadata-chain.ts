@@ -1,3 +1,4 @@
+import { consoleLogger } from "../../src/shared/logger.js";
 import {
     createMetadataChain,
     type MetadataChainConfig,
@@ -22,7 +23,8 @@ export function createTestChain(
 ): MetadataChain {
     return createMetadataChain(
         { lastFmApiKey: "test-key", verbose: false, ...config },
-        instantClock
+        instantClock,
+        consoleLogger
     );
 }
 

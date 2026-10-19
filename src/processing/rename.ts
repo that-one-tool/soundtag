@@ -6,9 +6,15 @@ import {
 } from "../library/folder-names.js";
 import { buildTrackFilename } from "../library/track-filename.js";
 import { getErrorMessage } from "../shared/errors.js";
+import type { Logger } from "../shared/logger.js";
 import { getTagStore, isProperlyTagged } from "../tags/audio-tags.js";
 import type { StoredTags } from "../tags/types.js";
 import type { TrackStatus } from "./types.js";
+
+export interface RenameContext {
+    folderNames: FolderNameCache;
+    logger: Logger;
+}
 
 function hasArtistAndTitle({ info }: StoredTags): boolean {
     return [info.artist, info.title].every((field) => field.trim());
@@ -53,31 +59,31 @@ async function getTargetFilename(
 async function moveToFilename(
     source: string,
     filename: string,
-    folderNames: FolderNameCache
+    { folderNames, logger }: RenameContext
 ): Promise<string | null> {
     const destination = path.join(path.dirname(source), filename);
 
     if (!(await renameIfFree(source, destination, folderNames))) {
-        console.log(`Not renamed: ${filename} already exists.`);
+        logger.info(`Not renamed: ${filename} already exists.`);
         return null;
     }
 
-    console.log(`Renamed to: ${filename}`);
+    logger.info(`Renamed to: ${filename}`);
     return destination;
 }
 
 export async function renameTrack(
     source: string,
     status: TrackStatus,
-    folderNames: FolderNameCache
+    context: RenameContext
 ): Promise<string | null> {
     try {
         const filename = await getTargetFilename(source, status);
         return filename
-            ? await moveToFilename(source, filename, folderNames)
+            ? await moveToFilename(source, filename, context)
             : null;
     } catch (error) {
-        console.error(`Rename error: ${getErrorMessage(error)}`);
+        context.logger.error(`Rename error: ${getErrorMessage(error)}`);
         return null;
     }
 }

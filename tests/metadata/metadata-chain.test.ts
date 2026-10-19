@@ -1,6 +1,8 @@
+import { consoleLogger } from "../../src/shared/logger.js";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
+import { createRecordingLogger } from "../helpers/logger.js";
 import type {
     CoverProvider,
     MetadataProvider,
@@ -61,7 +63,8 @@ test("MetadataChain returns null without asking for a cover when nothing matches
     const coverProvider = new FakeCoverProvider(cover);
     const chain = new MetadataChain(
         [new FakeMetadataProvider(null), new FakeMetadataProvider(null)],
-        coverProvider
+        coverProvider,
+        consoleLogger
     );
 
     assert.equal(await chain.find(search, emptyInfo), null);
@@ -69,15 +72,21 @@ test("MetadataChain returns null without asking for a cover when nothing matches
 });
 
 test("MetadataChain fills missing fields in provider order without overwriting", async () => {
-    const chain = new MetadataChain([
-        new FakeMetadataProvider(createMetadata({ title: "First", album: "" })),
-        new FakeMetadataProvider(
-            createMetadata(
-                { title: "Second", artist: "Second", album: "Album" },
-                cover
-            )
-        ),
-    ]);
+    const chain = new MetadataChain(
+        [
+            new FakeMetadataProvider(
+                createMetadata({ title: "First", album: "" })
+            ),
+            new FakeMetadataProvider(
+                createMetadata(
+                    { title: "Second", artist: "Second", album: "Album" },
+                    cover
+                )
+            ),
+        ],
+        undefined,
+        consoleLogger
+    );
 
     assert.deepEqual(await chain.find(search, { ...emptyInfo, year: "2020" }), {
         info: {
@@ -92,15 +101,19 @@ test("MetadataChain fills missing fields in provider order without overwriting",
 
 test("MetadataChain stops asking providers once metadata is complete", async () => {
     const lastProvider = new FakeMetadataProvider(null);
-    const chain = new MetadataChain([
-        new FakeMetadataProvider(
-            createMetadata(
-                { title: "T", artist: "A", album: "B", year: "2000" },
-                cover
-            )
-        ),
-        lastProvider,
-    ]);
+    const chain = new MetadataChain(
+        [
+            new FakeMetadataProvider(
+                createMetadata(
+                    { title: "T", artist: "A", album: "B", year: "2000" },
+                    cover
+                )
+            ),
+            lastProvider,
+        ],
+        undefined,
+        consoleLogger
+    );
 
     await chain.find(search, emptyInfo);
 
@@ -112,7 +125,11 @@ test("MetadataChain searches with collected info and only requests missing cover
     const firstProvider = new FakeMetadataProvider(
         createMetadata({ title: "Found title" }, cover)
     );
-    const chain = new MetadataChain([firstProvider, secondProvider]);
+    const chain = new MetadataChain(
+        [firstProvider, secondProvider],
+        undefined,
+        consoleLogger
+    );
 
     await chain.find(search, emptyInfo);
 
@@ -129,7 +146,8 @@ test("MetadataChain uses the cover provider only when matched metadata lacks a c
     const coverProvider = new FakeCoverProvider(cover);
     const chain = new MetadataChain(
         [new FakeMetadataProvider(createMetadata({ title: "Found" }))],
-        coverProvider
+        coverProvider,
+        consoleLogger
     );
 
     const metadata = await chain.find(search, emptyInfo);
@@ -144,7 +162,8 @@ test("MetadataChain skips the cover provider when a cover was found", async () =
     const coverProvider = new FakeCoverProvider(Buffer.from("other"));
     const chain = new MetadataChain(
         [new FakeMetadataProvider(createMetadata({ title: "Found" }, cover))],
-        coverProvider
+        coverProvider,
+        consoleLogger
     );
 
     assert.equal((await chain.find(search, emptyInfo))?.coverData, cover);
@@ -154,15 +173,32 @@ test("MetadataChain skips the cover provider when a cover was found", async () =
 test("MetadataChain reports whether a cover was found", async () => {
     const chain = new MetadataChain(
         [new FakeMetadataProvider(createMetadata({ title: "Found" }))],
-        new FakeCoverProvider(null)
+        new FakeCoverProvider(null),
+        consoleLogger
     );
 
     assert.equal((await chain.find(search, emptyInfo))?.coverData, null);
     assert.deepEqual(output, ["Cover: unavailable"]);
 
     output = [];
-    await new MetadataChain([
-        new FakeMetadataProvider(createMetadata({ title: "Found" }, cover)),
-    ]).find(search, emptyInfo);
+    await new MetadataChain(
+        [new FakeMetadataProvider(createMetadata({ title: "Found" }, cover))],
+        undefined,
+        consoleLogger
+    ).find(search, emptyInfo);
     assert.deepEqual(output, ["Cover: downloaded"]);
+});
+
+test("MetadataChain reports the cover result to the injected logger", async () => {
+    const logger = createRecordingLogger();
+    const chain = new MetadataChain(
+        [new FakeMetadataProvider(createMetadata({ title: "Title" }, cover))],
+        undefined,
+        logger
+    );
+
+    await chain.find(search, emptyInfo);
+
+    assert.deepEqual(logger.infos, ["Cover: downloaded"]);
+    assert.deepEqual(output, []);
 });

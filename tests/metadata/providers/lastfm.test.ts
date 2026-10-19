@@ -1,8 +1,10 @@
+import { consoleLogger } from "../../../src/shared/logger.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { LastFmProvider } from "../../../src/metadata/providers/lastfm.js";
 import { captureConsole } from "../../helpers/console.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
+import { createRecordingLogger } from "../../helpers/logger.js";
 
 restoreFetchAfterEach();
 const output = captureConsole();
@@ -36,10 +38,11 @@ test("LastFmProvider skips the cover download when no cover is needed", async ()
     const requestedHosts: string[] = [];
     mockLastFmMatchWithCover(requestedHosts);
 
-    const metadata = await new LastFmProvider("key").findMetadata(
-        search,
-        false
-    );
+    const metadata = await new LastFmProvider(
+        "key",
+        false,
+        consoleLogger
+    ).findMetadata(search, false);
 
     assert.equal(metadata?.info.album, "Album");
     assert.equal(metadata?.coverData, null);
@@ -51,7 +54,10 @@ test("LastFmProvider logs empty album details when nothing matches", async () =>
         Response.json({ results: { trackmatches: { track: [] } } });
 
     assert.equal(
-        await new LastFmProvider("key").findMetadata(search, true),
+        await new LastFmProvider("key", false, consoleLogger).findMetadata(
+            search,
+            true
+        ),
         null
     );
     assert.deepEqual(output.logs, ["Album: ", "Year: "]);
@@ -84,10 +90,11 @@ test("LastFmProvider reads the first match from a result list with a plain artis
         });
     };
 
-    const metadata = await new LastFmProvider("key").findMetadata(
-        { title: "Song", artist: "", album: "" },
-        false
-    );
+    const metadata = await new LastFmProvider(
+        "key",
+        false,
+        consoleLogger
+    ).findMetadata({ title: "Song", artist: "", album: "" }, false);
 
     assert.deepEqual(metadata?.info, {
         title: "Song",
@@ -117,10 +124,11 @@ test("LastFmProvider keeps titles that only start like the artist name", async (
         return Response.json({});
     };
 
-    const metadata = await new LastFmProvider("key").findMetadata(
-        { title: "Abbaesque", artist: "Abba", album: "" },
-        false
-    );
+    const metadata = await new LastFmProvider(
+        "key",
+        false,
+        consoleLogger
+    ).findMetadata({ title: "Abbaesque", artist: "Abba", album: "" }, false);
 
     assert.equal(metadata?.info.title, "Abbaesque");
 });
@@ -142,10 +150,25 @@ test("LastFmProvider removes a repeated artist prefix regardless of case", async
         return Response.json({});
     };
 
-    const metadata = await new LastFmProvider("key").findMetadata(
-        { title: "Waterloo", artist: "Abba", album: "" },
-        false
-    );
+    const metadata = await new LastFmProvider(
+        "key",
+        false,
+        consoleLogger
+    ).findMetadata({ title: "Waterloo", artist: "Abba", album: "" }, false);
 
     assert.equal(metadata?.info.title, "Waterloo");
+});
+
+test("LastFmProvider logs to the injected logger", async () => {
+    const logger = createRecordingLogger();
+    globalThis.fetch = async () => new Response(null, { status: 500 });
+
+    await new LastFmProvider("key", true, logger).findMetadata(search, true);
+
+    assert.deepEqual(logger.errors, [
+        "Last.fm search failed: Last.fm request failed: HTTP 500",
+    ]);
+    assert.deepEqual(logger.infos, ["Album: ", "Year: "]);
+    assert.deepEqual(output.logs, []);
+    assert.deepEqual(output.errors, []);
 });

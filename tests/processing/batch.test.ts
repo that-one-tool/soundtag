@@ -9,6 +9,9 @@ import {
     processBatch,
 } from "../../src/processing/batch.js";
 import { captureConsole } from "../helpers/console.js";
+import { createRecordingLogger } from "../helpers/logger.js";
+import { consoleLogger } from "../../src/shared/logger.js";
+import type { ProcessedTrack } from "../../src/processing/types.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import { createTestChain } from "../helpers/metadata-chain.js";
@@ -61,7 +64,11 @@ test("processBatch records each file status and logs its position", async () => 
     const report = createReport(files, directory);
 
     await processBatch(files, {
-        context: { sourceRoot: directory, metadataChain: createTestChain() },
+        context: {
+            sourceRoot: directory,
+            metadataChain: createTestChain(),
+            logger: consoleLogger,
+        },
         report,
         stopSignal: new AbortController().signal,
         renameFiles: true,
@@ -88,18 +95,26 @@ test("processBatch stops before the next file once a stop is requested", async (
     const files = ["a.mp3", "b.mp3"].map((name) => path.join(directory, name));
     await Promise.all(files.map((file) => fs.writeFile(file, "audio bytes")));
     const stop = new AbortController();
-    const stoppingChain = new MetadataChain([
-        {
-            findMetadata: async () => {
-                stop.abort();
-                return null;
+    const stoppingChain = new MetadataChain(
+        [
+            {
+                findMetadata: async () => {
+                    stop.abort();
+                    return null;
+                },
             },
-        },
-    ]);
+        ],
+        undefined,
+        consoleLogger
+    );
     const report = createReport(files, directory);
 
     await processBatch(files, {
-        context: { sourceRoot: directory, metadataChain: stoppingChain },
+        context: {
+            sourceRoot: directory,
+            metadataChain: stoppingChain,
+            logger: consoleLogger,
+        },
         report,
         stopSignal: stop.signal,
         renameFiles: true,
@@ -124,7 +139,11 @@ test("processBatch keeps file names when renaming is disabled", async () => {
     const report = createReport([tagged], directory);
 
     await processBatch([tagged], {
-        context: { sourceRoot: directory, metadataChain: createTestChain() },
+        context: {
+            sourceRoot: directory,
+            metadataChain: createTestChain(),
+            logger: consoleLogger,
+        },
         report,
         stopSignal: new AbortController().signal,
         renameFiles: false,
@@ -145,27 +164,35 @@ test("processBatch renames newly tagged files but not tracks that were not found
         info: { title: "Track 01", artist: "Unknown", album: "", year: "" },
         coverData: null,
     });
-    const chain = new MetadataChain([
-        {
-            findMetadata: async (search) =>
-                search.title === "found"
-                    ? {
-                          info: {
-                              title: "Title",
-                              artist: "Artist",
-                              album: "Album",
-                              year: "2024",
-                          },
-                          coverData: Buffer.from("cover"),
-                      }
-                    : null,
-        },
-    ]);
+    const chain = new MetadataChain(
+        [
+            {
+                findMetadata: async (search) =>
+                    search.title === "found"
+                        ? {
+                              info: {
+                                  title: "Title",
+                                  artist: "Artist",
+                                  album: "Album",
+                                  year: "2024",
+                              },
+                              coverData: Buffer.from("cover"),
+                          }
+                        : null,
+            },
+        ],
+        undefined,
+        consoleLogger
+    );
     const files = [found, notFound];
     const report = createReport(files, directory);
 
     await processBatch(files, {
-        context: { sourceRoot: directory, metadataChain: chain },
+        context: {
+            sourceRoot: directory,
+            metadataChain: chain,
+            logger: consoleLogger,
+        },
         report,
         stopSignal: new AbortController().signal,
         renameFiles: true,
@@ -199,7 +226,11 @@ test("processBatch renames only the first of two files with the same tags", asyn
     const report = createReport(files, directory);
 
     await processBatch(files, {
-        context: { sourceRoot: directory, metadataChain: createTestChain() },
+        context: {
+            sourceRoot: directory,
+            metadataChain: createTestChain(),
+            logger: consoleLogger,
+        },
         report,
         stopSignal: new AbortController().signal,
         renameFiles: true,
@@ -210,4 +241,60 @@ test("processBatch renames only the first of two files with the same tags", asyn
     assert.ok(
         output.logs.includes("Not renamed: Artist - Title.mp3 already exists.")
     );
+});
+
+test("processBatch logs to the context logger", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "broken.flac");
+    await fs.writeFile(source, "not really flac");
+    const logger = createRecordingLogger();
+
+    await processBatch([source], {
+        context: {
+            sourceRoot: directory,
+            metadataChain: createTestChain(),
+            logger,
+        },
+        report: createReport([source], directory),
+        stopSignal: new AbortController().signal,
+        renameFiles: false,
+    });
+
+    assert.deepEqual(logger.infos, ["\n[1/1] broken.flac", "Format: FLAC"]);
+    assert.deepEqual(output.logs, []);
+});
+
+test("processBatch announces each processed track with its new path", async () => {
+    const directory = await createTemporaryDirectory();
+    const tagged = path.join(directory, "tagged.mp3");
+    const broken = path.join(directory, "broken.flac");
+    await fs.writeFile(tagged, "audio bytes");
+    await fs.writeFile(broken, "not really flac");
+    await getTagStore(tagged).write(tagged, {
+        info: { title: "Title", artist: "Artist", album: "", year: "2024" },
+        coverData: Buffer.from("cover"),
+    });
+    const files = [broken, tagged];
+    const results: ProcessedTrack[] = [];
+
+    await processBatch(files, {
+        context: {
+            sourceRoot: directory,
+            metadataChain: createTestChain(),
+            logger: createRecordingLogger(),
+        },
+        report: createReport(files, directory),
+        stopSignal: new AbortController().signal,
+        renameFiles: true,
+        onTrackProcessed: (result) => results.push(result),
+    });
+
+    assert.deepEqual(results, [
+        { source: broken, status: "FAILED", destination: null },
+        {
+            source: tagged,
+            status: "SKIPPED",
+            destination: path.join(directory, "Artist - Title.mp3"),
+        },
+    ]);
 });

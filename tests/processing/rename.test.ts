@@ -5,6 +5,8 @@ import { test } from "node:test";
 import { getTagStore } from "../../src/tags/audio-tags.js";
 import { renameTrack } from "../../src/processing/rename.js";
 import { captureConsole } from "../helpers/console.js";
+import { createRecordingLogger } from "../helpers/logger.js";
+import { consoleLogger } from "../../src/shared/logger.js";
 import { emptyInfo } from "../helpers/metadata-chain.js";
 import { FolderNameCache } from "../../src/library/folder-names.js";
 import type { TrackStatus } from "../../src/processing/types.js";
@@ -17,7 +19,10 @@ const createTemporaryDirectory = useTemporaryDirectories(
 );
 
 function renameAlone(source: string, status: TrackStatus) {
-    return renameTrack(source, status, new FolderNameCache([source]));
+    return renameTrack(source, status, {
+        folderNames: new FolderNameCache([source]),
+        logger: consoleLogger,
+    });
 }
 
 const thunderstruck = { ...emptyInfo, artist: "AC/DC", title: "Thunderstruck" };
@@ -152,3 +157,17 @@ test(
         await fs.access(source);
     }
 );
+
+test("renameTrack logs to the injected logger", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = await createTaggedMp3(directory, "01 track.mp3");
+    const logger = createRecordingLogger();
+
+    await renameTrack(source, "TAGGED", {
+        folderNames: new FolderNameCache([source]),
+        logger,
+    });
+
+    assert.deepEqual(logger.infos, ["Renamed to: AC_DC - Thunderstruck.mp3"]);
+    assert.deepEqual(output.logs, []);
+});

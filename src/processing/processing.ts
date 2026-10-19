@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { getTagStore, isProperlyTagged } from "../tags/audio-tags.js";
 import { getErrorMessage } from "../shared/errors.js";
+import type { Logger } from "../shared/logger.js";
 import { inferFolderSearchTerms } from "../library/folder-context.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
 import { getFirstFilled } from "../metadata/track-metadata.js";
@@ -15,6 +16,7 @@ import type { TrackStatus } from "./types.js";
 export interface ProcessingContext {
     sourceRoot: string;
     metadataChain: MetadataChain;
+    logger: Logger;
 }
 
 const OPTIONAL_FIELD_CHECKS: [string, (metadata: TrackMetadata) => boolean][] =
@@ -47,8 +49,11 @@ function formatSearchDetail(label: string, value: string): string {
     return value ? ` (${label}: "${value}")` : "";
 }
 
-function logSearch({ title, artist, album }: TrackSearch): void {
-    console.log(
+function logSearch(
+    { title, artist, album }: TrackSearch,
+    logger: Logger
+): void {
+    logger.info(
         `Searching: "${title}"${formatSearchDetail("artist", artist)}${formatSearchDetail("album", album)}`
     );
 }
@@ -58,21 +63,21 @@ function hasTitleAndArtist({ info }: TrackMetadata): boolean {
 }
 
 async function findWritableMetadata(
-    metadataChain: MetadataChain,
     search: TrackSearch,
-    existingInfo: TrackInfo
+    existingInfo: TrackInfo,
+    { metadataChain, logger }: ProcessingContext
 ): Promise<TrackMetadata | null> {
     const metadata = await metadataChain.find(search, existingInfo);
 
     if (!metadata) {
-        console.log(
+        logger.info(
             "Track not found on available metadata services. Leaving source unchanged."
         );
         return null;
     }
 
     if (!hasTitleAndArtist(metadata)) {
-        console.log(
+        logger.info(
             "Track title or artist is missing. Leaving source unchanged."
         );
         return null;
@@ -81,13 +86,13 @@ async function findWritableMetadata(
     return metadata;
 }
 
-function logMissingFields(metadata: TrackMetadata): void {
+function logMissingFields(metadata: TrackMetadata, logger: Logger): void {
     const missingFields = OPTIONAL_FIELD_CHECKS.filter(([, isMissing]) =>
         isMissing(metadata)
     ).map(([label]) => label);
 
     if (missingFields.length > 0) {
-        console.log(
+        logger.info(
             `Some metadata was unavailable (${missingFields.join(", ")}); saving the fields that were found.`
         );
     }
@@ -96,23 +101,20 @@ function logMissingFields(metadata: TrackMetadata): void {
 async function tagUntaggedTrack(
     source: string,
     existingInfo: TrackInfo,
-    { sourceRoot, metadataChain }: ProcessingContext
+    context: ProcessingContext
 ): Promise<TrackStatus> {
+    const { sourceRoot, logger } = context;
     const search = buildTrackSearch(source, sourceRoot, existingInfo);
-    logSearch(search);
-    const metadata = await findWritableMetadata(
-        metadataChain,
-        search,
-        existingInfo
-    );
+    logSearch(search, logger);
+    const metadata = await findWritableMetadata(search, existingInfo, context);
 
     if (!metadata) {
         return "SKIPPED";
     }
 
-    logMissingFields(metadata);
+    logMissingFields(metadata, logger);
     await getTagStore(source).write(source, metadata);
-    console.log("Successfully tagged source file.");
+    logger.info("Successfully tagged source file.");
     return "TAGGED";
 }
 
@@ -123,7 +125,7 @@ async function tagTrack(
     const storedTags = await getTagStore(source).read(source);
 
     if (isProperlyTagged(storedTags)) {
-        console.log("Already properly tagged. Skipping.");
+        context.logger.info("Already properly tagged. Skipping.");
         return "SKIPPED";
     }
 
@@ -137,7 +139,7 @@ export async function processTrack(
     try {
         return await tagTrack(source, context);
     } catch (error) {
-        console.error(`Processing error: ${getErrorMessage(error)}`);
+        context.logger.error(`Processing error: ${getErrorMessage(error)}`);
         return "FAILED";
     }
 }

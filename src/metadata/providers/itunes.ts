@@ -1,4 +1,5 @@
 import { getErrorMessage } from "../../shared/errors.js";
+import type { Logger } from "../../shared/logger.js";
 import {
     downloadFirstImage,
     fetchWithTimeout,
@@ -6,7 +7,6 @@ import {
 } from "../../shared/http.js";
 import {
     createRateLimiter,
-    systemClock,
     type Clock,
     type RateLimiter,
 } from "../../shared/rate-limiter.js";
@@ -65,7 +65,10 @@ function downloadArtwork(url: string | undefined): Promise<Buffer | null> {
 export class ItunesProvider implements MetadataProvider {
     private readonly schedule: RateLimiter;
 
-    constructor(clock: Clock = systemClock) {
+    constructor(
+        clock: Clock,
+        private readonly logger: Logger
+    ) {
         this.schedule = createRateLimiter(ITUNES_REQUEST_INTERVAL, clock);
     }
 
@@ -101,7 +104,9 @@ export class ItunesProvider implements MetadataProvider {
             );
             return getFirstItunesTrack(data);
         } catch (error) {
-            console.error(`iTunes Search failed: ${getErrorMessage(error)}`);
+            this.logger.error(
+                `iTunes Search failed: ${getErrorMessage(error)}`
+            );
             return null;
         }
     }

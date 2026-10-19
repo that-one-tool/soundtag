@@ -1,3 +1,4 @@
+import type { Logger } from "../shared/logger.js";
 import {
     buildProviderSearch,
     isComplete,
@@ -19,7 +20,8 @@ interface ChainState {
 export class MetadataChain {
     constructor(
         readonly providers: MetadataProvider[],
-        readonly coverProvider?: CoverProvider
+        readonly coverProvider: CoverProvider | undefined,
+        private readonly logger: Logger
     ) {}
 
     async find(
@@ -33,7 +35,7 @@ export class MetadataChain {
         }
 
         const completed = await this.addFallbackCover(search, metadata);
-        console.log(
+        this.logger.info(
             `Cover: ${completed.coverData ? "downloaded" : "unavailable"}`
         );
         return completed;

@@ -11,6 +11,8 @@ import {
 } from "../../src/processing/processing.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { captureConsole } from "../helpers/console.js";
+import { createRecordingLogger } from "../helpers/logger.js";
+import { consoleLogger } from "../../src/shared/logger.js";
 import { createTestChain, emptyInfo } from "../helpers/metadata-chain.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
@@ -64,6 +66,7 @@ test("processTrack writes OGG Vorbis comments and embedded cover art", async () 
 
     const status = await processTrack(source, {
         sourceRoot: directory,
+        logger: consoleLogger,
         metadataChain: createTestChain(),
     });
 
@@ -150,6 +153,7 @@ test("processTrack combines embedded tags with artist and album folder context",
 
     const status = await processTrack(source, {
         sourceRoot: directory,
+        logger: consoleLogger,
         metadataChain: createTestChain({
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
         }),
@@ -215,6 +219,7 @@ test("processTrack writes available tags when year and cover art are unavailable
 
     const status = await processTrack(source, {
         sourceRoot: directory,
+        logger: consoleLogger,
         metadataChain: createTestChain({
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
         }),
@@ -241,6 +246,7 @@ test("processTrack marks unreadable audio files as failed without searching", as
 
     const status = await processTrack(source, {
         sourceRoot: directory,
+        logger: consoleLogger,
         metadataChain: createTestChain(),
     });
 
@@ -266,6 +272,7 @@ test("processTrack skips files that are already properly tagged", async () => {
     assert.equal(
         await processTrack(source, {
             sourceRoot: directory,
+            logger: consoleLogger,
             metadataChain: createTestChain(),
         }),
         "SKIPPED"
@@ -285,6 +292,7 @@ test("processTrack skips tracks no provider can identify", async () => {
     assert.equal(
         await processTrack(source, {
             sourceRoot: directory,
+            logger: consoleLogger,
             metadataChain: createTestChain(),
         }),
         "SKIPPED"
@@ -308,6 +316,7 @@ test("processTrack skips matches without a title and artist", async () => {
     assert.equal(
         await processTrack(source, {
             sourceRoot: directory,
+            logger: consoleLogger,
             metadataChain: createTestChain(),
         }),
         "SKIPPED"
@@ -387,6 +396,7 @@ test("processTrack logs its search and the metadata it could not find", async ()
     assert.equal(
         await processTrack(source, {
             sourceRoot: directory,
+            logger: consoleLogger,
             metadataChain: createTestChain(),
         }),
         "TAGGED"
@@ -402,4 +412,23 @@ test("processTrack logs its search and the metadata it could not find", async ()
         )
     );
     assert.ok(output.logs.includes("Successfully tagged source file."));
+});
+
+test("processTrack logs to the context logger", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "broken.flac");
+    await fs.writeFile(source, "not really flac");
+    const logger = createRecordingLogger();
+
+    await processTrack(source, {
+        sourceRoot: directory,
+        metadataChain: createTestChain({
+            musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
+        }),
+        logger,
+    });
+
+    assert.equal(logger.errors.length, 1);
+    assert.match(logger.errors[0], /^Processing error: /);
+    assert.deepEqual(output.errors, []);
 });

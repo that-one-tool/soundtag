@@ -12,3 +12,9 @@ export interface ProcessingReport {
     files: Record<string, FileStatus>;
     renamed?: Record<string, string>;
 }
+
+export interface ProcessedTrack {
+    source: string;
+    status: TrackStatus;
+    destination: string | null;
+}

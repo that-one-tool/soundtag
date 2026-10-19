@@ -2,7 +2,8 @@ import { ItunesProvider } from "./providers/itunes.js";
 import { LastFmProvider } from "./providers/lastfm.js";
 import { MetadataChain } from "./metadata-chain.js";
 import { MusicBrainzProvider } from "./providers/musicbrainz.js";
-import { systemClock, type Clock } from "../shared/rate-limiter.js";
+import type { Logger } from "../shared/logger.js";
+import type { Clock } from "../shared/rate-limiter.js";
 import type { MetadataProvider } from "./types.js";
 import { YouTubeCoverProvider } from "./providers/youtube.js";
 
@@ -15,37 +16,47 @@ export interface MetadataChainConfig {
 
 function createMusicBrainzProviders(
     userAgent: string | undefined,
-    clock: Clock
+    clock: Clock,
+    logger: Logger
 ): MetadataProvider[] {
     const trimmedUserAgent = userAgent?.trim();
 
     if (!trimmedUserAgent) {
-        console.error("MusicBrainz fallback requires MUSICBRAINZ_USER_AGENT.");
+        logger.error("MusicBrainz fallback requires MUSICBRAINZ_USER_AGENT.");
         return [];
     }
 
-    return [new MusicBrainzProvider(trimmedUserAgent, clock)];
+    return [new MusicBrainzProvider(trimmedUserAgent, clock, logger)];
 }
 
 function createCoverProvider(
-    apiKey: string | undefined
+    apiKey: string | undefined,
+    logger: Logger
 ): YouTubeCoverProvider | undefined {
     const trimmedApiKey = apiKey?.trim();
-    return trimmedApiKey ? new YouTubeCoverProvider(trimmedApiKey) : undefined;
+    return trimmedApiKey
+        ? new YouTubeCoverProvider(trimmedApiKey, logger)
+        : undefined;
 }
 
 export function createMetadataChain(
     config: MetadataChainConfig,
-    clock: Clock = systemClock
+    clock: Clock,
+    logger: Logger
 ): MetadataChain {
     const providers = [
-        new LastFmProvider(config.lastFmApiKey, config.verbose),
-        ...createMusicBrainzProviders(config.musicBrainzUserAgent, clock),
-        new ItunesProvider(clock),
+        new LastFmProvider(config.lastFmApiKey, config.verbose, logger),
+        ...createMusicBrainzProviders(
+            config.musicBrainzUserAgent,
+            clock,
+            logger
+        ),
+        new ItunesProvider(clock, logger),
     ];
 
     return new MetadataChain(
         providers,
-        createCoverProvider(config.youtubeApiKey)
+        createCoverProvider(config.youtubeApiKey, logger),
+        logger
     );
 }

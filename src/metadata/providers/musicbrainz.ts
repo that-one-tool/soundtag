@@ -1,4 +1,5 @@
 import { getErrorMessage } from "../../shared/errors.js";
+import type { Logger } from "../../shared/logger.js";
 import {
     downloadFirstImage,
     fetchWithTimeout,
@@ -8,7 +9,6 @@ import {
 } from "../../shared/http.js";
 import {
     createRateLimiter,
-    systemClock,
     type Clock,
     type RateLimiter,
 } from "../../shared/rate-limiter.js";
@@ -127,7 +127,8 @@ export class MusicBrainzProvider implements MetadataProvider {
 
     constructor(
         private readonly userAgent: string,
-        private readonly clock: Clock = systemClock
+        private readonly clock: Clock,
+        private readonly logger: Logger
     ) {
         this.schedule = createRateLimiter(MUSICBRAINZ_REQUEST_INTERVAL, clock);
     }
@@ -163,7 +164,7 @@ export class MusicBrainzProvider implements MetadataProvider {
             );
             return getFirstRecording(data);
         } catch (error) {
-            console.error(
+            this.logger.error(
                 `MusicBrainz search failed: ${getErrorMessage(error)}`
             );
             return null;

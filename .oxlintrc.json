@@ -1,6 +1,6 @@
 {
     "$schema": "./node_modules/oxlint/configuration_schema.json",
-    "plugins": ["typescript", "unicorn", "oxc", "import", "node"],
+    "plugins": ["typescript", "unicorn", "oxc", "import", "node", "react"],
     "categories": {
         "correctness": "error",
         "suspicious": "warn"
@@ -34,6 +34,7 @@
         ],
         "no-nested-ternary": "error",
         "eqeqeq": "error",
+        "react/react-in-jsx-scope": "off",
         "typescript/no-explicit-any": "error",
         "import/no-unassigned-import": [
             "warn",

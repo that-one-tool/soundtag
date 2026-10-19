@@ -1,13 +1,17 @@
 import * as path from "node:path";
 import { FolderNameCache } from "../library/folder-names.js";
+import type { Logger } from "../shared/logger.js";
 import { processTrack, type ProcessingContext } from "./processing.js";
 import { renameTrack } from "./rename.js";
 import type {
     FileStatus,
+    ProcessedTrack,
     ProcessingReport,
     ProcessingStats,
     TrackStatus,
 } from "./types.js";
+
+export const MAX_FILES_PER_RUN = 3000;
 
 export function createReport(
     files: string[],
@@ -20,9 +24,13 @@ export function createReport(
     };
 }
 
-function logTrackHeader(position: string, source: string): void {
-    console.log(`\n${position}`);
-    console.log(`Format: ${path.extname(source).slice(1).toUpperCase()}`);
+function logTrackHeader(
+    position: string,
+    source: string,
+    logger: Logger
+): void {
+    logger.info(`\n${position}`);
+    logger.info(`Format: ${path.extname(source).slice(1).toUpperCase()}`);
 }
 
 export interface BatchRun {
@@ -30,6 +38,7 @@ export interface BatchRun {
     report: ProcessingReport;
     stopSignal: AbortSignal;
     renameFiles: boolean;
+    onTrackProcessed?: (result: ProcessedTrack) => void;
 }
 
 interface ActiveBatch extends BatchRun {
@@ -53,16 +62,21 @@ async function renameProcessedFile(
     source: string,
     status: TrackStatus,
     run: ActiveBatch
-): Promise<void> {
+): Promise<string | null> {
     if (!run.renameFiles) {
-        return;
+        return null;
     }
 
-    const destination = await renameTrack(source, status, run.folderNames);
+    const destination = await renameTrack(source, status, {
+        folderNames: run.folderNames,
+        logger: run.context.logger,
+    });
 
     if (destination) {
         recordRename(source, destination, run);
     }
+
+    return destination;
 }
 
 async function processFile(
@@ -71,17 +85,20 @@ async function processFile(
     run: ActiveBatch
 ): Promise<void> {
     const relativePath = path.relative(run.context.sourceRoot, source);
-    logTrackHeader(`[${position}] ${relativePath}`, source);
+    logTrackHeader(`[${position}] ${relativePath}`, source, run.context.logger);
     const status = await processTrack(source, run.context);
     run.report.files[relativePath] = status;
-    await renameProcessedFile(source, status, run);
+    const destination = await renameProcessedFile(source, status, run);
     run.folderNames.markProcessed(source);
+    run.onTrackProcessed?.({ source, status, destination });
 }
 
 async function processFiles(files: string[], run: ActiveBatch): Promise<void> {
     for (const [index, source] of files.entries()) {
         if (run.stopSignal.aborted) {
-            console.log("Stopped before processing the remaining files.");
+            run.context.logger.info(
+                "Stopped before processing the remaining files."
+            );
             return;
         }
 

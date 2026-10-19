@@ -60,10 +60,33 @@ npm start -- /path/to/music
 
 Paths containing spaces should be quoted.
 
-If no source folder is supplied, SoundTag opens a folder browser in the current
-directory. Type a number to open a subfolder, `0` to go up, `s` to process the
-folder shown, or `q` to quit. After each run the browser reopens on the
-processed folder. Symlinked folders are listed too. The browser needs an
+If no source folder is supplied, SoundTag opens a full-screen browser in the
+current directory. The left pane lists subfolders and audio files, and the
+right pane shows the stored tags of the file under the cursor (or, for a
+folder, its file counts). Processing messages appear in the log pane below.
+
+| Key                    | Action                                          |
+| ---------------------- | ----------------------------------------------- |
+| `↑` `↓`, PgUp, PgDn    | Move the cursor                                 |
+| Enter, `→`             | Open the folder under the cursor                |
+| `←`, Backspace, Delete | Go up one folder                                |
+| `t`                    | Tag the file or folder under the cursor         |
+| `a`                    | Tag the folder being browsed                    |
+| `s`                    | Stop the current run after the file in progress |
+| `q`, Ctrl+C            | Quit (press again during a run to quit at once) |
+
+Tagging runs in the background, so you can keep browsing; further `t` and `a`
+presses are queued and run one after another, and are ignored once you quit.
+Once processed in this session, files get a colored dot: green for `TAGGED`,
+yellow for `SKIPPED`, red for `FAILED`. A folder shows the worst status of the
+files inside it. Folders are tagged with the `--recursive`/`--no-recursive`
+setting. Each run merges its results into the report of the folder tagged (the
+file's folder for a single file): entries for the files it processed are
+updated, other entries are kept, and a file left unprocessed by a stopped run
+keeps its earlier status. A file renamed by an earlier run before its own
+queued run starts is skipped. Quitting during a run waits for the file in
+progress; quitting again exits immediately with code 130 without writing that
+run's report. Symlinked folders are listed too. The browser needs an
 interactive terminal; for scripted runs, pass the source folder as an argument.
 
 By default, SoundTag scans subfolders. Use `--no-recursive` to scan only the
@@ -86,15 +109,16 @@ FLAC files use their supported native tags and picture metadata, and MP3 files
 use ID3 tags. WAV metadata is written through TagLib's RIFF/ID3 support;
 embedded artwork compatibility can vary between players.
 
-Press Ctrl+C to stop a run: SoundTag finishes the file it is working on and
-writes the report (unprocessed files stay `READ`). With a source folder
-argument it then exits with code 130; in the folder browser it returns to the
-browser instead. Press Ctrl+C a second time during a run to quit immediately
-without writing the report. Ctrl+C at a prompt exits with code 130.
+With a source folder argument, press Ctrl+C to stop a run: SoundTag finishes
+the file it is working on, writes the report (unprocessed files stay `READ`),
+and exits with code 130. Press Ctrl+C a second time to quit immediately without
+writing the report. Ctrl+C at a prompt exits with code 130.
 
-When you leave the folder browser with `q` or when input ends, SoundTag exits
-with code 1 if any run failed, otherwise 0. Stopped runs do not count as
-failures.
+When you quit the browser, SoundTag exits with code 1 if any run failed (a
+file failed or the report could not be written), otherwise 0. Stopped runs do
+not count as failures. Without an interactive terminal and without a source
+folder, SoundTag exits with code 1 before asking for anything and writes no
+report.
 
 After a file is tagged, or skipped because it was already fully tagged,
 SoundTag renames it to `<Artist> - <Title>.<extension>` from its tags when the
