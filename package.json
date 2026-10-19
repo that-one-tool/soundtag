@@ -11,10 +11,10 @@
     "start": "node dist/index.js",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc -p tsconfig.test.json",
-    "lint": "oxlint --max-warnings=33",
+    "lint": "oxlint --max-warnings=17",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-lines=98 --test-coverage-branches=90 --test-coverage-functions=100 tests/*.test.ts",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-lines=98 --test-coverage-branches=93 --test-coverage-functions=100 tests/*.test.ts",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test:coverage"
   },
   "dependencies": {

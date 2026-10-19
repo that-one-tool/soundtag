@@ -1,7 +1,8 @@
 import * as path from "node:path";
 import { getErrorMessage } from "./errors.js";
-import { inferFolderSearchTerms, parseTrackFilename } from "./file.js";
-import { isProperlyTagged, readTrackInfo, tagAudio } from "./audio-tags.js";
+import { inferFolderSearchTerms } from "./folder-context.js";
+import { parseTrackFilename } from "./track-name-parser.js";
+import { getTagStore, isProperlyTagged } from "./audio-tags.js";
 import type { MetadataChain } from "./metadata-chain.js";
 import type { ProcessingReport, ProcessingStats } from "./types.js";
 
@@ -24,14 +25,17 @@ export async function processTrack(
     console.log(`Format: ${extension.slice(1).toUpperCase()}`);
 
     try {
-        if (await isProperlyTagged(source)) {
+        const tagStore = getTagStore(source);
+        const storedTags = await tagStore.read(source);
+
+        if (isProperlyTagged(storedTags)) {
             console.log("Already properly tagged. Skipping.");
             stats.skipped++;
             report.files[relativePath] = "SKIPPED";
             return;
         }
 
-        const existingInfo = await readTrackInfo(source);
+        const existingInfo = storedTags.info;
         const artist =
             existingInfo.artist ||
             filenameTerms.artist ||
@@ -79,7 +83,7 @@ export async function processTrack(
             );
         }
 
-        await tagAudio(source, source, metadata.info, metadata.coverData);
+        await tagStore.write(source, metadata);
 
         console.log("Successfully tagged source file.");
         stats.ok++;

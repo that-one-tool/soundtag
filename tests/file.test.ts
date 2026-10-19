@@ -3,11 +3,10 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { findAudioFiles, getAudioFormat } from "../src/file.js";
 import {
-    inferFolderSearchTerms,
+    findAudioFiles,
+    getAudioFormat,
     isDirectory,
-    parseTrackFilename,
     writeTemporaryCopy,
 } from "../src/file.js";
 
@@ -77,112 +76,20 @@ test("findAudioFiles filters, recurses, sorts, and respects the file limit", asy
     assert.equal((await findAudioFiles(temporaryDirectory, true, 1)).length, 1);
 });
 
-test("parseTrackFilename separates an artist and title when named with a hyphen", () => {
-    assert.deepEqual(parseTrackFilename("Chumbawamba - Tubthumping.mp3"), {
-        artist: "Chumbawamba",
-        title: "Tubthumping",
-    });
-    assert.deepEqual(parseTrackFilename("Artist_Name - Track.Title.mp3"), {
-        artist: "Artist Name",
-        title: "Track Title",
-    });
-    assert.deepEqual(parseTrackFilename("AC-DC - Track-Title.mp3"), {
-        artist: "AC-DC",
-        title: "Track-Title",
-    });
-    assert.deepEqual(parseTrackFilename("Tubthumping.mp3"), {
-        title: "Tubthumping",
-    });
-});
+test("findAudioFiles stops walking nested folders once the limit is reached", async () => {
+    const first = path.join(temporaryDirectory, "a");
+    const second = path.join(temporaryDirectory, "b");
+    await fs.mkdir(first);
+    await fs.mkdir(second);
+    await fs.writeFile(path.join(first, "1.mp3"), "");
+    await fs.writeFile(path.join(first, "2.mp3"), "");
+    await fs.writeFile(path.join(second, "3.mp3"), "");
 
-test("parseTrackFilename removes leading track and disc-track numbers", () => {
-    assert.deepEqual(parseTrackFilename("01 - Artist - Song Title.mp3"), {
-        artist: "Artist",
-        title: "Song Title",
-    });
-    assert.deepEqual(parseTrackFilename("1.02 Artist - Song Title.ogg"), {
-        artist: "Artist",
-        title: "Song Title",
-    });
-    assert.deepEqual(parseTrackFilename("12. Song_Title.mp3"), {
-        title: "Song Title",
-    });
-});
-
-test("parseTrackFilename recognizes en and em dash separators", () => {
-    assert.deepEqual(parseTrackFilename("Artist – Song Title.mp3"), {
-        artist: "Artist",
-        title: "Song Title",
-    });
-    assert.deepEqual(parseTrackFilename("Artist—Song Title.mp3"), {
-        artist: "Artist",
-        title: "Song Title",
-    });
-});
-
-test("parseTrackFilename keeps internal hyphens and meaningful title suffixes", () => {
     assert.deepEqual(
-        parseTrackFilename("AC-DC - Track-Title (Live) feat. Guest.mp3"),
-        { artist: "AC-DC", title: "Track-Title (Live) feat Guest" }
-    );
-    assert.deepEqual(parseTrackFilename("AC-DC.mp3"), {
-        title: "AC-DC",
-    });
-});
-
-test("inferFolderSearchTerms reads artist and album from artist-album hierarchies", () => {
-    const source = path.join(
-        temporaryDirectory,
-        "Artist",
-        "2024 - Album",
-        "Disc 1",
-        "01 - Track.mp3"
-    );
-
-    assert.deepEqual(inferFolderSearchTerms(source, temporaryDirectory), {
-        artist: "Artist",
-        album: "Album",
-    });
-});
-
-test("inferFolderSearchTerms handles combined folders and soundtrack context", () => {
-    assert.deepEqual(
-        inferFolderSearchTerms(
-            path.join(temporaryDirectory, "ACDC - Rock or Bust", "01.mp3"),
-            temporaryDirectory
+        (await findAudioFiles(temporaryDirectory, true, 2)).map((file) =>
+            path.relative(temporaryDirectory, file)
         ),
-        { artist: "ACDC", album: "Rock or Bust" }
-    );
-    assert.deepEqual(
-        inferFolderSearchTerms(
-            path.join(temporaryDirectory, "Game of Thrones - OST", "01.mp3"),
-            temporaryDirectory
-        ),
-        { album: "Game of Thrones - OST" }
-    );
-});
-
-test("inferFolderSearchTerms ignores structural and unknown folder labels", () => {
-    assert.deepEqual(
-        inferFolderSearchTerms(
-            path.join(
-                temporaryDirectory,
-                "Music",
-                "iTunes Music",
-                "Artiste inconnu",
-                "Album inconnu",
-                "01.mp3"
-            ),
-            temporaryDirectory
-        ),
-        {}
-    );
-    assert.deepEqual(
-        inferFolderSearchTerms(
-            path.join(temporaryDirectory, "Album", "Loose track.mp3"),
-            temporaryDirectory
-        ),
-        { album: "Album" }
+        [path.join("a", "1.mp3"), path.join("a", "2.mp3")]
     );
 });
 

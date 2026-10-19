@@ -6,6 +6,8 @@ import {
     fillMissingFields,
     isComplete,
     mergeMetadata,
+    trimOrEmpty,
+    getFilledFields,
 } from "../src/track-metadata.js";
 
 const completeInfo = {
@@ -77,4 +79,27 @@ test("mergeMetadata fills missing fields and keeps the first cover found", () =>
         ).coverData,
         firstCover
     );
+});
+
+test("trimOrEmpty trims values and turns missing ones into empty strings", () => {
+    assert.equal(trimOrEmpty("  Title "), "Title");
+    assert.equal(trimOrEmpty(undefined), "");
+});
+
+test("getFilledFields keeps only non-blank fields", () => {
+    assert.deepEqual(
+        getFilledFields({
+            title: "Title",
+            artist: " ",
+            album: "",
+            year: "2024",
+        }),
+        { title: "Title", year: "2024" }
+    );
+});
+
+test("getFilledFields ignores keys that are not track fields", () => {
+    const infoWithExtraKey = { ...completeInfo, comment: "extra" };
+
+    assert.deepEqual(getFilledFields(infoWithExtraKey), completeInfo);
 });

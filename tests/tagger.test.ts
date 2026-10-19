@@ -5,11 +5,7 @@ import * as path from "node:path";
 import NodeID3 from "node-id3";
 import { File as TagLibFile } from "node-taglib-sharp";
 import { afterEach, test } from "node:test";
-import {
-    isProperlyTagged,
-    readTrackInfo,
-    tagAudio,
-} from "../src/audio-tags.js";
+import { getTagStore, isProperlyTagged } from "../src/audio-tags.js";
 import {
     createMetadataChain,
     type MetadataChainConfig,
@@ -18,7 +14,12 @@ import { ItunesProvider } from "../src/itunes.js";
 import type { MetadataChain } from "../src/metadata-chain.js";
 import { processTrack } from "../src/processing.js";
 import type { Clock } from "../src/rate-limiter.js";
-import type { TrackInfo, TrackMetadata, TrackSearch } from "../src/types.js";
+import type {
+    ProcessingReport,
+    TrackInfo,
+    TrackMetadata,
+    TrackSearch,
+} from "../src/types.js";
 
 const originalFetch = globalThis.fetch;
 const temporaryDirectories: string[] = [];
@@ -1149,229 +1150,6 @@ test("findTrackMetadata uses a YouTube thumbnail only after provider artwork is 
     );
 });
 
-test("tagAudio writes MP3 tags and isProperlyTagged reads them", async () => {
-    const directory = await createTemporaryDirectory();
-    const source = path.join(directory, "source.mp3");
-    await fs.writeFile(source, "audio bytes");
-
-    assert.equal(await isProperlyTagged(source), false);
-    await tagAudio(
-        source,
-        source,
-        {
-            title: "Title",
-            artist: "Artist",
-            album: "Album",
-            year: "2024",
-        },
-        Buffer.from("cover image")
-    );
-
-    assert.equal(await isProperlyTagged(source), true);
-    const tags = await NodeID3.Promise.read(source);
-    assert.equal(tags.year, "2024");
-    assert.notEqual(await fs.readFile(source, "utf8"), "audio bytes");
-});
-
-const pngCover = Buffer.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
-]);
-
-test("readTrackInfo trims the artist read from TagLib formats", async () => {
-    const directory = await createTemporaryDirectory();
-    const source = path.join(directory, "padded.wav");
-    await fs.copyFile(
-        path.join(process.cwd(), "tests/fixtures/silent.wav"),
-        source
-    );
-    const file = TagLibFile.createFromPath(source);
-    try {
-        file.tag.performers = ["  ", " Padded artist "];
-        file.save();
-    } finally {
-        file.dispose();
-    }
-
-    assert.equal((await readTrackInfo(source)).artist, "Padded artist");
-});
-
-test("tagAudio stores the detected MIME type of MP3 cover art", async () => {
-    const directory = await createTemporaryDirectory();
-    const source = path.join(directory, "png-cover.mp3");
-    await fs.writeFile(source, "audio bytes");
-
-    await tagAudio(
-        source,
-        source,
-        { title: "Title", artist: "Artist", album: "", year: "" },
-        pngCover
-    );
-
-    const tags = await NodeID3.Promise.read(source);
-    assert.ok(typeof tags.image === "object");
-    assert.equal(tags.image.mime, "image/png");
-});
-
-test("tagAudio stores the detected MIME type of FLAC cover art", async () => {
-    const directory = await createTemporaryDirectory();
-    const source = path.join(directory, "png-cover.flac");
-    await fs.copyFile(
-        path.join(process.cwd(), "tests/fixtures/silent.flac"),
-        source
-    );
-
-    await tagAudio(
-        source,
-        source,
-        { title: "Title", artist: "Artist", album: "", year: "" },
-        pngCover
-    );
-
-    const file = TagLibFile.createFromPath(source);
-    try {
-        assert.equal(file.tag.pictures[0].mimeType, "image/png");
-    } finally {
-        file.dispose();
-    }
-});
-
-test("tagAudio preserves existing MP3 fields when metadata is unavailable", async () => {
-    const directory = await createTemporaryDirectory();
-    const source = path.join(directory, "partial.mp3");
-    const cover = Buffer.from("existing cover");
-    await fs.writeFile(source, "audio bytes");
-    assert.equal(
-        NodeID3.write(
-            {
-                title: "Old title",
-                artist: "Old artist",
-                album: "Existing album",
-                year: "2020",
-                image: {
-                    mime: "image/jpeg",
-                    type: { id: 3, name: "front cover" },
-                    description: "Cover",
-                    imageBuffer: cover,
-                },
-            },
-            source
-        ),
-        true
-    );
-
-    await tagAudio(
-        source,
-        source,
-        { title: "New title", artist: "New artist", album: "", year: "" },
-        null
-    );
-
-    const tags = await NodeID3.Promise.read(source);
-    assert.equal(tags.title, "New title");
-    assert.equal(tags.artist, "New artist");
-    assert.equal(tags.album, "Existing album");
-    assert.equal(tags.year, "2020");
-    assert.ok(typeof tags.image === "object");
-    assert.deepEqual(tags.image.imageBuffer, cover);
-});
-
-test("tagAudio preserves existing OGG fields when metadata is unavailable", async () => {
-    const directory = await createTemporaryDirectory();
-    const source = path.join(directory, "partial.ogg");
-    const fixture = path.join(process.cwd(), "tests/fixtures/silent.ogg");
-    const cover = Buffer.from("existing cover");
-    await fs.copyFile(fixture, source);
-    await tagAudio(
-        source,
-        source,
-        {
-            title: "Old title",
-            artist: "Old artist",
-            album: "Existing album",
-            year: "2020",
-        },
-        cover
-    );
-
-    await tagAudio(
-        source,
-        source,
-        { title: "New title", artist: "New artist", album: "", year: "" },
-        null
-    );
-
-    const file = TagLibFile.createFromPath(source);
-    try {
-        assert.equal(file.tag.title, "New title");
-        assert.deepEqual(file.tag.performers, ["New artist"]);
-        assert.equal(file.tag.album, "Existing album");
-        assert.equal(file.tag.year, 2020);
-        assert.equal(file.tag.pictures.length, 1);
-        assert.deepEqual(
-            Buffer.from(file.tag.pictures[0].data.toByteArray()),
-            cover
-        );
-    } finally {
-        file.dispose();
-    }
-});
-
-for (const format of ["flac", "wav"] as const) {
-    test(`tagAudio writes ${format.toUpperCase()} tags and preserves unavailable fields`, async () => {
-        const directory = await createTemporaryDirectory();
-        const source = path.join(directory, `source.${format}`);
-        const fixture = path.join(
-            process.cwd(),
-            `tests/fixtures/silent.${format}`
-        );
-        const cover = Buffer.from("test-cover-data");
-        await fs.copyFile(fixture, source);
-
-        await tagAudio(
-            source,
-            source,
-            {
-                title: "Original title",
-                artist: "Original artist",
-                album: "Existing album",
-                year: "2020",
-            },
-            cover
-        );
-        await tagAudio(
-            source,
-            source,
-            {
-                title: "Updated title",
-                artist: "Updated artist",
-                album: "",
-                year: "",
-            },
-            null
-        );
-
-        assert.deepEqual(await readTrackInfo(source), {
-            title: "Updated title",
-            artist: "Updated artist",
-            album: "Existing album",
-            year: "2020",
-        });
-        assert.equal(await isProperlyTagged(source), true);
-
-        const file = TagLibFile.createFromPath(source);
-        try {
-            assert.equal(file.tag.pictures.length, 1);
-            assert.deepEqual(
-                Buffer.from(file.tag.pictures[0].data.toByteArray()),
-                cover
-            );
-            assert.ok(file.properties.audioSampleRate > 0);
-        } finally {
-            file.dispose();
-        }
-    });
-}
-
 test("processTrack writes OGG Vorbis comments and embedded cover art", async () => {
     const directory = await createTemporaryDirectory();
     const source = path.join(directory, "Artist - Title.ogg");
@@ -1441,7 +1219,10 @@ test("processTrack writes OGG Vorbis comments and embedded cover art", async () 
         file.dispose();
     }
 
-    assert.equal(await isProperlyTagged(source), true);
+    assert.equal(
+        isProperlyTagged(await getTagStore(source).read(source)),
+        true
+    );
     assert.deepEqual(stats, { ok: 1, skipped: 0, errors: 0 });
     assert.deepEqual(report, { files: { "Artist - Title.ogg": "TAGGED" } });
 });
@@ -1601,53 +1382,35 @@ test("processTrack writes available tags when year and cover art are unavailable
     assert.deepEqual(report, { files: { "Artist - Title.mp3": "TAGGED" } });
 });
 
-test("isProperlyTagged requires both artist and title when cover art exists", async () => {
+test("processTrack marks unreadable audio files as failed", async () => {
     const directory = await createTemporaryDirectory();
-    const source = path.join(directory, "incomplete.mp3");
-    await fs.writeFile(source, "audio bytes");
+    const source = path.join(directory, "broken.flac");
+    await fs.writeFile(source, "not really flac");
+    const stats = { ok: 0, skipped: 0, errors: 0 };
+    const report: ProcessingReport = { files: {} };
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    let fetchCalls = 0;
+    globalThis.fetch = async () => {
+        fetchCalls++;
+        return new Response(null, { status: 500 });
+    };
 
-    assert.equal(
-        NodeID3.write(
-            {
-                title: "Title",
-                year: "2024",
-                artist: "",
-                image: {
-                    mime: "image/jpeg",
-                    type: { id: 3, name: "front cover" },
-                    description: "Cover",
-                    imageBuffer: Buffer.from("cover image"),
-                },
-            },
-            source
-        ),
-        true
-    );
+    try {
+        await processTrack(
+            source,
+            directory,
+            createTestChain(),
+            stats,
+            report,
+            1,
+            1
+        );
+    } finally {
+        console.error = originalConsoleError;
+    }
 
-    assert.equal(await isProperlyTagged(source), false);
-});
-
-test("isProperlyTagged requires a year when artist, title, and cover art exist", async () => {
-    const directory = await createTemporaryDirectory();
-    const source = path.join(directory, "missing-year.mp3");
-    await fs.writeFile(source, "audio bytes");
-
-    assert.equal(
-        NodeID3.write(
-            {
-                title: "Title",
-                artist: "Artist",
-                image: {
-                    mime: "image/jpeg",
-                    type: { id: 3, name: "front cover" },
-                    description: "Cover",
-                    imageBuffer: Buffer.from("cover image"),
-                },
-            },
-            source
-        ),
-        true
-    );
-
-    assert.equal(await isProperlyTagged(source), false);
+    assert.deepEqual(stats, { ok: 0, skipped: 0, errors: 1 });
+    assert.deepEqual(report, { files: { "broken.flac": "FAILED" } });
+    assert.equal(fetchCalls, 0);
 });

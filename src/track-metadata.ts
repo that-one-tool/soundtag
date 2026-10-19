@@ -18,6 +18,24 @@ export function fillMissingFields(
     };
 }
 
+export function trimOrEmpty(value: string | undefined): string {
+    return value?.trim() ?? "";
+}
+
+export const TRACK_FIELDS: readonly (keyof TrackInfo)[] = [
+    "title",
+    "artist",
+    "album",
+    "year",
+];
+
+export function getFilledFields(info: TrackInfo): Partial<TrackInfo> {
+    const filledFields = TRACK_FIELDS.filter((field) => info[field].trim());
+    return Object.fromEntries(
+        filledFields.map((field) => [field, info[field]])
+    );
+}
+
 export function mergeMetadata(
     current: TrackMetadata,
     candidate: TrackMetadata

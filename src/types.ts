@@ -16,6 +16,14 @@ export interface CommandLineOptions {
     verbose: boolean;
 }
 
+export interface TrackSearchTerms {
+    title: string;
+    artist?: string;
+    album?: string;
+}
+
+export type FolderSearchTerms = Pick<TrackSearchTerms, "artist" | "album">;
+
 export interface TrackInfo {
     title: string;
     artist: string;
@@ -43,4 +51,14 @@ export interface MetadataProvider {
 
 export interface CoverProvider {
     findCover(search: TrackSearch): Promise<Buffer | null>;
+}
+
+export interface StoredTags {
+    info: TrackInfo;
+    hasCover: boolean;
+}
+
+export interface TagStore {
+    read(source: string): Promise<StoredTags>;
+    write(source: string, metadata: TrackMetadata): Promise<void>;
 }
