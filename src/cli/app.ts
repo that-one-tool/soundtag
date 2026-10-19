@@ -1,4 +1,3 @@
-import * as path from "node:path";
 import {
     countStatuses,
     createReport,
@@ -21,7 +20,6 @@ import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_SUCCESS } from "./exit-codes.js";
 import { findAudioFiles } from "../library/file.js";
 import { consoleLogger } from "../shared/logger.js";
 import { systemClock } from "../shared/rate-limiter.js";
-import { getReportPath, saveReport } from "../processing/report-file.js";
 import type { ProcessingReport, ProcessingStats } from "../processing/types.js";
 import type { AppConfig, SessionConfig, TaggingSettings } from "./types.js";
 
@@ -34,7 +32,6 @@ export interface AppEnvironment extends ConfigSources {
 }
 
 interface TaggingRun {
-    reportPath: string;
     report: ProcessingReport;
     stopSignal: AbortSignal;
 }
@@ -72,15 +69,39 @@ function printRunSettings({ sourceRoot, recursive }: AppConfig): void {
 }
 
 function printSummary(stats: ProcessingStats, run: TaggingRun): void {
+    const stopped = run.stopSignal.aborted;
     console.log(`\n${SEPARATOR}`);
-    console.log(
-        run.stopSignal.aborted ? "PROCESSING STOPPED" : "PROCESSING COMPLETE"
-    );
+    console.log(stopped ? "PROCESSING STOPPED" : "PROCESSING COMPLETE");
     console.log(`Successful: ${stats.ok}`);
     console.log(`Skipped:    ${stats.skipped}`);
     console.log(`Errors:     ${stats.errors}`);
-    console.log(`Report:     ${run.reportPath}`);
+    printUnprocessedCount(stats, stopped);
+    printSection("Failed:", getFailedFiles(run.report));
+    printSection("Renamed:", getRenames(run.report));
     console.log(SEPARATOR);
+}
+
+function printUnprocessedCount(stats: ProcessingStats, stopped: boolean): void {
+    if (stopped) {
+        console.log(`Not processed: ${stats.unprocessed}`);
+    }
+}
+
+function getFailedFiles({ files }: ProcessingReport): string[] {
+    return Object.keys(files).filter((file) => files[file] === "FAILED");
+}
+
+function getRenames({ renamed = {} }: ProcessingReport): string[] {
+    return Object.entries(renamed).map(([from, to]) => `${from} → ${to}`);
+}
+
+function printSection(title: string, lines: string[]): void {
+    if (lines.length === 0) {
+        return;
+    }
+
+    console.log(title);
+    lines.forEach((line) => console.log(`  ${line}`));
 }
 
 function findLibraryFiles({
@@ -92,10 +113,6 @@ function findLibraryFiles({
 
 function printProcessingStart(fileCount: number): void {
     console.log(`Processing ${fileCount} audio files. Starting tagging...\n`);
-}
-
-function createRun(reportPath: string, stopSignal: AbortSignal): TaggingRun {
-    return { reportPath, report: { files: {} }, stopSignal };
 }
 
 function createBatchRun(
@@ -117,7 +134,7 @@ function createBatchRun(
 
 async function tagLibrary(
     config: AppConfig,
-    run: TaggingRun,
+    stopSignal: AbortSignal,
     metadataChain: MetadataChain
 ): Promise<void> {
     printRunSettings(config);
@@ -129,19 +146,19 @@ async function tagLibrary(
     }
 
     printProcessingStart(audioFiles.length);
-    run.report = createReport(audioFiles, config.sourceRoot);
+    const run = {
+        report: createReport(audioFiles, config.sourceRoot),
+        stopSignal,
+    };
     await processBatch(audioFiles, createBatchRun(config, run, metadataChain));
     printSummary(countStatuses(run.report), run);
 }
 
-function getCompletionExitCode(run: TaggingRun): number {
-    return run.stopSignal.aborted ? EXIT_INTERRUPTED : EXIT_SUCCESS;
+function getCompletionExitCode(stopSignal: AbortSignal): number {
+    return stopSignal.aborted ? EXIT_INTERRUPTED : EXIT_SUCCESS;
 }
 
-function getFailureExitCode(
-    error: unknown,
-    { stopSignal }: Pick<TaggingRun, "stopSignal">
-): number {
+function getFailureExitCode(error: unknown, stopSignal: AbortSignal): number {
     if (error instanceof InputCancelledError && stopSignal.aborted) {
         return EXIT_INTERRUPTED;
     }
@@ -152,37 +169,27 @@ function getFailureExitCode(
 
 async function runTagging(
     session: TaggingSession,
-    run: TaggingRun,
+    stopSignal: AbortSignal,
     resolveSource: SourceRootResolver
 ): Promise<number> {
     try {
         const sourceRoot = await resolveSource();
-        run.reportPath = getReportPath(sourceRoot);
         const config = { ...session.settings, sourceRoot };
-        await tagLibrary(config, run, session.metadataChain);
-        return getCompletionExitCode(run);
+        await tagLibrary(config, stopSignal, session.metadataChain);
+        return getCompletionExitCode(stopSignal);
     } catch (error) {
-        return getFailureExitCode(error, run);
+        return getFailureExitCode(error, stopSignal);
     }
 }
 
-async function writeReport({
-    reportPath,
-    report,
-}: TaggingRun): Promise<number> {
-    const saved = await saveReport(reportPath, report, consoleLogger);
-    return saved ? EXIT_SUCCESS : EXIT_FAILURE;
-}
-
-async function tagAndReport(
+async function tagAndFinish(
     session: TaggingSession,
-    run: TaggingRun,
+    stopSignal: AbortSignal,
     resolveSource: SourceRootResolver
 ): Promise<number> {
-    const taggingExitCode = await runTagging(session, run, resolveSource);
-    const reportExitCode = await writeReport(run);
+    const exitCode = await runTagging(session, stopSignal, resolveSource);
     consoleLogger.info("Done!");
-    return Math.max(taggingExitCode, reportExitCode);
+    return exitCode;
 }
 
 async function browseLibrary(
@@ -223,13 +230,13 @@ function createSession(settings: TaggingSettings): TaggingSession {
 function runSession(
     { settings, sourcePath }: SessionConfig,
     environment: AppEnvironment,
-    setupRun: TaggingRun
+    stopSignal: AbortSignal
 ): Promise<number> {
     if (sourcePath === undefined) {
         return browseLibrary(settings, environment);
     }
 
-    return tagAndReport(createSession(settings), setupRun, () =>
+    return tagAndFinish(createSession(settings), stopSignal, () =>
         resolveSourceRoot(sourcePath, environment.workingDirectory)
     );
 }
@@ -242,16 +249,12 @@ export async function runApp(environment: AppEnvironment): Promise<number> {
         return EXIT_FAILURE;
     }
 
-    const setupRun = createRun(
-        getReportPath(path.resolve(environment.workingDirectory)),
-        environment.renewStopSignal()
-    );
+    const stopSignal = environment.renewStopSignal();
 
     try {
         const sessionConfig = await loadSessionConfig(environment);
-        return await runSession(sessionConfig, environment, setupRun);
+        return await runSession(sessionConfig, environment, stopSignal);
     } catch (error) {
-        const setupExitCode = getFailureExitCode(error, setupRun);
-        return Math.max(setupExitCode, await writeReport(setupRun));
+        return getFailureExitCode(error, stopSignal);
     }
 }

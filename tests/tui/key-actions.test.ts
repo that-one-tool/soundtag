@@ -23,12 +23,12 @@ test("getKeyAction maps command keys", () => {
     assert.equal(getKeyAction("t", key()), "tag");
     assert.equal(getKeyAction("a", key()), "tagFolder");
     assert.equal(getKeyAction("s", key()), "stop");
-    assert.equal(getKeyAction("d", key()), "deleteReport");
     assert.equal(getKeyAction("q", key()), "quit");
     assert.equal(getKeyAction("c", key({ ctrl: true })), "quit");
 });
 
 test("getKeyAction ignores other keys", () => {
     assert.equal(getKeyAction("x", key()), undefined);
+    assert.equal(getKeyAction("d", key()), undefined);
     assert.equal(getKeyAction("c", key()), undefined);
 });

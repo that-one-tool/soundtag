@@ -197,5 +197,6 @@ export function countStatuses(report: ProcessingReport): ProcessingStats {
         ok: count("TAGGED"),
         skipped: count("SKIPPED"),
         errors: count("FAILED"),
+        unprocessed: count("READ"),
     };
 }

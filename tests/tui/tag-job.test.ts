@@ -7,6 +7,7 @@ import { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import { getTagStore } from "../../src/tags/audio-tags.js";
 import type { ProcessedTrack } from "../../src/processing/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
+import { assertNoReport } from "../helpers/no-report.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
@@ -59,13 +60,7 @@ function createRunner(
     return { runJob, processed, logger };
 }
 
-async function readReport(folder: string): Promise<unknown> {
-    return JSON.parse(
-        await fs.readFile(path.join(folder, "soundtag_output.json"), "utf8")
-    );
-}
-
-test("a file job tags the file and writes the report in its folder", async () => {
+test("a file job tags the file without writing a report", async () => {
     const directory = await createTemporaryDirectory();
     const source = await createTrack(directory, "song.mp3");
     const { runJob, processed } = createRunner();
@@ -80,9 +75,7 @@ test("a file job tags the file and writes the report in its folder", async () =>
     assert.deepEqual(processed, [
         { source, status: "TAGGED", destination: null },
     ]);
-    assert.deepEqual(await readReport(directory), {
-        files: { "song.mp3": "TAGGED" },
-    });
+    await assertNoReport(directory);
 });
 
 test("a folder job tags subfolders when recursive", async () => {
@@ -96,17 +89,13 @@ test("a folder job tags subfolders when recursive", async () => {
         new AbortController().signal
     );
 
-    assert.equal(processed.length, 2);
-    assert.deepEqual(await readReport(directory), {
-        files: { "a.mp3": "TAGGED", [path.join("Disc 2", "b.mp3")]: "TAGGED" },
-        renamed: {
-            "a.mp3": "Artist - Title.mp3",
-            [path.join("Disc 2", "b.mp3")]: path.join(
-                "Disc 2",
-                "Artist - Title.mp3"
-            ),
-        },
-    });
+    assert.deepEqual(
+        processed.map(({ destination }) => destination),
+        [
+            path.join(directory, "Artist - Title.mp3"),
+            path.join(directory, "Disc 2", "Artist - Title.mp3"),
+        ]
+    );
 });
 
 test("a folder job skips subfolders when not recursive", async () => {
@@ -154,34 +143,17 @@ test("a job fails and logs when the folder cannot be read", async () => {
     assert.equal(logger.infos.at(-1), "Done!");
 });
 
-test("a job fails when the report cannot be written", async () => {
-    const directory = await createTemporaryDirectory();
-    await createTrack(directory, "a.mp3");
-    await fs.mkdir(path.join(directory, "soundtag_output.json"));
-    const { runJob, logger } = createRunner();
-
-    const succeeded = await runJob(
-        { kind: "folder", path: directory },
-        new AbortController().signal
-    );
-
-    assert.equal(succeeded, false);
-    assert.match(
-        logger.errors.at(-1) ?? "",
-        /^Could not write processing report/
-    );
-    assert.equal(logger.infos.at(-1), "Done!");
-});
-
-test("a stopped job saves its report and then logs Done!", async () => {
+test("a stopped job logs Done!", async () => {
     const directory = await createTemporaryDirectory();
     await createTrack(directory, "a.mp3");
     const { runJob, logger } = createRunner();
 
     await runJob({ kind: "folder", path: directory }, AbortSignal.abort());
 
-    assert.match(logger.infos.at(-2) ?? "", /^Processing report written to /);
-    assert.equal(logger.infos.at(-1), "Done!");
+    assert.deepEqual(logger.infos.slice(-2), [
+        "Stopped before processing the remaining files.",
+        "Done!",
+    ]);
 });
 
 test("a job announces its target", async () => {
@@ -195,12 +167,10 @@ test("a job announces its target", async () => {
     );
 
     assert.equal(logger.infos[0], `Tagging 1 audio files in ${directory}`);
-    assert.ok(logger.infos.includes("\nSaving report..."));
-    assert.match(logger.infos.at(-2) ?? "", /^Processing report written to /);
     assert.equal(logger.infos.at(-1), "Done!");
 });
 
-test("a job without audio files writes no report", async () => {
+test("a job without audio files succeeds", async () => {
     const directory = await createTemporaryDirectory();
     const { runJob, logger } = createRunner();
 
@@ -214,9 +184,6 @@ test("a job without audio files writes no report", async () => {
         `No supported audio files found in ${directory}.`,
         "Done!",
     ]);
-    await assert.rejects(
-        fs.access(path.join(directory, "soundtag_output.json"))
-    );
 });
 
 test("a file job succeeds when its whole folder is gone", async () => {
@@ -246,20 +213,4 @@ test("a file job skips a file that no longer exists", async () => {
     assert.deepEqual(processed, []);
     assert.ok(logger.infos.includes(`Skipped: ${source} no longer exists.`));
     assert.equal(logger.infos.at(-1), "Done!");
-});
-
-test("a job merges its results into the folder report", async () => {
-    const directory = await createTemporaryDirectory();
-    await fs.writeFile(
-        path.join(directory, "soundtag_output.json"),
-        JSON.stringify({ files: { "old.mp3": "SKIPPED" } })
-    );
-    const source = await createTrack(directory, "song.mp3");
-    const { runJob } = createRunner();
-
-    await runJob({ kind: "file", path: source }, new AbortController().signal);
-
-    assert.deepEqual(await readReport(directory), {
-        files: { "old.mp3": "SKIPPED", "song.mp3": "TAGGED" },
-    });
 });

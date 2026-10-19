@@ -87,7 +87,7 @@ function runCli(
     });
 }
 
-test("CLI writes a report and --no-recursive excludes nested audio files", async () => {
+test("CLI --no-recursive excludes nested audio files", async () => {
     const workingDirectory = await createTemporaryDirectory();
     const sourceDirectory = path.join(workingDirectory, "source");
     await fs.mkdir(path.join(sourceDirectory, "nested"), { recursive: true });
@@ -104,19 +104,9 @@ test("CLI writes a report and --no-recursive excludes nested audio files", async
     assert.equal(exitCode, 0);
     assert.equal(stderr, "");
     assert.match(stdout, /No supported audio files found/);
-    const report = JSON.parse(
-        await fs.readFile(
-            path.join(sourceDirectory, "soundtag_output.json"),
-            "utf8"
-        )
-    ) as { files: Record<string, string> };
-    await assert.rejects(
-        fs.access(path.join(workingDirectory, "soundtag_output.json"))
-    );
-    assert.deepEqual(report, { files: {} });
 });
 
-test("CLI records a properly tagged file as skipped in the report", async () => {
+test("CLI skips and renames a properly tagged file", async () => {
     const workingDirectory = await createTemporaryDirectory();
     const sourceDirectory = path.join(workingDirectory, "source");
     const source = path.join(sourceDirectory, "already-tagged.mp3");
@@ -142,39 +132,24 @@ test("CLI records a properly tagged file as skipped in the report", async () => 
         true
     );
 
-    const { exitCode, stderr } = await runCli(workingDirectory, [
+    const { exitCode, stdout, stderr } = await runCli(workingDirectory, [
         sourceDirectory,
         "--no-recursive",
     ]);
 
     assert.equal(exitCode, 0);
     assert.equal(stderr, "");
-    const report = JSON.parse(
-        await fs.readFile(
-            path.join(sourceDirectory, "soundtag_output.json"),
-            "utf8"
-        )
-    ) as { files: Record<string, string> };
-    assert.deepEqual(report, {
-        files: { "already-tagged.mp3": "SKIPPED" },
-        renamed: { "already-tagged.mp3": "Artist - Title.mp3" },
-    });
+    assert.match(stdout, /Skipped: {4}1/);
+    assert.match(stdout, /already-tagged\.mp3 → Artist - Title\.mp3/);
     await fs.access(path.join(sourceDirectory, "Artist - Title.mp3"));
 });
 
-test("CLI reports invalid options and still writes the report", async () => {
+test("CLI reports invalid options", async () => {
     const workingDirectory = await createTemporaryDirectory();
     const { exitCode, stderr } = await runCli(workingDirectory, ["--unknown"]);
 
     assert.equal(exitCode, 1);
     assert.match(stderr, /Unknown option: --unknown/);
-    const report = JSON.parse(
-        await fs.readFile(
-            path.join(workingDirectory, "soundtag_output.json"),
-            "utf8"
-        )
-    ) as { files: Record<string, string> };
-    assert.deepEqual(report, { files: {} });
 });
 
 test("CLI accepts the verbose option", async () => {
@@ -257,13 +232,6 @@ test("CLI fails cleanly when input ends during a prompt", async () => {
     assert.equal(exitCode, 1);
     assert.match(stderr, /^Error: Input ended before an answer was given\.$/m);
     assert.doesNotMatch(stderr, /unsettled top-level await/);
-    const report = JSON.parse(
-        await fs.readFile(
-            path.join(workingDirectory, "soundtag_output.json"),
-            "utf8"
-        )
-    ) as { files: Record<string, string> };
-    assert.deepEqual(report, { files: {} });
 });
 
 test("CLI stops with exit code 130 when interrupted at a prompt", async () => {
@@ -278,6 +246,5 @@ test("CLI stops with exit code 130 when interrupted at a prompt", async () => {
     assert.equal(stderr, "");
     assert.match(stdout, /Interrupted\./);
     assert.doesNotMatch(stdout, /Press Ctrl\+C again/);
-    assert.match(stdout, /Processing report written to /);
     assert.doesNotMatch(stdout, /Done!/);
 });

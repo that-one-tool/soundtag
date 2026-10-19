@@ -8,12 +8,6 @@ import {
     MAX_FILES_PER_RUN,
     processBatch,
 } from "../processing/batch.js";
-import {
-    getReportPath,
-    mergeReports,
-    readReport,
-    saveReport,
-} from "../processing/report-file.js";
 import type { ProcessedTrack, ProcessingReport } from "../processing/types.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
@@ -60,16 +54,6 @@ const TARGET_FINDERS: Record<
     }),
 };
 
-async function saveMergedReport(
-    sourceRoot: string,
-    report: ProcessingReport,
-    logger: Logger
-): Promise<boolean> {
-    const reportPath = getReportPath(sourceRoot);
-    const merged = mergeReports(await readReport(reportPath), report);
-    return saveReport(reportPath, merged, logger);
-}
-
 async function runBatch(
     { sourceRoot, files }: TargetFiles,
     stopSignal: AbortSignal,
@@ -95,13 +79,7 @@ async function tagFiles(
     dependencies: TagJobDependencies
 ): Promise<boolean> {
     const report = await runBatch(targetFiles, stopSignal, dependencies);
-    const { sourceRoot } = targetFiles;
-    const saved = await saveMergedReport(
-        sourceRoot,
-        report,
-        dependencies.logger
-    );
-    return saved && countStatuses(report).errors === 0;
+    return countStatuses(report).errors === 0;
 }
 
 async function tagFoundFiles(

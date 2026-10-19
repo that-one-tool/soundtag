@@ -13,10 +13,8 @@ export interface ControlledJob {
 export function createControlledServices(): {
     services: TuiServices;
     jobs: ControlledJob[];
-    deletedReports: string[];
 } {
     const jobs: ControlledJob[] = [];
-    const deletedReports: string[] = [];
     const queue = new TaggingQueue(
         (target, stopSignal) =>
             new Promise<boolean>((resolve) =>
@@ -28,11 +26,7 @@ export function createControlledServices(): {
             queue,
             logBuffer: new LogBuffer(),
             statusStore: new TrackStatusStore(),
-            deleteReport: async (directory) => {
-                deletedReports.push(directory);
-            },
         },
         jobs,
-        deletedReports,
     };
 }

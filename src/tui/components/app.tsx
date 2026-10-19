@@ -46,8 +46,6 @@ function useAppState({ startDirectory, services }: AppProps) {
         quitting,
         requestQuit,
         pageSize: layout.listHeight,
-        logger: logBuffer,
-        deleteReport: services.deleteReport,
     });
     return { ...layout, ...browsing, queueState, quitting, logBuffer };
 }

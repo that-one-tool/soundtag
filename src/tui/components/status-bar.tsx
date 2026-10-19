@@ -12,7 +12,6 @@ const KEY_HINTS: Hint[] = [
     ["t", "tag"],
     ["a", "tag folder"],
     ["s", "stop"],
-    ["d", "delete report"],
     ["q", "quit"],
 ];
 

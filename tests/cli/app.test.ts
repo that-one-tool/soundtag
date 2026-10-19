@@ -8,6 +8,7 @@ import type { TuiOptions } from "../../src/tui/run-tui.js";
 import type { TuiOutcome } from "../../src/tui/types.js";
 import { InputCancelledError } from "../../src/shared/errors.js";
 import { captureConsole } from "../helpers/console.js";
+import { assertNoReport } from "../helpers/no-report.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 const output = captureConsole();
@@ -22,9 +23,23 @@ const environment = {
     MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
 };
 
-async function readReport(directory: string): Promise<unknown> {
-    return JSON.parse(
-        await fs.readFile(path.join(directory, "soundtag_output.json"), "utf8")
+async function writeFullyTaggedMp3(source: string): Promise<void> {
+    await fs.mkdir(path.dirname(source), { recursive: true });
+    await fs.writeFile(source, "audio bytes");
+    NodeID3.write(
+        {
+            title: "Title",
+            artist: "Artist",
+            year: "2024",
+            genre: "Rock",
+            image: {
+                mime: "image/jpeg",
+                type: { id: 3, name: "front cover" },
+                description: "Cover",
+                imageBuffer: Buffer.from("cover"),
+            },
+        },
+        source
     );
 }
 
@@ -46,67 +61,55 @@ function runAppIn(
 test("runApp tags a library and prints a summary", async () => {
     const workingDirectory = await createTemporaryDirectory();
     const source = path.join(workingDirectory, "tagged.mp3");
-    await fs.writeFile(source, "audio bytes");
-    NodeID3.write(
-        {
-            title: "Title",
-            artist: "Artist",
-            year: "2024",
-            genre: "Rock",
-            image: {
-                mime: "image/jpeg",
-                type: { id: 3, name: "front cover" },
-                description: "Cover",
-                imageBuffer: Buffer.from("cover"),
-            },
-        },
-        source
-    );
+    await writeFullyTaggedMp3(source);
 
     assert.equal(await runAppIn(workingDirectory, ["."]), 0);
-    assert.deepEqual(await readReport(workingDirectory), {
-        files: { "tagged.mp3": "SKIPPED" },
-        renamed: { "tagged.mp3": "Artist - Title.mp3" },
-    });
     assert.equal(output.logs[1], "                SOUNDTAG");
     assert.ok(output.logs.includes("Skipped:    1"));
     assert.ok(output.logs.includes("PROCESSING COMPLETE"));
-    assert.match(output.logs.at(-2) ?? "", /^Processing report written to /);
-    assert.equal(output.logs.at(-1), "Done!");
+    assert.deepEqual(output.logs.slice(-4), [
+        "Renamed:",
+        "  tagged.mp3 → Artist - Title.mp3",
+        "========================================",
+        "Done!",
+    ]);
+    assert.ok(!output.logs.includes("Failed:"));
+    assert.ok(!output.logs.some((line) => line.startsWith("Not processed:")));
+    await assertNoReport(workingDirectory);
 });
 
 test("runApp keeps file names with --no-rename", async () => {
     const workingDirectory = await createTemporaryDirectory();
     const source = path.join(workingDirectory, "tagged.mp3");
-    await fs.writeFile(source, "audio bytes");
-    NodeID3.write(
-        {
-            title: "Title",
-            artist: "Artist",
-            year: "2024",
-            genre: "Rock",
-            image: {
-                mime: "image/jpeg",
-                type: { id: 3, name: "front cover" },
-                description: "Cover",
-                imageBuffer: Buffer.from("cover"),
-            },
-        },
-        source
-    );
+    await writeFullyTaggedMp3(source);
 
     assert.equal(await runAppIn(workingDirectory, [".", "--no-rename"]), 0);
     await fs.access(source);
-    assert.deepEqual(await readReport(workingDirectory), {
-        files: { "tagged.mp3": "SKIPPED" },
-    });
+    assert.ok(!output.logs.includes("Renamed:"));
+});
+
+test("runApp lists failed files, then renames, relative to the source", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const disc = path.join(workingDirectory, "Disc 2");
+    await writeFullyTaggedMp3(path.join(disc, "tagged.mp3"));
+    await fs.writeFile(path.join(disc, "broken.flac"), "bytes");
+
+    assert.equal(await runAppIn(workingDirectory, ["."]), 0);
+    assert.ok(output.logs.includes("Errors:     1"));
+    assert.deepEqual(output.logs.slice(-6), [
+        "Failed:",
+        `  ${path.join("Disc 2", "broken.flac")}`,
+        "Renamed:",
+        `  ${path.join("Disc 2", "tagged.mp3")} → ${path.join("Disc 2", "Artist - Title.mp3")}`,
+        "========================================",
+        "Done!",
+    ]);
 });
 
 test("runApp reports an empty library without a summary", async () => {
     const workingDirectory = await createTemporaryDirectory();
 
     assert.equal(await runAppIn(workingDirectory, ["."]), 0);
-    assert.deepEqual(await readReport(workingDirectory), { files: {} });
     assert.ok(
         output.logs.includes(
             "No supported audio files found in the source folder."
@@ -115,40 +118,15 @@ test("runApp reports an empty library without a summary", async () => {
     assert.ok(!output.logs.includes("PROCESSING COMPLETE"));
 });
 
-test("runApp fails on configuration errors and still writes the report", async () => {
+test("runApp fails on configuration errors", async () => {
     const workingDirectory = await createTemporaryDirectory();
 
     assert.equal(await runAppIn(workingDirectory, ["--unknown"]), 1);
     assert.deepEqual(output.errors, ["Error: Unknown option: --unknown"]);
-    assert.deepEqual(await readReport(workingDirectory), { files: {} });
     assert.ok(!output.logs.includes("Done!"));
 });
 
-test("runApp fails when the report cannot be written", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    await fs.mkdir(path.join(workingDirectory, "soundtag_output.json"));
-
-    assert.equal(await runAppIn(workingDirectory, ["."]), 1);
-    assert.match(
-        output.errors.at(-1) ?? "",
-        /^Could not write processing report to /
-    );
-    assert.equal(output.logs.at(-1), "Done!");
-});
-
-test("runApp writes the report into the source folder", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    const sourceDirectory = path.join(workingDirectory, "music");
-    await fs.mkdir(sourceDirectory);
-
-    assert.equal(await runAppIn(workingDirectory, ["music"]), 0);
-    assert.deepEqual(await readReport(sourceDirectory), { files: {} });
-    await assert.rejects(
-        fs.access(path.join(workingDirectory, "soundtag_output.json"))
-    );
-});
-
-test("runApp exits with 130 and keeps unprocessed files as read when stopped", async () => {
+test("runApp exits with 130 when stopped", async () => {
     const workingDirectory = await createTemporaryDirectory();
     await fs.writeFile(path.join(workingDirectory, "song.mp3"), "audio bytes");
 
@@ -156,10 +134,8 @@ test("runApp exits with 130 and keeps unprocessed files as read when stopped", a
         await runAppIn(workingDirectory, ["."], AbortSignal.abort()),
         130
     );
-    assert.deepEqual(await readReport(workingDirectory), {
-        files: { "song.mp3": "READ" },
-    });
     assert.ok(output.logs.includes("PROCESSING STOPPED"));
+    assert.ok(output.logs.includes("Not processed: 1"));
     assert.ok(!output.logs.includes("PROCESSING COMPLETE"));
 });
 
@@ -182,7 +158,6 @@ test("runApp exits with 130 without an error when stopped at a prompt", async ()
 
     assert.equal(exitCode, 130);
     assert.deepEqual(output.errors, []);
-    assert.deepEqual(await readReport(workingDirectory), { files: {} });
 });
 
 test("runApp still reports real errors after a stop was requested", async () => {
@@ -235,9 +210,6 @@ test("runApp opens the folder browser in the working directory", async () => {
         },
     ]);
     assert.deepEqual(output.errors, []);
-    await assert.rejects(
-        fs.access(path.join(workingDirectory, "soundtag_output.json"))
-    );
 });
 
 test("runApp maps the browser outcome to an exit code", async () => {
@@ -270,9 +242,6 @@ test("runApp needs an interactive terminal to browse folders", async () => {
     assert.deepEqual(output.errors, [
         "Error: Browsing folders needs an interactive terminal; pass a source folder instead.",
     ]);
-    await assert.rejects(
-        fs.access(path.join(workingDirectory, "soundtag_output.json"))
-    );
 });
 
 test("runApp still fails on unexpected browser errors", async () => {

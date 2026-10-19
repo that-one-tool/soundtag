@@ -87,24 +87,18 @@ folder, its file counts). Processing messages appear in the log pane below.
 | `t`                    | Tag the file or folder under the cursor         |
 | `a`                    | Tag the folder being browsed                    |
 | `s`                    | Stop the current run after the file in progress |
-| `d`                    | Delete the report of the folder being browsed   |
 | `q`, Ctrl+C            | Quit (press again during a run to quit at once) |
 
 Tagging runs in the background, so you can keep browsing; further `t` and `a`
 presses are queued and run one after another, and are ignored once you quit.
-`d` deletes the report without confirmation, and is refused while a run is in
-progress.
 Once processed in this session, files get a colored dot: green for `TAGGED`,
 yellow for `SKIPPED`, red for `FAILED`. A folder shows the worst status of the
 files inside it. Folders are tagged with the `--recursive`/`--no-recursive`
-setting. Each run merges its results into the report of the folder tagged (the
-file's folder for a single file): entries for the files it processed are
-updated, other entries are kept, and a file left unprocessed by a stopped run
-keeps its earlier status. A file renamed by an earlier run before its own
-queued run starts is skipped. Quitting during a run waits for the file in
-progress; quitting again exits immediately with code 130 without writing that
-run's report. Symlinked folders are listed too. The browser needs an
-interactive terminal; for scripted runs, pass the source folder as an argument.
+setting. A file renamed by an earlier run before its own queued run starts is
+skipped. Quitting during a run waits for the file in progress; quitting again
+exits immediately with code 130. Symlinked folders are listed too. The browser
+needs an interactive terminal; for scripted runs, pass the source folder as an
+argument.
 
 By default, SoundTag scans subfolders. Use `--no-recursive` to scan only the
 source folder itself:
@@ -127,15 +121,14 @@ use ID3 tags. WAV metadata is written through TagLib's RIFF/ID3 support;
 embedded artwork compatibility can vary between players.
 
 With a source folder argument, press Ctrl+C to stop a run: SoundTag finishes
-the file it is working on, writes the report (unprocessed files stay `READ`),
-and exits with code 130. Press Ctrl+C a second time to quit immediately without
-writing the report. Ctrl+C at a prompt exits with code 130.
+the file it is working on, prints the summary (with the number of files not
+processed), and exits with code 130. Press Ctrl+C a second time to quit
+immediately. Ctrl+C at a prompt exits with code 130.
 
 When you quit the browser, SoundTag exits with code 1 if any run failed (a
-file failed or the report could not be written), otherwise 0. Stopped runs do
-not count as failures. Without an interactive terminal and without a source
-folder, SoundTag exits with code 1 before asking for anything and writes no
-report.
+file failed), otherwise 0. Stopped runs do not count as failures. Without an
+interactive terminal and without a source folder, SoundTag exits with code 1
+before asking for anything.
 
 After a file is tagged, or skipped because it was already fully tagged,
 SoundTag renames it to `<Artist> - <Title>.<extension>` from its tags when the
@@ -143,8 +136,8 @@ name differs (letter case is ignored). Files skipped because no service found
 them keep their name, since their tags are unverified. Characters that
 filenames cannot hold, such as `/` or `?`, become `_`, a leading `.` becomes
 `_`, and names are shortened to 200 bytes. An existing file is never
-overwritten, even one whose name differs only in letter case. Renames are
-listed under `renamed` in the report. Use `--no-rename` to keep file names:
+overwritten, even one whose name differs only in letter case. Use
+`--no-rename` to keep file names:
 
 ```sh
 soundtag /path/to/music --no-rename
@@ -194,19 +187,11 @@ file is processed sequentially using a temporary copy before replacement;
 large lossless files therefore need temporary free space comparable to the
 file size and can require substantial additional disk or NAS I/O.
 
-At the end of each run, `soundtag_output.json` is written inside the source
-folder used for that run. It maps each processed file's path relative to the
-source folder to its final status:
-
-| Status    | Meaning                                                                  |
-| --------- | ------------------------------------------------------------------------ |
-| `READ`    | The file was discovered and is awaiting processing.                      |
-| `SKIPPED` | The file was already tagged, or a complete metadata match was not found. |
-| `TAGGED`  | Metadata was found and the source file was updated.                      |
-| `FAILED`  | An error occurred while processing the file.                             |
-
-Statuses are keyed by each file's original path. Renamed files are also listed
-under `renamed`, which maps the original path to the new one.
+With a source folder argument, a summary is printed at the end of the run:
+the number of tagged, skipped and failed files, then each failed file and each
+rename (`old → new`), with paths relative to the source folder. SoundTag writes
+no report file; `soundtag_output.json` files left by older versions can be
+deleted.
 
 ## Development
 

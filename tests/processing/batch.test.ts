@@ -35,7 +35,7 @@ test("createReport marks every file as read by its relative path", () => {
     );
 });
 
-test("countStatuses counts processed files and ignores unread ones", () => {
+test("countStatuses counts each status", () => {
     assert.deepEqual(
         countStatuses({
             files: {
@@ -46,7 +46,7 @@ test("countStatuses counts processed files and ignores unread ones", () => {
                 "e.mp3": "READ",
             },
         }),
-        { ok: 1, skipped: 2, errors: 1 }
+        { ok: 1, skipped: 2, errors: 1, unprocessed: 1 }
     );
 });
 

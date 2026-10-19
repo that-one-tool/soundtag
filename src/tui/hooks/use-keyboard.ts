@@ -1,6 +1,5 @@
 import { useInput } from "ink";
 import type { Dispatch } from "react";
-import type { Logger } from "../../shared/logger.js";
 import type { BrowserAction } from "../browser-state.js";
 import { getKeyAction, type KeyAction } from "../key-actions.js";
 import type { TaggingQueue } from "../tagging-queue.js";
@@ -14,8 +13,6 @@ export interface KeyboardControls {
     quitting: boolean;
     requestQuit(): void;
     pageSize: number;
-    logger: Logger;
-    deleteReport(directory: string): Promise<void>;
 }
 
 function getTagTarget(entry: BrowserEntry | undefined): TagTarget | null {
@@ -36,16 +33,6 @@ function enqueue(
     }
 }
 
-// A running job would write the report again when it finishes.
-function deleteFolderReport(controls: KeyboardControls): void {
-    if (controls.queue.getSnapshot().running) {
-        controls.logger.info("Cannot delete the report while tagging.");
-        return;
-    }
-
-    void controls.deleteReport(controls.directory);
-}
-
 function createKeyHandlers(
     controls: KeyboardControls
 ): Record<KeyAction, () => void> {
@@ -62,7 +49,6 @@ function createKeyHandlers(
         tagFolder: () =>
             enqueue({ kind: "folder", path: controls.directory }, controls),
         stop: () => controls.queue.stop(),
-        deleteReport: () => deleteFolderReport(controls),
         quit: () => controls.requestQuit(),
     };
 }
