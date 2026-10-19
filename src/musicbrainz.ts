@@ -1,11 +1,24 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { getErrorMessage } from "./errors.js";
+import {
+    downloadFirstImage,
+    fetchWithTimeout,
+    getRetryAfterDelay,
+    readJsonResponse,
+    type ImageRequest,
+} from "./http.js";
+import { createRateLimiter } from "./rate-limiter.js";
 import type { TrackInfo } from "./types.js";
 
 const MUSICBRAINZ_BASE = "https://musicbrainz.org/ws/2/";
 const COVER_ART_ARCHIVE_BASE = "https://coverartarchive.org/release/";
 const MUSICBRAINZ_REQUEST_INTERVAL = 1000;
-let lastMusicBrainzRequestAt = 0;
-let musicBrainzRequestQueue: Promise<void> = Promise.resolve();
+const SERVICE_UNAVAILABLE = 503;
+const DEFAULT_RETRY_DELAY = 2_000;
+const MAX_RETRY_DELAY = 10_000;
+const scheduleMusicBrainzRequest = createRateLimiter(
+    MUSICBRAINZ_REQUEST_INTERVAL
+);
 
 export interface MusicBrainzRelease {
     id?: string;
@@ -30,39 +43,35 @@ interface MusicBrainzSearchResponse {
     recordings?: MusicBrainzRecording[];
 }
 
-async function requestMusicBrainz<T>(url: URL, userAgent: string): Promise<T> {
-    const request = musicBrainzRequestQueue.then(async () => {
-        const timeSinceLastRequest = Date.now() - lastMusicBrainzRequestAt;
-
-        if (timeSinceLastRequest < MUSICBRAINZ_REQUEST_INTERVAL) {
-            await delay(MUSICBRAINZ_REQUEST_INTERVAL - timeSinceLastRequest);
-        }
-
-        lastMusicBrainzRequestAt = Date.now();
-        const response = await fetch(url, {
-            headers: { "User-Agent": userAgent },
-            signal: AbortSignal.timeout(10_000),
-        });
-
-        if (!response.ok) {
-            throw new Error(
-                `MusicBrainz request failed: HTTP ${response.status}`
-            );
-        }
-
-        return (await response.json()) as T;
-    });
-
-    musicBrainzRequestQueue = request.then(
-        () => undefined,
-        () => undefined
+function scheduleMusicBrainzFetch(
+    url: URL,
+    userAgent: string
+): Promise<Response> {
+    return scheduleMusicBrainzRequest(() =>
+        fetchWithTimeout(url, { headers: { "User-Agent": userAgent } })
     );
-
-    return request;
 }
 
-function getErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+async function fetchMusicBrainzWithRetry(
+    url: URL,
+    userAgent: string
+): Promise<Response> {
+    const response = await scheduleMusicBrainzFetch(url, userAgent);
+
+    if (response.status !== SERVICE_UNAVAILABLE) {
+        return response;
+    }
+
+    await response.body?.cancel();
+    await delay(
+        getRetryAfterDelay(response, DEFAULT_RETRY_DELAY, MAX_RETRY_DELAY)
+    );
+    return scheduleMusicBrainzFetch(url, userAgent);
+}
+
+async function requestMusicBrainz<T>(url: URL, userAgent: string): Promise<T> {
+    const response = await fetchMusicBrainzWithRetry(url, userAgent);
+    return readJsonResponse<T>(response, "MusicBrainz");
 }
 
 function getMusicBrainzArtist(recording: MusicBrainzRecording): string {
@@ -106,47 +115,28 @@ export async function searchMusicBrainz(
     }
 }
 
-export async function downloadMusicBrainzCover(
+function getCoverArtRequest(
+    releaseId: string,
+    userAgent: string
+): ImageRequest {
+    return {
+        url: new URL(
+            `${encodeURIComponent(releaseId)}/front-500`,
+            COVER_ART_ARCHIVE_BASE
+        ),
+        headers: { "User-Agent": userAgent },
+    };
+}
+
+export function downloadMusicBrainzCover(
     releases: MusicBrainzRelease[],
     userAgent: string
 ): Promise<Buffer | null> {
-    for (const release of releases) {
-        if (!release.id) {
-            continue;
-        }
-
-        const url = new URL(
-            `${encodeURIComponent(release.id)}/front-500`,
-            COVER_ART_ARCHIVE_BASE
-        );
-
-        try {
-            const response = await fetch(url, {
-                headers: { "User-Agent": userAgent },
-                signal: AbortSignal.timeout(10_000),
-            });
-
-            if (!response.ok) {
-                continue;
-            }
-
-            const contentType = response.headers.get("content-type") ?? "";
-
-            if (!contentType.toLowerCase().startsWith("image/")) {
-                continue;
-            }
-
-            const data = Buffer.from(await response.arrayBuffer());
-
-            if (data.length > 0) {
-                return data;
-            }
-        } catch {
-            continue;
-        }
-    }
-
-    return null;
+    return downloadFirstImage(
+        releases.flatMap(({ id }) =>
+            id ? [getCoverArtRequest(id, userAgent)] : []
+        )
+    );
 }
 
 export async function findMusicBrainzMetadata(

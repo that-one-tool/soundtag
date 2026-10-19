@@ -1,3 +1,6 @@
+import { getErrorMessage } from "./errors.js";
+import { downloadImage, fetchWithTimeout, readJsonResponse } from "./http.js";
+
 const YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 
 interface YouTubeThumbnail {
@@ -20,10 +23,6 @@ interface YouTubeSearchResponse {
     items?: YouTubeSearchItem[];
 }
 
-function getErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
-
 async function findThumbnailUrl(
     title: string,
     artist: string,
@@ -37,17 +36,10 @@ async function findThumbnailUrl(
     url.searchParams.set("key", apiKey);
 
     try {
-        const response = await fetch(url, {
-            signal: AbortSignal.timeout(10_000),
-        });
-
-        if (!response.ok) {
-            throw new Error(
-                `YouTube Data API request failed: HTTP ${response.status}`
-            );
-        }
-
-        const data = (await response.json()) as YouTubeSearchResponse;
+        const data = await readJsonResponse<YouTubeSearchResponse>(
+            await fetchWithTimeout(url),
+            "YouTube Data API"
+        );
         const thumbnails = data.items?.[0]?.snippet?.thumbnails;
 
         return (
@@ -68,24 +60,7 @@ async function findThumbnailUrl(
 
 async function downloadThumbnail(url: string): Promise<Buffer | null> {
     try {
-        const response = await fetch(url, {
-            signal: AbortSignal.timeout(10_000),
-        });
-
-        if (!response.ok) {
-            throw new Error(
-                `YouTube thumbnail request failed: HTTP ${response.status}`
-            );
-        }
-
-        const contentType = response.headers.get("content-type") ?? "";
-
-        if (!contentType.toLowerCase().startsWith("image/")) {
-            throw new Error("YouTube thumbnail response was not an image.");
-        }
-
-        const data = Buffer.from(await response.arrayBuffer());
-        return data.length > 0 ? data : null;
+        return await downloadImage({ url });
     } catch (error) {
         console.error(
             `YouTube thumbnail download failed: ${getErrorMessage(error)}`

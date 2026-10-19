@@ -1,5 +1,10 @@
-import { performance } from "node:perf_hooks";
-import { setTimeout as delay } from "node:timers/promises";
+import { getErrorMessage } from "./errors.js";
+import {
+    downloadFirstImage,
+    fetchWithTimeout,
+    readJsonResponse,
+} from "./http.js";
+import { createRateLimiter } from "./rate-limiter.js";
 import type { TrackInfo } from "./types.js";
 
 const ITUNES_SEARCH_URL = "https://itunes.apple.com/search";
@@ -17,14 +22,13 @@ interface ItunesSearchResponse {
     results?: ItunesTrack[];
 }
 
-let lastItunesRequestAt = 0;
-let itunesRequestQueue: Promise<void> = Promise.resolve();
+const scheduleItunesRequest = createRateLimiter(ITUNES_REQUEST_INTERVAL);
 
-async function requestItunesSearch(
+function buildItunesSearchUrl(
     title: string,
     artist: string,
     album: string
-): Promise<ItunesTrack | null> {
+): URL {
     const url = new URL(ITUNES_SEARCH_URL);
     url.searchParams.set(
         "term",
@@ -33,71 +37,36 @@ async function requestItunesSearch(
     url.searchParams.set("country", "US");
     url.searchParams.set("entity", "song");
     url.searchParams.set("limit", "1");
+    return url;
+}
 
-    const request = itunesRequestQueue.then(async () => {
-        const timeSinceLastRequest = performance.now() - lastItunesRequestAt;
+function getFirstItunesTrack(data: ItunesSearchResponse): ItunesTrack | null {
+    return data.results?.[0] ?? null;
+}
 
-        if (timeSinceLastRequest < ITUNES_REQUEST_INTERVAL) {
-            await delay(ITUNES_REQUEST_INTERVAL - timeSinceLastRequest);
-        }
-
-        lastItunesRequestAt = performance.now();
-        const responsePromise = fetch(url, {
-            signal: AbortSignal.timeout(10_000),
-        });
-        const response = await responsePromise;
-
-        if (!response.ok) {
-            throw new Error(
-                `iTunes Search request failed: HTTP ${response.status}`
-            );
-        }
-
-        const data = (await response.json()) as ItunesSearchResponse;
-        return data.results?.[0] ?? null;
-    });
-
-    itunesRequestQueue = request.then(
-        () => undefined,
-        () => undefined
-    );
+async function requestItunesSearch(
+    title: string,
+    artist: string,
+    album: string
+): Promise<ItunesTrack | null> {
+    const url = buildItunesSearchUrl(title, artist, album);
 
     try {
-        return await request;
+        const data = await scheduleItunesRequest(async () =>
+            readJsonResponse<ItunesSearchResponse>(
+                await fetchWithTimeout(url),
+                "iTunes Search"
+            )
+        );
+        return getFirstItunesTrack(data);
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`iTunes Search failed: ${message}`);
+        console.error(`iTunes Search failed: ${getErrorMessage(error)}`);
         return null;
     }
 }
 
-async function downloadArtwork(
-    url: string | undefined
-): Promise<Buffer | null> {
-    if (!url) {
-        return null;
-    }
-
-    try {
-        const response = await fetch(url, {
-            signal: AbortSignal.timeout(10_000),
-        });
-
-        if (!response.ok) {
-            return null;
-        }
-
-        const contentType = response.headers.get("content-type") ?? "";
-
-        if (!contentType.toLowerCase().startsWith("image/")) {
-            return null;
-        }
-
-        const data = Buffer.from(await response.arrayBuffer());
-        return data.length > 0 ? data : null;
-    } catch {
-        return null;
-    }
+function downloadArtwork(url: string | undefined): Promise<Buffer | null> {
+    return url ? downloadFirstImage([{ url }]) : Promise.resolve(null);
 }
 
 export async function findItunesMetadata(

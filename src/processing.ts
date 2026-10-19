@@ -1,12 +1,9 @@
 import * as path from "node:path";
+import { getErrorMessage } from "./errors.js";
 import { inferFolderSearchTerms, parseTrackFilename } from "./file.js";
 import { readTrackInfo } from "./audio-tags.js";
 import { findTrackMetadata, isProperlyTagged, tagAudio } from "./tagger.js";
 import type { ProcessingReport, ProcessingStats } from "./types.js";
-
-function getErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
 
 export async function processTrack(
     source: string,

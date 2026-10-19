@@ -359,6 +359,50 @@ test("findTrackMetadata falls back to MusicBrainz when Last.fm has no track", as
     assert.equal(musicBrainzUserAgent, "SoundTag/1.0 (test@example.com)");
 });
 
+test("findTrackMetadata replaces a whitespace-only existing year with a fallback year", async () => {
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+
+        if (url.hostname === "ws.audioscrobbler.com") {
+            return Response.json({ results: { trackmatches: { track: [] } } });
+        }
+
+        if (url.hostname === "musicbrainz.org") {
+            return Response.json({
+                recordings: [
+                    {
+                        title: "Fallback title",
+                        "artist-credit": [{ name: "Fallback artist" }],
+                        "first-release-date": "1997-01-01",
+                        releases: [{ title: "Fallback album" }],
+                    },
+                ],
+            });
+        }
+
+        return new Response(null, { status: 404 });
+    };
+
+    const metadata = await findTrackMetadata(
+        "Title",
+        "test-key",
+        "Artist",
+        false,
+        "SoundTag/1.0 (test@example.com)",
+        undefined,
+        {
+            existingInfo: {
+                title: "Existing title",
+                artist: "Existing artist",
+                album: "Existing album",
+                year: "   ",
+            },
+        }
+    );
+
+    assert.equal(metadata?.info.year, "1997");
+});
+
 test("MusicBrainz rate limiting does not delay Last.fm requests", async () => {
     let resolveFirstMusicBrainzRequest!: () => void;
     let resolveSecondLastFmInfo!: () => void;
@@ -1135,6 +1179,50 @@ test("tagAudio writes MP3 tags and isProperlyTagged reads them", async () => {
     const tags = await NodeID3.Promise.read(source);
     assert.equal(tags.year, "2024");
     assert.notEqual(await fs.readFile(source, "utf8"), "audio bytes");
+});
+
+const pngCover = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+]);
+
+test("tagAudio stores the detected MIME type of MP3 cover art", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "png-cover.mp3");
+    await fs.writeFile(source, "audio bytes");
+
+    await tagAudio(
+        source,
+        source,
+        { title: "Title", artist: "Artist", album: "", year: "" },
+        pngCover
+    );
+
+    const tags = await NodeID3.Promise.read(source);
+    assert.ok(typeof tags.image === "object");
+    assert.equal(tags.image.mime, "image/png");
+});
+
+test("tagAudio stores the detected MIME type of FLAC cover art", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "png-cover.flac");
+    await fs.copyFile(
+        path.join(process.cwd(), "tests/fixtures/silent.flac"),
+        source
+    );
+
+    await tagAudio(
+        source,
+        source,
+        { title: "Title", artist: "Artist", album: "", year: "" },
+        pngCover
+    );
+
+    const file = TagLibFile.createFromPath(source);
+    try {
+        assert.equal(file.tag.pictures[0].mimeType, "image/png");
+    } finally {
+        file.dispose();
+    }
 });
 
 test("tagAudio preserves existing MP3 fields when metadata is unavailable", async () => {

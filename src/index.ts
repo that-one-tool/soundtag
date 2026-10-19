@@ -3,16 +3,13 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import * as readline from "node:readline/promises";
+import { getErrorMessage } from "./errors.js";
 import { findAudioFiles, isDirectory } from "./file.js";
 import { parseArguments } from "./cli-options.js";
 import { processTrack } from "./processing.js";
 import type { ProcessingReport, ProcessingStats } from "./types.js";
 
 const MAX_FILES_PER_RUN = 3000;
-
-function getErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
 
 async function main(): Promise<void> {
     const report: ProcessingReport = { files: {} };

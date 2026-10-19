@@ -79,7 +79,7 @@ export async function findTrackMetadata(
             searchArtist ||
             "";
         info.album = info.album.trim() || musicBrainzMetadata.info.album || "";
-        info.year = info.year || musicBrainzMetadata.info.year || "";
+        info.year = info.year.trim() || musicBrainzMetadata.info.year || "";
         coverData = coverData ?? musicBrainzMetadata.coverData;
     }
 
@@ -102,7 +102,7 @@ export async function findTrackMetadata(
             info.title = info.title.trim() || itunesMetadata.info.title;
             info.artist = info.artist.trim() || itunesMetadata.info.artist;
             info.album = info.album.trim() || itunesMetadata.info.album;
-            info.year = info.year || itunesMetadata.info.year;
+            info.year = info.year.trim() || itunesMetadata.info.year;
             coverData = coverData ?? itunesMetadata.coverData;
         }
     }

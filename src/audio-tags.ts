@@ -6,6 +6,7 @@ import {
     PictureType,
 } from "node-taglib-sharp";
 import { getAudioFormat, writeTemporaryCopy } from "./file.js";
+import { getImageMimeType } from "./image-type.js";
 import type { TrackInfo } from "./types.js";
 
 export async function readTrackInfo(source: string): Promise<TrackInfo> {
@@ -105,7 +106,7 @@ export async function tagAudio(
 
             if (coverData) {
                 tags.image = {
-                    mime: "image/jpeg",
+                    mime: getImageMimeType(coverData),
                     type: { id: 3, name: "front cover" },
                     description: "Cover",
                     imageBuffer: coverData,
@@ -142,7 +143,7 @@ export async function tagAudio(
                     Picture.fromFullData(
                         ByteVector.fromByteArray(coverData),
                         PictureType.FrontCover,
-                        "image/jpeg",
+                        getImageMimeType(coverData),
                         "Cover"
                     ),
                 ];

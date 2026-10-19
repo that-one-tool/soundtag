@@ -1,3 +1,10 @@
+import { getErrorMessage } from "./errors.js";
+import {
+    downloadFirstImage,
+    fetchWithTimeout,
+    readJsonResponse,
+    type ImageRequest,
+} from "./http.js";
 import type { TrackInfo, TrackMetadata } from "./types.js";
 
 const LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/";
@@ -55,19 +62,7 @@ async function requestLastFm<T>(
         console.log(`Last.fm track.getInfo URL: ${loggedUrl}`);
     }
 
-    const response = await fetch(url, {
-        signal: AbortSignal.timeout(10_000),
-    });
-
-    if (!response.ok) {
-        throw new Error(`Last.fm request failed: HTTP ${response.status}`);
-    }
-
-    return (await response.json()) as T;
-}
-
-function getErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+    return readJsonResponse<T>(await fetchWithTimeout(url), "Last.fm");
 }
 
 async function searchTrack(
@@ -166,66 +161,11 @@ function getCoverImages(images: LastFmImage[] = []): CoverImage[] {
         );
 }
 
-async function downloadImage(images: CoverImage[]): Promise<Buffer | null> {
-    for (const image of images) {
-        try {
-            const response = await fetch(image.url, {
-                signal: AbortSignal.timeout(10_000),
-            });
-
-            if (!response.ok) {
-                continue;
-            }
-
-            const contentType = response.headers.get("content-type") ?? "";
-
-            if (!contentType.toLowerCase().startsWith("image/")) {
-                continue;
-            }
-
-            const maxBytes =
-                image.size === "large" ? MAX_LARGE_COVER_BYTES : undefined;
-            const reader = response.body?.getReader();
-
-            if (!reader) {
-                continue;
-            }
-
-            const chunks: Uint8Array[] = [];
-            let totalBytes = 0;
-
-            while (true) {
-                const { done, value } = await reader.read();
-
-                if (done) {
-                    break;
-                }
-
-                totalBytes += value.length;
-
-                if (maxBytes !== undefined && totalBytes >= maxBytes) {
-                    await reader.cancel();
-                    break;
-                }
-
-                chunks.push(value);
-            }
-
-            if (maxBytes !== undefined && totalBytes >= maxBytes) {
-                continue;
-            }
-
-            const data = Buffer.concat(chunks);
-
-            if (data.length > 0) {
-                return data;
-            }
-        } catch {
-            continue;
-        }
-    }
-
-    return null;
+function getCoverImageRequests(images: CoverImage[]): ImageRequest[] {
+    return images.map(({ size, url }) => ({
+        url,
+        byteLimit: size === "large" ? MAX_LARGE_COVER_BYTES : undefined,
+    }));
 }
 
 export async function findLastFmMetadata(
@@ -250,9 +190,9 @@ export async function findLastFmMetadata(
     const album = info?.album?.title ?? "";
     const year =
         info?.album?.year ?? info?.album?.date?.match(/\b\d{4}\b/)?.[0] ?? "";
-    const coverImages = getCoverImages(info?.album?.image ?? []);
-    const coverData =
-        coverImages.length > 0 ? await downloadImage(coverImages) : null;
+    const coverData = await downloadFirstImage(
+        getCoverImageRequests(getCoverImages(info?.album?.image ?? []))
+    );
 
     console.log(`Album: ${album}`);
     console.log(`Year: ${year}`);
