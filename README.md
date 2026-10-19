@@ -126,8 +126,11 @@ source folder to its final status:
 
 ## Development
 
-The source is organized by responsibility: `cli-options.ts` parses command-line
-arguments, `file.ts` handles audio-file discovery and temporary copies, and
+The source is organized by responsibility: `index.ts` wires the terminal to
+`app.ts`, which loads settings through `config.ts` (with `cli-options.ts` for
+command-line arguments), runs `batch.ts` over the discovered files, and writes
+the report. `processing.ts` handles a single file and returns its status.
+`file.ts` handles audio-file discovery and temporary copies, and
 `track-name-parser.ts` and `folder-context.ts` derive search terms from
 filenames and folders. `audio-tags.ts` picks the tag store for each format:
 `id3-tag-store.ts` for MP3 and `taglib-tag-store.ts` for OGG, FLAC, and WAV.

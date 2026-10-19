@@ -18,6 +18,10 @@ export function fillMissingFields(
     };
 }
 
+export function getFirstFilled(...values: (string | undefined)[]): string {
+    return values.find(Boolean) ?? "";
+}
+
 export function trimOrEmpty(value: string | undefined): string {
     return value?.trim() ?? "";
 }

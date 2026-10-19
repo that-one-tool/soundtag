@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { MusicBrainzProvider } from "../src/musicbrainz.js";
-import type { Clock } from "../src/rate-limiter.js";
+import { createFakeClock } from "./helpers/clock.js";
 
 const originalFetch = globalThis.fetch;
 const originalConsoleError = console.error;
@@ -16,20 +16,6 @@ afterEach(() => {
     globalThis.fetch = originalFetch;
     console.error = originalConsoleError;
 });
-
-function createFakeClock(): Clock & { sleeps: number[] } {
-    let currentTime = 0;
-    const sleeps: number[] = [];
-
-    return {
-        sleeps,
-        now: () => currentTime,
-        async sleep(milliseconds) {
-            sleeps.push(milliseconds);
-            currentTime += milliseconds;
-        },
-    };
-}
 
 function mockMusicBrainzResponses(responses: (() => Response)[]): Response[] {
     const sent: Response[] = [];

@@ -1,34 +1,18 @@
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
 import NodeID3 from "node-id3";
 import { File as TagLibFile } from "node-taglib-sharp";
-import { afterEach, test } from "node:test";
+import { test } from "node:test";
 import { getTagStore, isProperlyTagged } from "../src/audio-tags.js";
 import { Id3TagStore } from "../src/id3-tag-store.js";
 import { TagLibTagStore } from "../src/taglib-tag-store.js";
 import type { TrackInfo } from "../src/types.js";
+import { useTemporaryDirectories } from "./helpers/temporary-directories.js";
 
-const temporaryDirectories: string[] = [];
-
-afterEach(async () => {
-    await Promise.all(
-        temporaryDirectories
-            .splice(0)
-            .map((directory) =>
-                fs.rm(directory, { recursive: true, force: true })
-            )
-    );
-});
-
-async function createTemporaryDirectory(): Promise<string> {
-    const directory = await fs.mkdtemp(
-        path.join(os.tmpdir(), "soundtag-audio-tags-test-")
-    );
-    temporaryDirectories.push(directory);
-    return directory;
-}
+const createTemporaryDirectory = useTemporaryDirectories(
+    "soundtag-audio-tags-test-"
+);
 
 async function writeTags(
     source: string,

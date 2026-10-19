@@ -1,39 +1,30 @@
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
 import NodeID3 from "node-id3";
-import { afterEach, test } from "node:test";
+import { test } from "node:test";
+import { useTemporaryDirectories } from "./helpers/temporary-directories.js";
 
-const temporaryDirectories: string[] = [];
 const projectRoot = process.cwd();
 const tsxLoader = path.join(projectRoot, "node_modules/tsx/dist/loader.mjs");
 
-afterEach(async () => {
-    await Promise.all(
-        temporaryDirectories
-            .splice(0)
-            .map((directory) =>
-                fs.rm(directory, { recursive: true, force: true })
-            )
-    );
-});
+const createTemporaryDirectory = useTemporaryDirectories("soundtag-cli-test-");
 
-async function createTemporaryDirectory(): Promise<string> {
-    const directory = await fs.mkdtemp(
-        path.join(os.tmpdir(), "soundtag-cli-test-")
-    );
-    temporaryDirectories.push(directory);
-    return directory;
+interface CliRunOptions {
+    environment?: NodeJS.ProcessEnv;
+    answers?: string[];
 }
 
 function runCli(
     workingDirectory: string,
     args: string[],
-    environment: NodeJS.ProcessEnv = {
-        MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
-    }
+    {
+        environment = {
+            MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
+        },
+        answers = [],
+    }: CliRunOptions = {}
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
         const child = spawn(
@@ -53,19 +44,33 @@ function runCli(
                     YOUTUBE_API_KEY: undefined,
                     ...environment,
                 },
-                stdio: ["ignore", "pipe", "pipe"],
+                stdio: ["pipe", "pipe", "pipe"],
             }
         );
+        const pendingAnswers = [...answers];
         let stdout = "";
         let stderr = "";
 
         child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
             stdout += chunk;
+
+            if (stdout.endsWith(": ") && pendingAnswers.length > 0) {
+                child.stdin.write(`${pendingAnswers.shift()}\n`);
+            }
+
+            if (pendingAnswers.length === 0) {
+                child.stdin.end();
+            }
         });
         child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
             stderr += chunk;
         });
         child.once("error", reject);
+        child.once("spawn", () => {
+            if (pendingAnswers.length === 0) {
+                child.stdin.end();
+            }
+        });
         child.once("close", (exitCode) =>
             resolve({ exitCode, stdout, stderr })
         );
@@ -179,7 +184,7 @@ test("CLI warns at startup when MusicBrainz is not configured", async () => {
     const { exitCode, stderr } = await runCli(
         workingDirectory,
         [sourceDirectory],
-        {}
+        { environment: {} }
     );
 
     assert.equal(exitCode, 0);
@@ -187,4 +192,46 @@ test("CLI warns at startup when MusicBrainz is not configured", async () => {
         stderr,
         "MusicBrainz fallback requires MUSICBRAINZ_USER_AGENT.\n"
     );
+});
+
+test("CLI prompts for the API key and source folder when not provided", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const sourceDirectory = path.join(workingDirectory, "source");
+    await fs.mkdir(sourceDirectory);
+
+    const { exitCode, stdout, stderr } = await runCli(workingDirectory, [], {
+        environment: {
+            LASTFM_API_KEY: undefined,
+            MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
+        },
+        answers: ["prompted-key", sourceDirectory],
+    });
+
+    assert.equal(exitCode, 0);
+    assert.equal(stderr, "");
+    assert.match(stdout, /Enter your Last\.fm API key: /);
+    assert.match(stdout, /Enter the source folder path: /);
+    assert.match(
+        stdout,
+        /No supported audio files found in the source folder\./
+    );
+});
+
+test("CLI fails cleanly when input ends during a prompt", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+
+    const { exitCode, stderr } = await runCli(workingDirectory, [], {
+        environment: { LASTFM_API_KEY: undefined },
+    });
+
+    assert.equal(exitCode, 1);
+    assert.match(stderr, /^Error: Input ended before an answer was given\.$/m);
+    assert.doesNotMatch(stderr, /unsettled top-level await/);
+    const report = JSON.parse(
+        await fs.readFile(
+            path.join(workingDirectory, "soundtag_output.json"),
+            "utf8"
+        )
+    ) as { files: Record<string, string> };
+    assert.deepEqual(report, { files: {} });
 });

@@ -6,8 +6,19 @@ export interface ProcessingStats {
 
 export type FileStatus = "READ" | "SKIPPED" | "TAGGED" | "FAILED";
 
+export type TrackStatus = Exclude<FileStatus, "READ">;
+
 export interface ProcessingReport {
     files: Record<string, FileStatus>;
+}
+
+export interface AppConfig {
+    lastFmApiKey: string;
+    sourceRoot: string;
+    recursive: boolean;
+    verbose: boolean;
+    musicBrainzUserAgent?: string;
+    youtubeApiKey?: string;
 }
 
 export interface CommandLineOptions {

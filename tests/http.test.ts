@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, test } from "node:test";
+import { test } from "node:test";
 import {
     downloadFirstImage,
     downloadImage,
@@ -7,12 +7,9 @@ import {
     getRetryAfterDelay,
     readJsonResponse,
 } from "../src/http.js";
+import { restoreFetchAfterEach } from "./helpers/fetch.js";
 
-const originalFetch = globalThis.fetch;
-
-afterEach(() => {
-    globalThis.fetch = originalFetch;
-});
+restoreFetchAfterEach();
 
 function withRetryAfter(value: string): Response {
     return new Response(null, {

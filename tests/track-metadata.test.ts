@@ -8,6 +8,7 @@ import {
     mergeMetadata,
     trimOrEmpty,
     getFilledFields,
+    getFirstFilled,
 } from "../src/track-metadata.js";
 
 const completeInfo = {
@@ -102,4 +103,9 @@ test("getFilledFields ignores keys that are not track fields", () => {
     const infoWithExtraKey = { ...completeInfo, comment: "extra" };
 
     assert.deepEqual(getFilledFields(infoWithExtraKey), completeInfo);
+});
+
+test("getFirstFilled returns the first non-empty value", () => {
+    assert.equal(getFirstFilled("", undefined, "second", "third"), "second");
+    assert.equal(getFirstFilled(undefined, ""), "");
 });

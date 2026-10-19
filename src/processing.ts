@@ -1,96 +1,143 @@
 import * as path from "node:path";
+import { getTagStore, isProperlyTagged } from "./audio-tags.js";
 import { getErrorMessage } from "./errors.js";
 import { inferFolderSearchTerms } from "./folder-context.js";
-import { parseTrackFilename } from "./track-name-parser.js";
-import { getTagStore, isProperlyTagged } from "./audio-tags.js";
 import type { MetadataChain } from "./metadata-chain.js";
-import type { ProcessingReport, ProcessingStats } from "./types.js";
+import { getFirstFilled } from "./track-metadata.js";
+import { parseTrackFilename } from "./track-name-parser.js";
+import type {
+    TrackInfo,
+    TrackMetadata,
+    TrackSearch,
+    TrackStatus,
+} from "./types.js";
+
+export interface ProcessingContext {
+    sourceRoot: string;
+    metadataChain: MetadataChain;
+}
+
+const OPTIONAL_FIELD_CHECKS: [string, (metadata: TrackMetadata) => boolean][] =
+    [
+        ["album", ({ info }) => !info.album.trim()],
+        ["year", ({ info }) => !info.year.trim()],
+        ["cover art", ({ coverData }) => !coverData],
+    ];
+
+export function buildTrackSearch(
+    source: string,
+    sourceRoot: string,
+    existingInfo: TrackInfo
+): TrackSearch {
+    const filenameTerms = parseTrackFilename(path.basename(source));
+    const folderTerms = inferFolderSearchTerms(source, sourceRoot);
+
+    return {
+        title: getFirstFilled(existingInfo.title, filenameTerms.title),
+        artist: getFirstFilled(
+            existingInfo.artist,
+            filenameTerms.artist,
+            folderTerms.artist
+        ),
+        album: getFirstFilled(existingInfo.album, folderTerms.album),
+    };
+}
+
+function formatSearchDetail(label: string, value: string): string {
+    return value ? ` (${label}: "${value}")` : "";
+}
+
+function logSearch({ title, artist, album }: TrackSearch): void {
+    console.log(
+        `Searching: "${title}"${formatSearchDetail("artist", artist)}${formatSearchDetail("album", album)}`
+    );
+}
+
+function hasTitleAndArtist({ info }: TrackMetadata): boolean {
+    return [info.title, info.artist].every((field) => field.trim());
+}
+
+async function findWritableMetadata(
+    metadataChain: MetadataChain,
+    search: TrackSearch,
+    existingInfo: TrackInfo
+): Promise<TrackMetadata | null> {
+    const metadata = await metadataChain.find(search, existingInfo);
+
+    if (!metadata) {
+        console.log(
+            "Track not found on available metadata services. Leaving source unchanged."
+        );
+        return null;
+    }
+
+    if (!hasTitleAndArtist(metadata)) {
+        console.log(
+            "Track title or artist is missing. Leaving source unchanged."
+        );
+        return null;
+    }
+
+    return metadata;
+}
+
+function logMissingFields(metadata: TrackMetadata): void {
+    const missingFields = OPTIONAL_FIELD_CHECKS.filter(([, isMissing]) =>
+        isMissing(metadata)
+    ).map(([label]) => label);
+
+    if (missingFields.length > 0) {
+        console.log(
+            `Some metadata was unavailable (${missingFields.join(", ")}); saving the fields that were found.`
+        );
+    }
+}
+
+async function tagUntaggedTrack(
+    source: string,
+    existingInfo: TrackInfo,
+    { sourceRoot, metadataChain }: ProcessingContext
+): Promise<TrackStatus> {
+    const search = buildTrackSearch(source, sourceRoot, existingInfo);
+    logSearch(search);
+    const metadata = await findWritableMetadata(
+        metadataChain,
+        search,
+        existingInfo
+    );
+
+    if (!metadata) {
+        return "SKIPPED";
+    }
+
+    logMissingFields(metadata);
+    await getTagStore(source).write(source, metadata);
+    console.log("Successfully tagged source file.");
+    return "TAGGED";
+}
+
+async function tagTrack(
+    source: string,
+    context: ProcessingContext
+): Promise<TrackStatus> {
+    const storedTags = await getTagStore(source).read(source);
+
+    if (isProperlyTagged(storedTags)) {
+        console.log("Already properly tagged. Skipping.");
+        return "SKIPPED";
+    }
+
+    return tagUntaggedTrack(source, storedTags.info, context);
+}
 
 export async function processTrack(
     source: string,
-    sourceRoot: string,
-    metadataChain: MetadataChain,
-    stats: ProcessingStats,
-    report: ProcessingReport,
-    index: number,
-    total: number
-): Promise<void> {
-    const relativePath = path.relative(sourceRoot, source);
-    const filenameTerms = parseTrackFilename(path.basename(source));
-    const folderTerms = inferFolderSearchTerms(source, sourceRoot);
-    const extension = path.extname(source);
-
-    report.files[relativePath] = "READ";
-    console.log(`\n[${index}/${total}] ${relativePath}`);
-    console.log(`Format: ${extension.slice(1).toUpperCase()}`);
-
+    context: ProcessingContext
+): Promise<TrackStatus> {
     try {
-        const tagStore = getTagStore(source);
-        const storedTags = await tagStore.read(source);
-
-        if (isProperlyTagged(storedTags)) {
-            console.log("Already properly tagged. Skipping.");
-            stats.skipped++;
-            report.files[relativePath] = "SKIPPED";
-            return;
-        }
-
-        const existingInfo = storedTags.info;
-        const artist =
-            existingInfo.artist ||
-            filenameTerms.artist ||
-            folderTerms.artist ||
-            "";
-        const title = existingInfo.title || filenameTerms.title;
-        const album = existingInfo.album || folderTerms.album || "";
-
-        console.log(
-            `Searching: "${title}"${artist ? ` (artist: "${artist}")` : ""}${album ? ` (album: "${album}")` : ""}`
-        );
-
-        const metadata = await metadataChain.find(
-            { title, artist, album },
-            existingInfo
-        );
-
-        if (!metadata) {
-            console.log(
-                "Track not found on available metadata services. Leaving source unchanged."
-            );
-            stats.skipped++;
-            report.files[relativePath] = "SKIPPED";
-            return;
-        }
-
-        if (!metadata.info.title.trim() || !metadata.info.artist.trim()) {
-            console.log(
-                "Track title or artist is missing. Leaving source unchanged."
-            );
-            stats.skipped++;
-            report.files[relativePath] = "SKIPPED";
-            return;
-        }
-
-        const missingFields = [
-            !metadata.info.album.trim() && "album",
-            !metadata.info.year.trim() && "year",
-            !metadata.coverData && "cover art",
-        ].filter((field): field is string => Boolean(field));
-
-        if (missingFields.length > 0) {
-            console.log(
-                `Some metadata was unavailable (${missingFields.join(", ")}); saving the fields that were found.`
-            );
-        }
-
-        await tagStore.write(source, metadata);
-
-        console.log("Successfully tagged source file.");
-        stats.ok++;
-        report.files[relativePath] = "TAGGED";
+        return await tagTrack(source, context);
     } catch (error) {
         console.error(`Processing error: ${getErrorMessage(error)}`);
-        stats.errors++;
-        report.files[relativePath] = "FAILED";
+        return "FAILED";
     }
 }

@@ -1,30 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-    createRateLimiter,
-    systemClock,
-    type Clock,
-} from "../src/rate-limiter.js";
-
-function createFakeClock(): Clock & {
-    sleeps: number[];
-    advance(ms: number): void;
-} {
-    let currentTime = 0;
-    const sleeps: number[] = [];
-
-    return {
-        sleeps,
-        now: () => currentTime,
-        advance(ms) {
-            currentTime += ms;
-        },
-        async sleep(ms) {
-            sleeps.push(ms);
-            currentTime += ms;
-        },
-    };
-}
+import { createRateLimiter, systemClock } from "../src/rate-limiter.js";
+import { createFakeClock } from "./helpers/clock.js";
 
 test("createRateLimiter runs the first task without waiting", async () => {
     const clock = createFakeClock();
