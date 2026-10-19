@@ -1,5 +1,5 @@
-import { DetailsCache } from "../../src/tui/details-cache.js";
-import { ReadPacer } from "../../src/tui/read-pacer.js";
+import { createCoverCache } from "../../src/tui/cover-reader.js";
+import { createDetailsCache } from "../../src/tui/entry-details.js";
 import { LogBuffer } from "../../src/tui/log-buffer.js";
 import { TaggingQueue } from "../../src/tui/tagging-queue.js";
 import { SubfolderSetting } from "../../src/tui/subfolder-setting.js";
@@ -32,8 +32,8 @@ export function createControlledServices(): {
             logBuffer,
             statusStore: new TrackStatusStore(),
             subfolders: new SubfolderSetting(true),
-            detailsCache: new DetailsCache(),
-            readPacer: new ReadPacer(),
+            detailsCache: createDetailsCache(),
+            coverCache: createCoverCache({ trueColor: true }),
         },
         jobs,
     };

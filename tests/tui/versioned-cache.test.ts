@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { test } from "node:test";
-import { DetailsCache } from "../../src/tui/details-cache.js";
+import { createDetailsCache } from "../../src/tui/entry-details.js";
+import { VersionedCache } from "../../src/tui/versioned-cache.js";
 import type { BrowserEntry, EntryDetails } from "../../src/tui/types.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
-    "soundtag-details-cache-test-"
+    "soundtag-versioned-cache-test-"
 );
 
 async function createFile(
@@ -20,29 +21,32 @@ async function createFile(
     return { name, path: file, kind: "file" };
 }
 
-function createCountingCache(capacity?: number) {
+function createUnreadableCache() {
     const reads: string[] = [];
-    const cache = new DetailsCache(async (entry): Promise<EntryDetails> => {
+    const cache = createDetailsCache(async (entry): Promise<EntryDetails> => {
         reads.push(entry.name);
         return { kind: "unreadable", message: `read ${reads.length}` };
-    }, capacity);
+    });
     return { cache, reads };
 }
 
 function createFolderCache(capacity?: number) {
     const reads: string[] = [];
-    const cache = new DetailsCache(async (entry): Promise<EntryDetails> => {
-        reads.push(entry.name);
-        return {
-            kind: "folder",
-            audioFileCount: reads.length,
-            subfolderCount: 0,
-        };
-    }, capacity);
+    const cache = new VersionedCache(
+        async (entry): Promise<EntryDetails> => {
+            reads.push(entry.name);
+            return {
+                kind: "folder",
+                audioFileCount: reads.length,
+                subfolderCount: 0,
+            };
+        },
+        { capacity }
+    );
     return { cache, reads };
 }
 
-test("DetailsCache keeps the details of an unchanged entry", async () => {
+test("VersionedCache keeps the details of an unchanged entry", async () => {
     const { cache, reads } = createFolderCache();
     const entry = await createFile("a.mp3");
 
@@ -53,7 +57,7 @@ test("DetailsCache keeps the details of an unchanged entry", async () => {
     assert.deepEqual(reads, ["a.mp3"]);
 });
 
-test("DetailsCache reads an entry again once it changed on disk", async () => {
+test("VersionedCache reads an entry again once it changed on disk", async () => {
     const { cache, reads } = createFolderCache();
     const entry = await createFile("a.mp3");
     const first = await cache.read(entry);
@@ -66,7 +70,7 @@ test("DetailsCache reads an entry again once it changed on disk", async () => {
     assert.deepEqual(reads, ["a.mp3", "a.mp3"]);
 });
 
-test("DetailsCache evicts the least recently used entry", async () => {
+test("VersionedCache evicts the least recently used entry", async () => {
     const { cache } = createFolderCache(2);
     const [first, second, third] = await Promise.all(
         ["a.mp3", "b.mp3", "c.mp3"].map((name) => createFile(name))
@@ -82,8 +86,8 @@ test("DetailsCache evicts the least recently used entry", async () => {
     assert.ok(cache.peek(third));
 });
 
-test("DetailsCache does not keep unreadable details", async () => {
-    const { cache, reads } = createCountingCache();
+test("VersionedCache does not keep unreadable details", async () => {
+    const { cache, reads } = createUnreadableCache();
     const entry = await createFile("a.mp3");
 
     await cache.read(entry);
@@ -93,7 +97,7 @@ test("DetailsCache does not keep unreadable details", async () => {
     assert.deepEqual(reads, ["a.mp3", "a.mp3"]);
 });
 
-test("DetailsCache does not keep the details of a missing entry", async () => {
+test("VersionedCache does not keep the details of a missing entry", async () => {
     const { cache } = createFolderCache();
     const entry: BrowserEntry = {
         name: "gone.mp3",
@@ -106,7 +110,7 @@ test("DetailsCache does not keep the details of a missing entry", async () => {
     assert.equal(cache.peek(entry), undefined);
 });
 
-test("DetailsCache reads a file replaced with the same size and time", async () => {
+test("VersionedCache reads a file replaced with the same size and time", async () => {
     const { cache, reads } = createFolderCache();
     const entry = await createFile("a.mp3", "old audio");
     const sameTime = new Date("2024-01-01T00:00:00Z");
@@ -122,9 +126,9 @@ test("DetailsCache reads a file replaced with the same size and time", async () 
     assert.deepEqual(reads, ["a.mp3", "a.mp3"]);
 });
 
-test("DetailsCache forgets an entry that became unreadable", async () => {
+test("VersionedCache forgets an entry that became unreadable", async () => {
     let readable = true;
-    const cache = new DetailsCache(async (): Promise<EntryDetails> =>
+    const cache = createDetailsCache(async (): Promise<EntryDetails> =>
         readable ? { kind: "parent" } : { kind: "unreadable", message: "EBUSY" }
     );
     const entry = await createFile("a.mp3");
@@ -137,9 +141,9 @@ test("DetailsCache forgets an entry that became unreadable", async () => {
     assert.equal(cache.peek(entry), undefined);
 });
 
-test("DetailsCache keeps the details of the latest read", async () => {
+test("VersionedCache keeps the details of the latest read", async () => {
     const pending: ((details: EntryDetails) => void)[] = [];
-    const cache = new DetailsCache(
+    const cache = new VersionedCache(
         () => new Promise<EntryDetails>((resolve) => pending.push(resolve))
     );
     const entry = await createFile("a.mp3");
@@ -164,3 +168,18 @@ async function waitForReads(pending: unknown[], count: number): Promise<void> {
         await new Promise((resolve) => setImmediate(resolve));
     }
 }
+
+test("VersionedCache keeps a null value", async () => {
+    const reads: string[] = [];
+    const cache = new VersionedCache(async (entry) => {
+        reads.push(entry.name);
+        return null;
+    });
+    const entry = await createFile("a.mp3");
+
+    await cache.read(entry);
+
+    assert.equal(cache.peek(entry), null);
+    assert.equal(await cache.read(entry), null);
+    assert.deepEqual(reads, ["a.mp3"]);
+});

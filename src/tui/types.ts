@@ -1,6 +1,17 @@
 import type { StoredTags, TrackDetails } from "../tags/types.js";
 import type { TrackStatus } from "../processing/types.js";
 
+export interface CoverArt {
+    width: number;
+    height: number;
+    pixels: Uint8Array;
+}
+
+export type CoverLookup =
+    | { kind: "found"; art: CoverArt }
+    | { kind: "missing" }
+    | { kind: "unreadable" };
+
 export type FocusedPane = "browser" | "log";
 
 export type EntryKind = "parent" | "folder" | "file";

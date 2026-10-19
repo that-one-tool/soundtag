@@ -8,7 +8,12 @@ const MIN_LIST_HEIGHT = 3;
 export interface Layout {
     logLines: number;
     listHeight: number;
+    detailRows: number;
 }
+
+// The metadata pane is as tall as the browser, whose title and error line
+// match its header plus one row.
+const DETAIL_ROWS_BEYOND_LIST = 1;
 
 function getLogLines(rows: number): number {
     const logPaneRows = Math.floor(rows / LOG_SHARE);
@@ -17,6 +22,14 @@ function getLogLines(rows: number): number {
 
 export function getLayout(rows: number): Layout {
     const logLines = getLogLines(rows);
-    const listHeight = rows - FIXED_ROWS - logLines;
-    return { logLines, listHeight: Math.max(listHeight, MIN_LIST_HEIGHT) };
+    const listHeight = Math.max(rows - FIXED_ROWS - logLines, MIN_LIST_HEIGHT);
+    const detailRows = listHeight + DETAIL_ROWS_BEYOND_LIST;
+    return { logLines, listHeight, detailRows };
+}
+
+// Wide enough for the 48-column cover inside the border and padding.
+const FULL_PANEL_WIDTH = 52;
+
+export function getPanelWidth(columns: number): number {
+    return Math.min(FULL_PANEL_WIDTH, Math.floor(columns / 2));
 }

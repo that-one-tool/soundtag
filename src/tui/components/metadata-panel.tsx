@@ -15,9 +15,17 @@ import { ERROR_COLOR, PANE_COLOR, STATUS_COLOR } from "../theme.js";
 import { countFolderStatuses, STATUS_ORDER } from "../track-statuses.js";
 import type { TrackExtras } from "../../metadata/types.js";
 import type { TrackDetails } from "../../tags/types.js";
-import type { BrowserEntry, EntryDetails, TrackStatuses } from "../types.js";
+import type {
+    BrowserEntry,
+    CoverArt,
+    EntryDetails,
+    TrackStatuses,
+} from "../types.js";
+import { CoverArtView } from "./cover-art-view.js";
 
-const PANEL_WIDTH = 47;
+// Border and padding on both sides.
+const PANEL_FRAME_COLUMNS = 4;
+const MIN_COVER_SIZE = 16;
 const LABEL_WIDTH = 13;
 
 interface FieldRow {
@@ -48,6 +56,9 @@ interface DetailsViewProps<Kind extends EntryDetails["kind"]> {
     details: Extract<EntryDetails, { kind: Kind }>;
     entry: BrowserEntry;
     statuses: TrackStatuses;
+    cover: CoverArt | null;
+    detailRows: number;
+    width: number;
 }
 
 type FileDetailsData = Extract<EntryDetails, { kind: "file" }>;
@@ -103,16 +114,56 @@ function getStatusRow(status: TrackStatus | undefined): FieldRow {
     return { label: "Status", value: status ?? "", color };
 }
 
-function FileDetails({ details, entry, statuses }: DetailsViewProps<"file">) {
-    const status = statuses.get(entry.path);
+interface CoverSpace {
+    freeRows: number;
+    freeColumns: number;
+}
+
+function roundDownToEven(value: number): number {
+    return value - (value % 2);
+}
+
+// Each row holds two pixels and one blank row sits above the cover.
+function getCoverSize(cover: CoverArt, { freeRows, freeColumns }: CoverSpace) {
+    const sizeByRows = (freeRows - 1) * 2;
+    return roundDownToEven(Math.min(cover.height, sizeByRows, freeColumns));
+}
+
+function FittingCover({
+    cover,
+    space,
+}: {
+    cover: CoverArt;
+    space: CoverSpace;
+}) {
+    const size = getCoverSize(cover, space);
+    if (size < MIN_COVER_SIZE) {
+        return null;
+    }
+
     return (
-        <FieldList
-            rows={[
-                getStatusRow(status),
-                ...getTagRows(details),
-                ...getAudioRows(details),
-            ]}
-        />
+        <Box marginTop={1}>
+            <CoverArtView cover={cover} size={size} />
+        </Box>
+    );
+}
+
+function FileDetails(props: DetailsViewProps<"file">) {
+    const { details, entry, statuses } = props;
+    const rows = [
+        getStatusRow(statuses.get(entry.path)),
+        ...getTagRows(details),
+        ...getAudioRows(details),
+    ];
+    const space = {
+        freeRows: props.detailRows - rows.length,
+        freeColumns: props.width - PANEL_FRAME_COLUMNS,
+    };
+    return (
+        <>
+            <FieldList rows={rows} />
+            {props.cover && <FittingCover cover={props.cover} space={space} />}
+        </>
     );
 }
 
@@ -164,11 +215,11 @@ const DETAIL_VIEWS: {
     parent: ParentDetails,
 };
 
-function renderDetails(
-    details: EntryDetails | null,
-    entry: BrowserEntry | undefined,
-    statuses: TrackStatuses
-): ReactNode {
+function renderDetails({
+    details,
+    entry,
+    ...rest
+}: MetadataPanelProps): ReactNode {
     if (!details || !entry) {
         return <Text dimColor>Loading…</Text>;
     }
@@ -176,7 +227,7 @@ function renderDetails(
     const View = DETAIL_VIEWS[details.kind] as (
         props: DetailsViewProps<EntryDetails["kind"]>
     ) => ReactNode;
-    return <View details={details} entry={entry} statuses={statuses} />;
+    return <View {...rest} details={details} entry={entry} />;
 }
 
 export interface MetadataPanelProps {
@@ -184,25 +235,35 @@ export interface MetadataPanelProps {
     details: EntryDetails | null;
     loading: boolean;
     statuses: TrackStatuses;
+    cover: CoverArt | null;
+    detailRows: number;
+    width: number;
+}
+
+function PanelHeader({ loading }: { loading: boolean }) {
+    return (
+        <Box flexShrink={0}>
+            <Text bold color={PANE_COLOR.metadata}>
+                Metadata
+            </Text>
+            {loading && <Text dimColor> …</Text>}
+        </Box>
+    );
 }
 
 export function MetadataPanel(props: MetadataPanelProps) {
     return (
         <Box
             flexDirection="column"
-            width={PANEL_WIDTH}
+            width={props.width}
+            flexShrink={0}
             borderStyle="round"
             borderColor={PANE_COLOR.metadata}
             paddingX={1}
             overflow="hidden"
         >
-            <Box flexShrink={0}>
-                <Text bold color={PANE_COLOR.metadata}>
-                    Metadata
-                </Text>
-                {props.loading && <Text dimColor> …</Text>}
-            </Box>
-            {renderDetails(props.details, props.entry, props.statuses)}
+            <PanelHeader loading={props.loading} />
+            {renderDetails(props)}
         </Box>
     );
 }

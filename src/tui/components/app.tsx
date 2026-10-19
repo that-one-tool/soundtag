@@ -1,13 +1,14 @@
 import { Box, useWindowSize } from "ink";
 import { useBrowser } from "../hooks/use-browser.js";
-import { useEntryDetails } from "../hooks/use-entry-details.js";
+import { useEntryValue } from "../hooks/use-entry-value.js";
 import { useKeyboard } from "../hooks/use-keyboard.js";
 import { useLogView } from "../hooks/use-log-view.js";
 import { useQuit } from "../hooks/use-quit.js";
 import { useStore } from "../hooks/use-store.js";
-import { getLayout } from "../layout.js";
+import { getLayout, getPanelWidth } from "../layout.js";
 import { getEntryStatus } from "../track-statuses.js";
 import type { TuiServices } from "../tui-services.js";
+import { getShownCover } from "../shown-cover.js";
 import { BrowserPane, type BrowserPaneProps } from "./browser-pane.js";
 import { Header } from "./header.js";
 import { LogPane, type LogPaneProps } from "./log-pane.js";
@@ -20,19 +21,25 @@ export interface AppProps {
 }
 
 function useLayout() {
-    const { rows } = useWindowSize();
-    return { rows, ...getLayout(rows) };
+    const { rows, columns } = useWindowSize();
+    return { rows, ...getLayout(rows), panelWidth: getPanelWidth(columns) };
 }
 
-function useBrowsing(
-    startDirectory: string,
-    { statusStore, ...sources }: TuiServices
-) {
-    const statuses = useStore(statusStore);
-    const [browser, dispatch] = useBrowser(startDirectory, statusStore);
+function useBrowsing(startDirectory: string, services: TuiServices) {
+    const statuses = useStore(services.statusStore);
+    const [browser, dispatch] = useBrowser(
+        startDirectory,
+        services.statusStore
+    );
     const hovered = browser.entries[browser.cursor];
-    const status = hovered && getEntryStatus(statuses, hovered);
-    const details = useEntryDetails({ entry: hovered, status }, sources);
+    const request = {
+        entry: hovered,
+        status: hovered && getEntryStatus(statuses, hovered),
+    };
+    const view = useEntryValue(request, services.detailsCache);
+    const coverView = useEntryValue(request, services.coverCache);
+    const cover = getShownCover(view.entry, coverView);
+    const details = { ...view, details: view.value, cover };
     return { browser, dispatch, hovered, details, statuses };
 }
 
@@ -106,6 +113,8 @@ export function App(props: AppProps) {
                 {...state.details}
                 statuses={state.statuses}
                 height={state.listHeight}
+                detailRows={state.detailRows}
+                width={state.panelWidth}
                 focused={state.logView.focus === "browser"}
             />
             <LogPane {...getLogPaneProps(state)} />

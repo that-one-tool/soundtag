@@ -23,6 +23,10 @@ const processStreams: TerminalStreams = {
     stderr: process.stderr,
 };
 
+export function hasTrueColor(stdout: NodeJS.WriteStream): boolean {
+    return stdout.getColorDepth?.() === 24;
+}
+
 export async function renderTui(
     services: TuiServices,
     startDirectory: string,
@@ -45,8 +49,9 @@ export function runTui(
     options: TuiOptions,
     streams: TerminalStreams = processStreams
 ): Promise<TuiOutcome> {
+    const display = { trueColor: hasTrueColor(streams.stdout) };
     return renderTui(
-        createTuiServices(options),
+        createTuiServices(options, display),
         options.startDirectory,
         streams
     );

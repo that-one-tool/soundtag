@@ -7,9 +7,16 @@ import { cleanup, render } from "ink-testing-library";
 import { createElement } from "react";
 import { App } from "../../../src/tui/components/app.js";
 import { getTagStore } from "../../../src/tags/audio-tags.js";
-import { DetailsCache } from "../../../src/tui/details-cache.js";
-import { readEntryDetails } from "../../../src/tui/entry-details.js";
-import type { BrowserEntry, EntryDetails } from "../../../src/tui/types.js";
+import {
+    createDetailsCache,
+    readEntryDetails,
+} from "../../../src/tui/entry-details.js";
+import type {
+    BrowserEntry,
+    CoverLookup,
+    EntryDetails,
+} from "../../../src/tui/types.js";
+import { VersionedCache } from "../../../src/tui/versioned-cache.js";
 import {
     findFrameLine,
     KEYS,
@@ -46,7 +53,7 @@ type DetailsReader = (entry: BrowserEntry) => Promise<EntryDetails>;
 
 async function renderApp(directory: string, readDetails?: DetailsReader) {
     const { services, jobs } = createControlledServices();
-    services.detailsCache = new DetailsCache(readDetails);
+    services.detailsCache = createDetailsCache(readDetails);
     const instance = render(
         createElement(App, { startDirectory: directory, services })
     );
@@ -410,4 +417,31 @@ test("App scrolls the focused log pane instead of the browser", async () => {
 
     await waitFor(() => /▸/.test(findFrameLine(lastFrame, "Album")));
     assert.ok((lastFrame() ?? "").includes("Log ↑2"));
+});
+
+test("App reads the cover of the hovered file again once it is processed", async () => {
+    const directory = await createLibrary();
+    const song = path.join(directory, "song.mp3");
+    const { lastFrame, stdin, services } = await renderApp(directory);
+    const covers: string[] = [];
+    services.coverCache = new VersionedCache<CoverLookup>(async (entry) => {
+        covers.push(entry.name);
+        return { kind: "missing" };
+    });
+    stdin.write(KEYS.down);
+    await delay(30);
+    stdin.write(KEYS.down);
+    await waitFor(() => covers.includes("song.mp3"));
+
+    await fs.appendFile(song, "cover added");
+    services.statusStore.record({
+        source: song,
+        status: "TAGGED",
+        destination: null,
+    });
+
+    await waitFor(
+        () => covers.filter((name) => name === "song.mp3").length >= 2
+    );
+    await waitForFrame(lastFrame, "Black Sabbath");
 });

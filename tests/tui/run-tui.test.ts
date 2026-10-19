@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { renderTui, runTui } from "../../src/tui/run-tui.js";
+import { hasTrueColor, renderTui, runTui } from "../../src/tui/run-tui.js";
 import {
     createFakeTerminal,
     KEYS,
@@ -108,4 +108,14 @@ test("runTui wires the services and browses the start directory", async () => {
     stdin.write("q");
 
     assert.equal(await outcome, "success");
+});
+
+function createStdoutWithDepth(depth: number): NodeJS.WriteStream {
+    return { getColorDepth: () => depth } as unknown as NodeJS.WriteStream;
+}
+
+test("hasTrueColor needs a terminal with 24-bit colors", () => {
+    assert.equal(hasTrueColor(createStdoutWithDepth(24)), true);
+    assert.equal(hasTrueColor(createStdoutWithDepth(8)), false);
+    assert.equal(hasTrueColor({} as NodeJS.WriteStream), false);
 });

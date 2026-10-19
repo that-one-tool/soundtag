@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { cleanup, render } from "ink-testing-library";
+import { Box, Text } from "ink";
 import { createElement } from "react";
 import {
     MetadataPanel,
@@ -22,10 +23,14 @@ const EMPTY_TRACK = {
     sizeBytes: 0,
 };
 
+type PanelDefaults = "loading" | "cover" | "detailRows" | "width";
+
 function renderPanel(
-    props: Omit<MetadataPanelProps, "loading"> & { loading?: boolean }
+    props: Omit<MetadataPanelProps, PanelDefaults> &
+        Partial<Pick<MetadataPanelProps, PanelDefaults>>
 ): string {
-    const panel = createElement(MetadataPanel, { loading: false, ...props });
+    const defaults = { loading: false, cover: null, detailRows: 40, width: 52 };
+    const panel = createElement(MetadataPanel, { ...defaults, ...props });
     return render(panel).lastFrame() ?? "";
 }
 
@@ -128,4 +133,81 @@ test("MetadataPanel explains unreadable files", () => {
     });
 
     assert.ok(frame.includes("Corrupt file"));
+});
+
+const COVER = { width: 48, height: 48, pixels: new Uint8Array(48 * 48 * 3) };
+
+function createFileProps() {
+    return {
+        entry: { name: "a.mp3", path: "/a.mp3", kind: "file" as const },
+        statuses: new Map(),
+        details: {
+            kind: "file" as const,
+            format: "MP3",
+            tags: {
+                info: { title: "", artist: "", album: "", year: "" },
+                extras: {},
+                hasCover: true,
+            },
+            track: EMPTY_TRACK,
+        },
+        cover: COVER,
+    };
+}
+
+function getCoverLines(frame: string): string[] {
+    return frame
+        .split("\n")
+        .map((line) => line.match(/▀+/)?.[0] ?? "")
+        .filter(Boolean);
+}
+
+test("MetadataPanel draws the whole cover below the fields when it fits", () => {
+    const frame = renderPanel({ ...createFileProps(), detailRows: 36 });
+
+    const coverLines = getCoverLines(frame);
+    assert.equal(coverLines.length, 24);
+    assert.equal(coverLines[0].length, 48);
+    assert.ok(frame.indexOf("▀") > frame.indexOf("File"));
+});
+
+test("MetadataPanel shrinks the cover to the free rows", () => {
+    const frame = renderPanel({ ...createFileProps(), detailRows: 20 });
+
+    const coverLines = getCoverLines(frame);
+    assert.equal(coverLines.length, 8);
+    assert.equal(coverLines[0].length, 16);
+});
+
+test("MetadataPanel leaves out a cover that would be too small", () => {
+    const frame = renderPanel({ ...createFileProps(), detailRows: 19 });
+
+    assert.ok(!frame.includes("▀"));
+});
+
+test("MetadataPanel shrinks the cover to its width", () => {
+    const frame = renderPanel({ ...createFileProps(), width: 31 });
+
+    const coverLines = getCoverLines(frame);
+    assert.equal(coverLines[0].length, 26);
+    assert.equal(coverLines.length, 13);
+});
+
+test("MetadataPanel keeps its width beside a long file name", () => {
+    const longName = createElement(
+        Box,
+        { flexGrow: 1 },
+        createElement(Text, { wrap: "truncate" }, "x".repeat(90))
+    );
+    const panel = createElement(MetadataPanel, {
+        ...createFileProps(),
+        loading: false,
+        detailRows: 36,
+        width: 52,
+    });
+
+    const frame =
+        render(createElement(Box, null, longName, panel)).lastFrame() ?? "";
+
+    assert.equal(getCoverLines(frame)[0].length, 48);
 });

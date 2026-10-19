@@ -78,9 +78,13 @@ From the project folder, `npm start -- /path/to/music` works too.
 Paths containing spaces should be quoted.
 
 If no source folder is supplied, SoundTag opens a full-screen browser in the
-current directory. The left pane lists subfolders and audio files, and the
-right pane shows the stored tags of the file under the cursor (or, for a
-folder, its file counts). Processing messages appear in the log pane below.
+current directory. The left pane lists subfolders and audio files, and the right
+pane shows the stored tags of the file under the cursor (or, for a folder, its
+file counts). When the terminal is tall enough (about 37 rows or more), the
+file's embedded cover is drawn below its tags, growing with the terminal up to
+48 columns by 24 rows (from about 61 rows and 104 columns); this needs a
+terminal with true color support (`COLORTERM=truecolor`, which tmux only passes
+on when configured to). Processing messages appear in the log pane below.
 
 | Key                    | Action                                          |
 | ---------------------- | ----------------------------------------------- |

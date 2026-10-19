@@ -4,6 +4,7 @@ import { getErrorMessage } from "../shared/errors.js";
 import { getTagStore } from "../tags/audio-tags.js";
 import { readTrackDetails } from "../tags/track-details.js";
 import type { BrowserEntry, EntryDetails } from "./types.js";
+import { VersionedCache, type EntryReader } from "./versioned-cache.js";
 
 async function readFileDetails(file: string): Promise<EntryDetails> {
     const [tags, track] = await Promise.all([
@@ -47,4 +48,12 @@ export async function readEntryDetails(
     } catch (error) {
         return { kind: "unreadable", message: getErrorMessage(error) };
     }
+}
+
+export function createDetailsCache(
+    readDetails: EntryReader<EntryDetails> = readEntryDetails
+): VersionedCache<EntryDetails> {
+    return new VersionedCache(readDetails, {
+        isCacheable: (details) => details.kind !== "unreadable",
+    });
 }
