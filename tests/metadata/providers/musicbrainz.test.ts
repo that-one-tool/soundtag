@@ -35,7 +35,7 @@ const recording = () =>
 
 test("MusicBrainzProvider retries once after the Retry-After delay", async () => {
     const clock = createFakeClock();
-    const sent = mockMusicBrainzResponses([unavailable("3"), recording]);
+    const sent = mockMusicBrainzResponses([unavailable("5"), recording]);
 
     const metadata = await new MusicBrainzProvider(
         userAgent,
@@ -46,6 +46,21 @@ test("MusicBrainzProvider retries once after the Retry-After delay", async () =>
     assert.equal(metadata?.info.title, "Retried title");
     assert.equal(sent.length, 2);
     assert.equal(sent[0].bodyUsed, true);
+    assert.deepEqual(clock.sleeps, [5000]);
+});
+
+test("MusicBrainzProvider waits three seconds without a Retry-After header", async () => {
+    const clock = createFakeClock();
+    mockMusicBrainzResponses([
+        () => new Response("busy", { status: 503 }),
+        recording,
+    ]);
+
+    await new MusicBrainzProvider(userAgent, clock, consoleLogger).findMetadata(
+        search,
+        false
+    );
+
     assert.deepEqual(clock.sleeps, [3000]);
 });
 
