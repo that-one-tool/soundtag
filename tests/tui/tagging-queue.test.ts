@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { TaggingQueue } from "../../src/tui/tagging-queue.js";
 import type { TagTarget } from "../../src/tui/types.js";
+import { createRecordingLogger } from "../helpers/logger.js";
 
 interface ControlledJob {
     target: TagTarget;
@@ -11,16 +12,22 @@ interface ControlledJob {
 
 function createControlledQueue() {
     const jobs: ControlledJob[] = [];
+    const logger = createRecordingLogger();
     const queue = new TaggingQueue(
         (target, stopSignal) =>
             new Promise<boolean>((resolve) =>
                 jobs.push({ target, stopSignal, finish: resolve })
-            )
+            ),
+        logger
     );
-    return { queue, jobs };
+    return { queue, jobs, logger };
 }
 
-const album: TagTarget = { kind: "folder", path: "/music/Album" };
+const album: TagTarget = {
+    kind: "folder",
+    path: "/music/Album",
+    recursive: true,
+};
 const single: TagTarget = { kind: "file", path: "/music/single.mp3" };
 
 test("TaggingQueue runs targets one at a time in order", async () => {
@@ -48,15 +55,19 @@ test("TaggingQueue runs targets one at a time in order", async () => {
     });
 });
 
-test("TaggingQueue ignores a target that is already queued or running", () => {
-    const { queue } = createControlledQueue();
+test("TaggingQueue ignores and logs a target that is already queued or running", () => {
+    const { queue, logger } = createControlledQueue();
 
     queue.enqueue(album);
     queue.enqueue(single);
-    queue.enqueue({ ...album });
+    queue.enqueue({ ...album, recursive: false });
     queue.enqueue({ ...single });
 
     assert.deepEqual(queue.getSnapshot().pending, [single]);
+    assert.deepEqual(logger.infos, [
+        "Already queued: Album (subfolders on).",
+        "Already queued: single.mp3.",
+    ]);
 });
 
 test("TaggingQueue stop aborts the running job and drops pending ones", async () => {
@@ -100,14 +111,17 @@ test("TaggingQueue gives each job a fresh stop signal", async () => {
 });
 
 test("TaggingQueue remembers failed and rejected jobs", async () => {
-    const failing = new TaggingQueue(async () => false);
+    const failing = new TaggingQueue(
+        async () => false,
+        createRecordingLogger()
+    );
     failing.enqueue(album);
     await failing.whenIdle();
     assert.equal(failing.getSnapshot().failed, true);
 
     const throwing = new TaggingQueue(async () => {
         throw new Error("boom");
-    });
+    }, createRecordingLogger());
     throwing.enqueue(album);
     await throwing.whenIdle();
     assert.equal(throwing.getSnapshot().failed, true);

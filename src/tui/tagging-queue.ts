@@ -1,4 +1,6 @@
+import type { Logger } from "../shared/logger.js";
 import { Listeners } from "./listeners.js";
+import { describeTarget } from "./queue-summary.js";
 import type { QueueState, TagJobRunner, TagTarget } from "./types.js";
 
 export class TaggingQueue {
@@ -12,7 +14,10 @@ export class TaggingQueue {
     private controller = new AbortController();
     private idle: Promise<void> = Promise.resolve();
 
-    constructor(private readonly runJob: TagJobRunner) {}
+    constructor(
+        private readonly runJob: TagJobRunner,
+        private readonly logger: Logger
+    ) {}
 
     subscribe = (listener: () => void): (() => void) =>
         this.listeners.add(listener);
@@ -24,7 +29,10 @@ export class TaggingQueue {
     }
 
     enqueue(target: TagTarget): void {
-        if (this.isQueued(target)) {
+        const queued = this.findQueued(target);
+
+        if (queued) {
+            this.logger.info(`Already queued: ${describeTarget(queued)}.`);
             return;
         }
 
@@ -44,9 +52,9 @@ export class TaggingQueue {
         this.update({ pending: [], stopping: true });
     }
 
-    private isQueued({ path }: TagTarget): boolean {
+    private findQueued({ path }: TagTarget): TagTarget | null | undefined {
         const { running, pending } = this.state;
-        return [running, ...pending].some((queued) => queued?.path === path);
+        return [running, ...pending].find((queued) => queued?.path === path);
     }
 
     private async drain(): Promise<void> {

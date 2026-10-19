@@ -42,7 +42,11 @@ test("renderTui quits with Ctrl+C too", async () => {
 
 test("renderTui reports a failure when a job failed", async () => {
     const { stdin, outcome, services, jobs, directory } = await startTui();
-    services.queue.enqueue({ kind: "folder", path: directory });
+    services.queue.enqueue({
+        kind: "folder",
+        path: directory,
+        recursive: true,
+    });
     jobs[0].finish(false);
     await services.queue.whenIdle();
 
@@ -53,7 +57,11 @@ test("renderTui reports a failure when a job failed", async () => {
 
 test("renderTui waits for the current file before quitting", async () => {
     const { stdin, outcome, services, jobs, directory } = await startTui();
-    services.queue.enqueue({ kind: "folder", path: directory });
+    services.queue.enqueue({
+        kind: "folder",
+        path: directory,
+        recursive: true,
+    });
     let settled = false;
     void outcome.then(() => (settled = true));
 
@@ -68,7 +76,11 @@ test("renderTui waits for the current file before quitting", async () => {
 
 test("renderTui forces the quit when asked twice during a run", async () => {
     const { stdin, outcome, services, directory } = await startTui();
-    services.queue.enqueue({ kind: "folder", path: directory });
+    services.queue.enqueue({
+        kind: "folder",
+        path: directory,
+        recursive: true,
+    });
 
     stdin.write("q");
     await new Promise(setImmediate);

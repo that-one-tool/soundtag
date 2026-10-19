@@ -44,15 +44,12 @@ async function createTrack(
     return source;
 }
 
-function createRunner(
-    overrides: { recursive?: boolean; renameFiles?: boolean } = {}
-) {
+function createRunner(overrides: { renameFiles?: boolean } = {}) {
     const processed: ProcessedTrack[] = [];
     const logger = createRecordingLogger();
     const runJob = createTagJobRunner({
         metadataChain: foundChain,
         logger,
-        recursive: true,
         renameFiles: false,
         onTrackProcessed: (result) => processed.push(result),
         ...overrides,
@@ -85,7 +82,7 @@ test("a folder job tags subfolders when recursive", async () => {
     const { runJob, processed } = createRunner({ renameFiles: true });
 
     await runJob(
-        { kind: "folder", path: directory },
+        { kind: "folder", path: directory, recursive: true },
         new AbortController().signal
     );
 
@@ -102,10 +99,10 @@ test("a folder job skips subfolders when not recursive", async () => {
     const directory = await createTemporaryDirectory();
     await createTrack(directory, "a.mp3");
     await createTrack(path.join(directory, "Disc 2"), "b.mp3");
-    const { runJob, processed } = createRunner({ recursive: false });
+    const { runJob, processed } = createRunner();
 
     await runJob(
-        { kind: "folder", path: directory },
+        { kind: "folder", path: directory, recursive: false },
         new AbortController().signal
     );
 
@@ -134,7 +131,7 @@ test("a job fails and logs when the folder cannot be read", async () => {
     const { runJob, logger } = createRunner();
 
     const succeeded = await runJob(
-        { kind: "folder", path: directory },
+        { kind: "folder", path: directory, recursive: true },
         new AbortController().signal
     );
 
@@ -148,7 +145,10 @@ test("a stopped job logs Done!", async () => {
     await createTrack(directory, "a.mp3");
     const { runJob, logger } = createRunner();
 
-    await runJob({ kind: "folder", path: directory }, AbortSignal.abort());
+    await runJob(
+        { kind: "folder", path: directory, recursive: true },
+        AbortSignal.abort()
+    );
 
     assert.deepEqual(logger.infos.slice(-2), [
         "Stopped before processing the remaining files.",
@@ -162,7 +162,7 @@ test("a job announces its target", async () => {
     const { runJob, logger } = createRunner();
 
     await runJob(
-        { kind: "folder", path: directory },
+        { kind: "folder", path: directory, recursive: true },
         new AbortController().signal
     );
 
@@ -175,7 +175,7 @@ test("a job without audio files succeeds", async () => {
     const { runJob, logger } = createRunner();
 
     const succeeded = await runJob(
-        { kind: "folder", path: directory },
+        { kind: "folder", path: directory, recursive: true },
         new AbortController().signal
     );
 

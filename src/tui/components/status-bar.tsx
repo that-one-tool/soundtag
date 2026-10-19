@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import { describeQueue } from "../queue-summary.js";
+import { describeQueue, describeSubfolderChoice } from "../queue-summary.js";
 import { ACCENT } from "../theme.js";
 import type { QueueState } from "../types.js";
 
@@ -11,6 +11,7 @@ const KEY_HINTS: Hint[] = [
     ["←", "up"],
     ["t", "tag"],
     ["a", "tag folder"],
+    ["r", "subfolders"],
     ["s", "stop"],
     ["q", "quit"],
 ];
@@ -34,14 +35,20 @@ function KeyHints() {
 export interface StatusBarProps {
     queueState: QueueState;
     quitting: boolean;
+    subfoldersIncluded: boolean;
 }
 
-export function StatusBar({ queueState, quitting }: StatusBarProps) {
+export function StatusBar({
+    queueState,
+    quitting,
+    subfoldersIncluded,
+}: StatusBarProps) {
     return (
         <Box justifyContent="space-between" gap={2} paddingX={1}>
             <Box flexShrink={0}>
                 <Text color={ACCENT}>
                     {describeQueue(queueState, quitting)}
+                    {` · ${describeSubfolderChoice(subfoldersIncluded)}`}
                 </Text>
             </Box>
             <KeyHints />

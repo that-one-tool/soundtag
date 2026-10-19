@@ -16,10 +16,9 @@ export interface BrowserListing {
 
 export type TrackStatuses = ReadonlyMap<string, TrackStatus>;
 
-export interface TagTarget {
-    kind: "file" | "folder";
-    path: string;
-}
+export type TagTarget =
+    | { kind: "file"; path: string }
+    | { kind: "folder"; path: string; recursive: boolean };
 
 export type TagJobRunner = (
     target: TagTarget,

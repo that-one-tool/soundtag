@@ -89,6 +89,7 @@ folder, its file counts). Processing messages appear in the log pane below.
 | `←`, Backspace, Delete | Go up one folder                                |
 | `t`                    | Tag the file or folder under the cursor         |
 | `a`                    | Tag the folder being browsed                    |
+| `r`                    | Include or exclude subfolders in folder runs    |
 | `s`                    | Stop the current run after the file in progress |
 | `q`, Ctrl+C            | Quit (press again during a run to quit at once) |
 
@@ -96,12 +97,14 @@ Tagging runs in the background, so you can keep browsing; further `t` and `a`
 presses are queued and run one after another, and are ignored once you quit.
 Once processed in this session, files get a colored dot: green for `TAGGED`,
 yellow for `SKIPPED`, red for `FAILED`. A folder shows the worst status of the
-files inside it. Folders are tagged with the `--recursive`/`--no-recursive`
-setting. A file renamed by an earlier run before its own queued run starts is
-skipped. Quitting during a run waits for the file in progress; quitting again
-exits immediately with code 130. Symlinked folders are listed too. The browser
-needs an interactive terminal; for scripted runs, pass the source folder as an
-argument.
+files inside it. Folder runs include subfolders unless `--no-recursive` was
+passed; `r` switches this for the folders queued next, and the status bar shows
+the current choice. A file or folder that is already queued or running is not
+queued again, even with a different choice; the log says so. A file renamed by
+an earlier run before its own queued run starts is skipped. Quitting during a
+run waits for the file in progress; quitting again exits immediately with
+code 130. Symlinked folders are listed too. The browser needs an interactive
+terminal; for scripted runs, pass the source folder as an argument.
 
 By default, SoundTag scans subfolders. Use `--no-recursive` to scan only the
 source folder itself:

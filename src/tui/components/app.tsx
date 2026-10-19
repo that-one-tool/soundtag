@@ -33,21 +33,30 @@ function useBrowsing(startDirectory: string, statusStore: TrackStatusStore) {
     return { browser, dispatch, hovered, details, statuses };
 }
 
-function useAppState({ startDirectory, services }: AppProps) {
-    const { queue, statusStore, logBuffer } = services;
-    const layout = useLayout();
+function useStatus({ queue, subfolders }: TuiServices) {
     const queueState = useStore(queue);
-    const browsing = useBrowsing(startDirectory, statusStore);
+    const subfoldersIncluded = useStore(subfolders);
     const { quitting, requestQuit } = useQuit(queue, queueState);
+    return {
+        status: { queueState, quitting, subfoldersIncluded },
+        requestQuit,
+    };
+}
+
+function useAppState({ startDirectory, services }: AppProps) {
+    const layout = useLayout();
+    const browsing = useBrowsing(startDirectory, services.statusStore);
+    const { status, requestQuit } = useStatus(services);
     useKeyboard({
         ...browsing,
         directory: browsing.browser.directory,
-        queue,
-        quitting,
+        queue: services.queue,
+        quitting: status.quitting,
         requestQuit,
         pageSize: layout.listHeight,
+        subfolders: services.subfolders,
     });
-    return { ...layout, ...browsing, queueState, quitting, logBuffer };
+    return { ...layout, ...browsing, status, logBuffer: services.logBuffer };
 }
 
 type WorkspaceProps = BrowserPaneProps & MetadataPanelProps;
@@ -84,10 +93,7 @@ export function App(props: AppProps) {
                 height={state.listHeight}
             />
             <LogPane logBuffer={state.logBuffer} height={state.logLines} />
-            <StatusBar
-                queueState={state.queueState}
-                quitting={state.quitting}
-            />
+            <StatusBar {...state.status} />
         </Box>
     );
 }

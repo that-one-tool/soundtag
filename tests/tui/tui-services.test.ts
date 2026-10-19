@@ -36,3 +36,14 @@ test("createTuiServices routes job results to the status store and logs", async 
     );
     assert.ok(logText.some((text) => text.startsWith("Searching:")));
 });
+
+test("createTuiServices starts the subfolder choice from the options", () => {
+    const services = createTuiServices({
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: false,
+        renameFiles: false,
+    });
+
+    assert.equal(services.subfolders.getSnapshot(), false);
+});

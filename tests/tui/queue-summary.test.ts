@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { describeQueue } from "../../src/tui/queue-summary.js";
+import { describeQueue, describeTarget } from "../../src/tui/queue-summary.js";
 import type { QueueState } from "../../src/tui/types.js";
 
 const idle: QueueState = {
@@ -11,7 +11,7 @@ const idle: QueueState = {
 };
 const running: QueueState = {
     ...idle,
-    running: { kind: "folder", path: "/music/Album" },
+    running: { kind: "folder", path: "/music/Album", recursive: true },
 };
 
 test("describeQueue reports an idle queue", () => {
@@ -37,5 +37,17 @@ test("describeQueue tells when the run is stopping or the app quitting", () => {
     assert.equal(
         describeQueue({ ...running, stopping: true }, true),
         "Tagging Album · quitting after the current file (press q again to force)"
+    );
+});
+
+test("describeTarget names a file, or a folder with its subfolder choice", () => {
+    assert.equal(describeTarget({ kind: "file", path: "/a.mp3" }), "a.mp3");
+    assert.equal(
+        describeTarget({ kind: "folder", path: "/Rock", recursive: true }),
+        "Rock (subfolders on)"
+    );
+    assert.equal(
+        describeTarget({ kind: "folder", path: "/Rock", recursive: false }),
+        "Rock (subfolders off)"
     );
 });

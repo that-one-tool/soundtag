@@ -16,7 +16,6 @@ import type { TagJobRunner, TagTarget } from "./types.js";
 export interface TagJobDependencies {
     metadataChain: MetadataChain;
     logger: Logger;
-    recursive: boolean;
     renameFiles: boolean;
     onTrackProcessed: (result: ProcessedTrack) => void;
 }
@@ -40,19 +39,26 @@ async function findFile(file: string, logger: Logger): Promise<TargetFiles> {
     return { sourceRoot: path.dirname(file), files: exists ? [file] : [] };
 }
 
-const TARGET_FINDERS: Record<
-    TagTarget["kind"],
-    (
-        targetPath: string,
-        dependencies: TagJobDependencies
-    ) => Promise<TargetFiles>
-> = {
-    file: (file, { logger }) => findFile(file, logger),
-    folder: async (folder, { recursive }) => ({
+async function findFolderFiles(
+    folder: string,
+    recursive: boolean
+): Promise<TargetFiles> {
+    return {
         sourceRoot: folder,
         files: await findAudioFiles(folder, recursive, MAX_FILES_PER_RUN),
-    }),
-};
+    };
+}
+
+function findTargetFiles(
+    target: TagTarget,
+    logger: Logger
+): Promise<TargetFiles> {
+    if (target.kind === "file") {
+        return findFile(target.path, logger);
+    }
+
+    return findFolderFiles(target.path, target.recursive);
+}
 
 async function runBatch(
     { sourceRoot, files }: TargetFiles,
@@ -103,10 +109,7 @@ async function runTagJob(
     dependencies: TagJobDependencies
 ): Promise<boolean> {
     try {
-        const targetFiles = await TARGET_FINDERS[target.kind](
-            target.path,
-            dependencies
-        );
+        const targetFiles = await findTargetFiles(target, dependencies.logger);
         return await tagFoundFiles(targetFiles, stopSignal, dependencies);
     } catch (error) {
         dependencies.logger.error(`Error: ${getErrorMessage(error)}`);

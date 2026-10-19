@@ -112,6 +112,7 @@ test("App queues the hovered file or folder for tagging", async () => {
     assert.deepEqual(jobs[0].target, {
         kind: "folder",
         path: path.join(directory, "Album"),
+        recursive: true,
     });
 });
 
@@ -204,7 +205,50 @@ test("App tags the folder being browsed with a", async () => {
     stdin.write("a");
 
     await waitFor(() => jobs.length === 1);
-    assert.deepEqual(jobs[0].target, { kind: "folder", path: directory });
+    assert.deepEqual(jobs[0].target, {
+        kind: "folder",
+        path: directory,
+        recursive: true,
+    });
+});
+
+test("App keeps the subfolder choice of each queued folder", async () => {
+    const directory = await createLibrary();
+    await fs.mkdir(path.join(directory, "Live"));
+    const { lastFrame, stdin, jobs } = await renderApp(directory);
+    stdin.write("a");
+    await waitFor(() => jobs.length === 1);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Audio files");
+    stdin.write("t");
+
+    stdin.write("r");
+    await waitForFrame(lastFrame, "subfolders off");
+    stdin.write(KEYS.down);
+    await waitFor(() => findFrameLine(lastFrame, "Live").includes("▸"));
+    stdin.write("t");
+    await waitForFrame(lastFrame, "2 queued");
+    jobs[0].finish(true);
+    await waitFor(() => jobs.length === 2);
+    jobs[1].finish(true);
+    await waitFor(() => jobs.length === 3);
+
+    assert.deepEqual(
+        jobs.map(({ target }) => target),
+        [
+            { kind: "folder", path: directory, recursive: true },
+            {
+                kind: "folder",
+                path: path.join(directory, "Album"),
+                recursive: true,
+            },
+            {
+                kind: "folder",
+                path: path.join(directory, "Live"),
+                recursive: false,
+            },
+        ]
+    );
 });
 
 test("App ignores tag keys while quitting", async () => {
@@ -213,6 +257,7 @@ test("App ignores tag keys while quitting", async () => {
     services.queue.enqueue({
         kind: "folder",
         path: path.join(directory, "Album"),
+        recursive: true,
     });
     stdin.write("q");
     await waitForFrame(lastFrame, "quitting after the current file");
