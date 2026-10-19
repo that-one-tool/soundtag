@@ -39,8 +39,12 @@ MUSICBRAINZ_USER_AGENT=SoundTag/1.0.0 (your-contact-information)
 YOUTUBE_API_KEY=your_youtube_data_api_key
 ```
 
+Last.fm API requests (up to two per track: a search, then the track details)
+are spaced two seconds apart; cover image downloads are not.
+
 MusicBrainz does not require an API key. It requires a meaningful User-Agent
-string and limits requests to one per second. Set `MUSICBRAINZ_USER_AGENT` to
+string and limits requests to one per second; SoundTag spaces them two
+seconds apart. Set `MUSICBRAINZ_USER_AGENT` to
 identify your SoundTag installation and provide contact information. The
 MusicBrainz fallback is used when Last.fm misses track metadata or cover
 art; cover images are retrieved from the Cover Art Archive. If metadata is
@@ -51,9 +55,8 @@ the genre and, when its release matches the track's album (or no album is
 known), the track number, disc number and album artist. These are only taken
 when the iTunes song has the same title and artist. Since only iTunes provides
 them, a track missing its genre or track number is looked up on every
-service. iTunes searches are
-spaced at least three seconds apart to stay within the 20-requests-per-minute
-limit.
+service. iTunes searches are spaced at least four seconds apart to stay within
+the 20-requests-per-minute limit.
 If no provider returns artwork for a track matched by the metadata services,
 SoundTag can use a YouTube video thumbnail as a last resort. This requires a
 YouTube Data API key with access to `search.list`; set `YOUTUBE_API_KEY` to

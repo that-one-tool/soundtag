@@ -26,7 +26,7 @@ import type {
 } from "../types.js";
 
 const ITUNES_SEARCH_URL = "https://itunes.apple.com/search";
-const ITUNES_REQUEST_INTERVAL = 3_000;
+const ITUNES_REQUEST_INTERVAL = 4_000;
 
 interface ItunesTrack {
     trackName?: string;

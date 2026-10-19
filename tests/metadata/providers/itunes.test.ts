@@ -54,7 +54,7 @@ test("iTunes searches are rate-limited when requests run concurrently", async ()
     ]);
 
     assert.equal(requestCount, 2);
-    assert.deepEqual(sleeps, [3000]);
+    assert.deepEqual(sleeps, [4000]);
 });
 
 test("ItunesProvider logs failures to the injected logger", async () => {

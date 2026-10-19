@@ -39,13 +39,17 @@ function createCoverProvider(
         : undefined;
 }
 
-export function createMetadataChain(
+function createProviders(
     config: MetadataChainConfig,
     clock: Clock,
     logger: Logger
-): MetadataChain {
-    const providers = [
-        new LastFmProvider(config.lastFmApiKey, config.verbose, logger),
+): MetadataProvider[] {
+    return [
+        new LastFmProvider(
+            { apiKey: config.lastFmApiKey, verbose: config.verbose },
+            clock,
+            logger
+        ),
         ...createMusicBrainzProviders(
             config.musicBrainzUserAgent,
             clock,
@@ -53,9 +57,15 @@ export function createMetadataChain(
         ),
         new ItunesProvider(clock, logger),
     ];
+}
 
+export function createMetadataChain(
+    config: MetadataChainConfig,
+    clock: Clock,
+    logger: Logger
+): MetadataChain {
     return new MetadataChain(
-        providers,
+        createProviders(config, clock, logger),
         createCoverProvider(config.youtubeApiKey, logger),
         logger
     );

@@ -6,6 +6,11 @@ import {
     readJsonResponse,
     type ImageRequest,
 } from "../../shared/http.js";
+import {
+    createRateLimiter,
+    type Clock,
+    type RateLimiter,
+} from "../../shared/rate-limiter.js";
 import { extractYear, valueOrEmpty } from "../track-metadata.js";
 import type {
     MetadataProvider,
@@ -17,6 +22,12 @@ import type {
 const LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/";
 const DEFAULT_COVER = "2a96cbd8b46e442fc41c2b86b821562f.png";
 const MAX_LARGE_COVER_BYTES = 500 * 1024;
+const LASTFM_REQUEST_INTERVAL = 2_000;
+
+export interface LastFmSettings {
+    apiKey: string;
+    verbose: boolean;
+}
 
 interface LastFmImage {
     size?: string;
@@ -106,23 +117,6 @@ function getTrackMatches(
 function getFirstMatch(data: LastFmSearchResponse): LastFmTrack | null {
     const matches = [getTrackMatches(data) ?? []].flat();
     return matches[0] ?? null;
-}
-
-async function searchTrack(
-    { title, artist }: TrackSearch,
-    apiKey: string,
-    logger: Logger
-): Promise<LastFmTrack | null> {
-    try {
-        const data = await requestLastFm<LastFmSearchResponse>(
-            buildSearchParams(title, apiKey, artist),
-            null
-        );
-        return getFirstMatch(data);
-    } catch (error) {
-        logger.error(`Last.fm search failed: ${getErrorMessage(error)}`);
-        return null;
-    }
 }
 
 function buildTrackInfoParams(
@@ -234,17 +228,21 @@ function logAlbumDetails(
 
 export class LastFmProvider implements MetadataProvider {
     readonly name = "Last.fm";
+    private readonly schedule: RateLimiter;
+
     constructor(
-        private readonly apiKey: string,
-        private readonly verbose: boolean,
+        private readonly settings: LastFmSettings,
+        clock: Clock,
         private readonly logger: Logger
-    ) {}
+    ) {
+        this.schedule = createRateLimiter(LASTFM_REQUEST_INTERVAL, clock);
+    }
 
     async findMetadata(
         search: TrackSearch,
         needsCover: boolean
     ): Promise<TrackMetadata | null> {
-        const match = await searchTrack(search, this.apiKey, this.logger);
+        const match = await this.searchTrack(search);
 
         if (!match) {
             logAlbumDetails({ album: "", year: "" }, this.logger);
@@ -271,15 +269,40 @@ export class LastFmProvider implements MetadataProvider {
     }
 
     private getUrlLogger(): Logger | null {
-        return this.verbose ? this.logger : null;
+        return this.settings.verbose ? this.logger : null;
+    }
+
+    private request<T>(
+        params: Record<string, string>,
+        urlLogger: Logger | null
+    ): Promise<T> {
+        return this.schedule(() => requestLastFm<T>(params, urlLogger));
+    }
+
+    private async searchTrack({
+        title,
+        artist,
+    }: TrackSearch): Promise<LastFmTrack | null> {
+        try {
+            const data = await this.request<LastFmSearchResponse>(
+                buildSearchParams(title, this.settings.apiKey, artist),
+                null
+            );
+            return getFirstMatch(data);
+        } catch (error) {
+            this.logger.error(
+                `Last.fm search failed: ${getErrorMessage(error)}`
+            );
+            return null;
+        }
     }
 
     private async getTrackInfo(
         matched: Pick<TrackInfo, "title" | "artist">
     ): Promise<LastFmTrack | null> {
         try {
-            const data = await requestLastFm<LastFmInfoResponse>(
-                buildTrackInfoParams(matched, this.apiKey),
+            const data = await this.request<LastFmInfoResponse>(
+                buildTrackInfoParams(matched, this.settings.apiKey),
                 this.getUrlLogger()
             );
             return data.track ?? null;

@@ -58,7 +58,7 @@ test("MusicBrainzProvider rate-limits the retry", async () => {
         false
     );
 
-    assert.deepEqual(clock.sleeps, [0, 1000]);
+    assert.deepEqual(clock.sleeps, [0, 2000]);
 });
 
 test("MusicBrainzProvider gives up after a second unavailable response", async () => {
