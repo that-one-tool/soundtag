@@ -1,0 +1,56 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["typescript", "unicorn", "oxc", "import", "node"],
+    "categories": {
+        "correctness": "error",
+        "suspicious": "warn"
+    },
+    "rules": {
+        "complexity": [
+            "warn",
+            {
+                "max": 3
+            }
+        ],
+        "max-lines-per-function": [
+            "warn",
+            {
+                "max": 20,
+                "skipBlankLines": true,
+                "skipComments": true
+            }
+        ],
+        "max-params": [
+            "warn",
+            {
+                "max": 3
+            }
+        ],
+        "max-depth": [
+            "warn",
+            {
+                "max": 2
+            }
+        ],
+        "no-nested-ternary": "error",
+        "eqeqeq": "error",
+        "typescript/no-explicit-any": "error",
+        "import/no-unassigned-import": [
+            "warn",
+            {
+                "allow": ["dotenv/config"]
+            }
+        ]
+    },
+    "overrides": [
+        {
+            "files": ["tests/**/*.ts"],
+            "rules": {
+                "max-lines-per-function": "off",
+                "complexity": "off",
+                "max-depth": "off"
+            }
+        }
+    ],
+    "ignorePatterns": ["dist", "node_modules"]
+}

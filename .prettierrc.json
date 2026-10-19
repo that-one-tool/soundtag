@@ -1,0 +1,11 @@
+{
+    "tabWidth": 4,
+    "printWidth": 80,
+    "trailingComma": "es5",
+    "overrides": [
+        {
+            "files": ["package.json", "tsconfig*.json", "*.md"],
+            "options": { "tabWidth": 2 }
+        }
+    ]
+}
