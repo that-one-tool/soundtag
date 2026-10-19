@@ -5,9 +5,9 @@ import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
 import { getTagStore } from "../tags/audio-tags.js";
 import type { StoredTags } from "../tags/types.js";
+import { getAlbumKey, readKnownTags, type KnownTags } from "./album-tags.js";
 
 type CoverHolders = Map<string, string>;
-type KnownTags = ReadonlyMap<string, StoredTags>;
 
 export interface TaggedFile {
     path: string;
@@ -21,20 +21,11 @@ export interface SharedCover {
 
 const NO_INFO: TrackInfo = { title: "", artist: "", album: "", year: "" };
 
-function normalizeTagValue(value: string): string {
-    return value.normalize("NFC").trim().toLowerCase();
-}
-
-function getAlbumKey({ artist, album }: TrackInfo): string | null {
-    const fields = [artist, album].map(normalizeTagValue);
-    return fields.every(Boolean) ? fields.join("\u0000") : null;
-}
-
 async function readCoverAlbumKey(
     file: string,
     knownTags: KnownTags
 ): Promise<string | null> {
-    const tags = knownTags.get(file) ?? (await getTagStore(file).read(file));
+    const tags = await readKnownTags(file, knownTags);
     return tags.hasCover ? getAlbumKey(tags.info) : null;
 }
 

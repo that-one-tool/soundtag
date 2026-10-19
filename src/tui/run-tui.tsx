@@ -7,9 +7,7 @@ import {
 } from "./tui-services.js";
 import type { TuiOutcome } from "./types.js";
 
-export interface TuiOptions extends TaggingOptions {
-    startDirectory: string;
-}
+export type TuiOptions = TaggingOptions;
 
 export interface TerminalStreams {
     stdin: NodeJS.ReadStream;

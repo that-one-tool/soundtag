@@ -6,6 +6,7 @@ import {
     type BrowserAction,
     type BrowserState,
 } from "../browser-state.js";
+import type { PathMoves } from "../path-moves.js";
 import type { ExternalStore } from "./use-store.js";
 
 interface ListingLoader {
@@ -43,9 +44,14 @@ function watchListing(
     };
 }
 
+export interface BrowserSources {
+    changes: ExternalStore<unknown>;
+    moves: PathMoves;
+}
+
 export function useBrowser(
     startDirectory: string,
-    changes: ExternalStore<unknown>
+    { changes, moves }: BrowserSources
 ): [BrowserState, Dispatch<BrowserAction>] {
     const [state, dispatch] = useReducer(
         reduceBrowserState,
@@ -56,6 +62,11 @@ export function useBrowser(
     useEffect(
         () => watchListing(state.directory, changes, dispatch),
         [state.directory, changes]
+    );
+
+    useEffect(
+        () => moves.subscribe((move) => dispatch({ type: "moved", move })),
+        [moves]
     );
 
     return [state, dispatch];

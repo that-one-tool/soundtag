@@ -12,7 +12,11 @@ import {
 import { captureConsole } from "../helpers/console.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { consoleLogger } from "../../src/shared/logger.js";
-import type { ProcessedTrack } from "../../src/processing/types.js";
+import type {
+    ProcessedTrack,
+    ProcessingReport,
+} from "../../src/processing/types.js";
+import type { PathMove } from "../../src/shared/paths.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import {
@@ -702,4 +706,221 @@ test("processBatch shares a renamed holder's cover without reading it again", as
         await getTagStore(renamedBorrower).readCover(renamedBorrower),
         Buffer.from("cover")
     );
+});
+
+async function writeTrack(file: string, info: typeof albumInfo) {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, `audio ${file}`);
+    await getTagStore(file).write(file, { info, extras: {}, coverData: null });
+}
+
+async function createAlbumFolders(albumsByFolder: Record<string, string>) {
+    const root = await createTemporaryDirectory();
+    const files: string[] = [];
+    for (const [folder, album] of Object.entries(albumsByFolder)) {
+        for (const title of ["A", "B"]) {
+            const file = path.join(root, folder, `${title}.mp3`);
+            await writeTrack(file, { ...albumInfo, album, title });
+            files.push(file);
+        }
+    }
+    return { root, files };
+}
+
+interface AlbumBatchOptions {
+    renameFiles?: boolean;
+    libraryRoot?: string;
+    stop?: AbortController;
+}
+
+async function processAlbumBatch(
+    sourceRoot: string,
+    files: string[],
+    { renameFiles = true, libraryRoot, stop }: AlbumBatchOptions = {}
+) {
+    const report: ProcessingReport = createReport(files, sourceRoot);
+    const moves: PathMove[] = [];
+    const logger = createRecordingLogger();
+    const controller = stop ?? new AbortController();
+
+    await processBatch(files, {
+        context: { sourceRoot, metadataChain: createTestChain(), logger },
+        report,
+        stopSignal: controller.signal,
+        renameFiles,
+        libraryRoot,
+        onFolderRenamed: (move) => {
+            moves.push(move);
+            stop?.abort();
+        },
+    });
+    return { report, moves, logger };
+}
+
+test("processBatch renames the folder of an album after renaming its tracks", async () => {
+    const { root, files } = await createAlbumFolders({ old: "Album" });
+
+    const { report, moves } = await processAlbumBatch(root, files);
+
+    const destination = path.join(root, "Artist - Album");
+    assert.deepEqual(moves, [{ source: path.join(root, "old"), destination }]);
+    assert.deepEqual(report, {
+        files: {
+            [path.join("old", "A.mp3")]: "TAGGED",
+            [path.join("old", "B.mp3")]: "TAGGED",
+        },
+        renamed: {
+            [path.join("old", "A.mp3")]: path.join(
+                "Artist - Album",
+                "Artist - A.mp3"
+            ),
+            [path.join("old", "B.mp3")]: path.join(
+                "Artist - Album",
+                "Artist - B.mp3"
+            ),
+            old: "Artist - Album",
+        },
+    });
+    await fs.access(path.join(destination, "Artist - A.mp3"));
+});
+
+test("processBatch keeps folder names when renaming is disabled", async () => {
+    const { root, files } = await createAlbumFolders({ old: "Album" });
+
+    const { moves } = await processAlbumBatch(root, files, {
+        renameFiles: false,
+    });
+
+    assert.deepEqual(moves, []);
+    await fs.access(files[0]);
+});
+
+test("processBatch keeps the source folder unless the library root is above it", async () => {
+    const { root, files } = await createAlbumFolders({ old: "Album" });
+    const album = path.join(root, "old");
+
+    const kept = await processAlbumBatch(album, files);
+    const renamed = await processAlbumBatch(
+        album,
+        ["Artist - A.mp3", "Artist - B.mp3"].map((name) =>
+            path.join(album, name)
+        ),
+        { libraryRoot: root }
+    );
+
+    assert.deepEqual(kept.moves, []);
+    assert.deepEqual(renamed.report.renamed, {
+        ".": path.join("..", "Artist - Album"),
+    });
+});
+
+test("processBatch stops renaming folders once a stop is requested", async () => {
+    const { root, files } = await createAlbumFolders({
+        first: "One",
+        second: "Two",
+    });
+
+    const { moves, logger } = await processAlbumBatch(root, files, {
+        stop: new AbortController(),
+    });
+
+    assert.equal(moves.length, 1);
+    await fs.access(path.join(root, "second"));
+    assert.ok(
+        logger.infos.includes("Stopped before renaming the remaining folders.")
+    );
+});
+
+test("processBatch renames the folder of tracks renamed after borrowing a cover", async () => {
+    const root = await createTemporaryDirectory();
+    const [holder, borrower] = ["A", "B"].map((title) =>
+        path.join(root, "old", `${title}.mp3`)
+    );
+    await fs.mkdir(path.join(root, "old"));
+    for (const [file, coverData] of [
+        [holder, Buffer.from("cover")],
+        [borrower, null],
+    ] as const) {
+        await fs.writeFile(file, `audio ${file}`);
+        await getTagStore(file).write(file, {
+            info: { ...albumInfo, title: path.basename(file, ".mp3") },
+            extras: {},
+            coverData,
+        });
+    }
+    const notFoundChain = new MetadataChain(
+        [{ name: "Fake", findMetadata: async () => null }],
+        undefined,
+        createProviderServices()
+    );
+
+    await processBatch([holder, borrower], {
+        context: {
+            sourceRoot: root,
+            metadataChain: notFoundChain,
+            logger: createRecordingLogger(),
+        },
+        report: createReport([holder, borrower], root),
+        stopSignal: new AbortController().signal,
+        renameFiles: true,
+    });
+
+    await fs.access(path.join(root, "Artist - Album", "Artist - B.mp3"));
+});
+
+function createNotFoundChain(): MetadataChain {
+    return new MetadataChain(
+        [{ name: "Fake", findMetadata: async () => null }],
+        undefined,
+        createProviderServices()
+    );
+}
+
+async function processWith(
+    root: string,
+    files: string[],
+    metadataChain: MetadataChain
+) {
+    const logger = createRecordingLogger();
+    await processBatch(files, {
+        context: { sourceRoot: root, metadataChain, logger },
+        report: createReport(files, root),
+        stopSignal: new AbortController().signal,
+        renameFiles: true,
+    });
+    return logger;
+}
+
+test("processBatch keeps the folder of tracks whose tags nothing confirmed", async () => {
+    const { root, files } = await createAlbumFolders({ old: "Album" });
+
+    await processWith(root, files, createNotFoundChain());
+
+    await fs.access(path.join(root, "old"));
+});
+
+test("processBatch tells sibling folders of one album apart by disc tag", async () => {
+    const root = await createTemporaryDirectory();
+    const files: string[] = [];
+    for (const [folder, discNumber] of [
+        ["1 - 2", 1],
+        ["3 - 4", 2],
+    ] as const) {
+        for (const title of ["A", "B"]) {
+            const file = path.join(root, folder, `${title}${discNumber}.mp3`);
+            await fs.mkdir(path.dirname(file), { recursive: true });
+            await fs.writeFile(file, `audio ${file}`);
+            await getTagStore(file).write(file, {
+                info: { ...albumInfo, title: `${title}${discNumber}` },
+                extras: { discNumber, genre: "Rock" },
+                coverData: Buffer.from("cover"),
+            });
+            files.push(file);
+        }
+    }
+
+    await processWith(root, files, createNotFoundChain());
+
+    await fs.access(path.join(root, "Artist - Album - CD1", "Artist - A1.mp3"));
+    await fs.access(path.join(root, "Artist - Album - CD2", "Artist - B2.mp3"));
 });

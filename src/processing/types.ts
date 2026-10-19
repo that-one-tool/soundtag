@@ -30,3 +30,17 @@ export interface ProcessedTrack {
     status: TrackStatus;
     destination: string | null;
 }
+
+export interface FolderAlbum {
+    folder: string;
+    artist: string;
+    album: string;
+    key: string;
+    disc: number | null;
+    discCount: number;
+}
+
+export interface FolderName {
+    folder: string;
+    name: string;
+}

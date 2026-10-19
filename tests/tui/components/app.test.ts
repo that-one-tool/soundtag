@@ -189,6 +189,27 @@ test("App refreshes the listing after a file is renamed", async () => {
     assert.equal(findFrameLine(lastFrame, "song.mp3"), "");
 });
 
+test("App follows the browsed folder when it is renamed", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, services } = await renderApp(directory);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Audio files");
+    stdin.write(KEYS.enter);
+    await waitForFrame(lastFrame, "inside.mp3");
+    const renamed = path.join(directory, "Artist - Album");
+    await fs.rename(path.join(directory, "Album"), renamed);
+
+    services.pathMoves.record({
+        source: path.join(directory, "Album"),
+        destination: renamed,
+    });
+
+    await waitForFrame(lastFrame, renamed);
+    stdin.write(KEYS.left);
+    await waitForFrame(lastFrame, "song.mp3");
+    assert.match(findFrameLine(lastFrame, "Artist - Album/"), /▸/);
+});
+
 test("App shows the latest log lines", async () => {
     const directory = await createLibrary();
     const { lastFrame, services } = await renderApp(directory);

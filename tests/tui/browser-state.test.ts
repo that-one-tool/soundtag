@@ -161,3 +161,62 @@ test("loaded keeps the same entry objects for unchanged entries", () => {
 
     assert.equal(reloaded.entries[1], state.entries[2]);
 });
+
+const renamedAlbum = { source: "/music/Album", destination: "/music/A - B" };
+
+test("moved keeps the cursor on a renamed folder", () => {
+    const state = reduceBrowserState(loadedState(1), {
+        type: "moved",
+        move: renamedAlbum,
+    });
+
+    assert.equal(state.directory, "/music");
+    assert.equal(state.focusPath, "/music/A - B");
+    assert.equal(state.entries[1].path, "/music/A - B");
+    assert.equal(state.entries[2], song);
+});
+
+test("moved follows the browsed folder when it is renamed", () => {
+    const inside = reduceBrowserState(loadedState(1), { type: "open" });
+
+    const state = reduceBrowserState(inside, {
+        type: "moved",
+        move: renamedAlbum,
+    });
+
+    assert.equal(state.directory, "/music/A - B");
+});
+
+test("moved keeps the folder to refocus when it is renamed", () => {
+    const inside = reduceBrowserState(createBrowserState("/music/Album/CD1"), {
+        type: "parent",
+    });
+
+    const state = reduceBrowserState(inside, {
+        type: "moved",
+        move: renamedAlbum,
+    });
+
+    assert.equal(state.directory, "/music/A - B");
+    assert.equal(state.focusPath, "/music/A - B/CD1");
+});
+
+test("moved keeps the cursor on entries outside the renamed folder", () => {
+    const state = reduceBrowserState(loadedState(2), {
+        type: "moved",
+        move: renamedAlbum,
+    });
+
+    assert.equal(state.focusPath, undefined);
+    assert.equal(state.cursor, 2);
+});
+
+test("moved follows the folder of a listing that is still loading", () => {
+    const state = reduceBrowserState(createBrowserState("/music/Album"), {
+        type: "moved",
+        move: renamedAlbum,
+    });
+
+    assert.equal(state.directory, "/music/A - B");
+    assert.equal(state.focusPath, undefined);
+});

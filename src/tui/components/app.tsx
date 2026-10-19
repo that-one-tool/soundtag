@@ -27,10 +27,10 @@ function useLayout() {
 
 function useBrowsing(startDirectory: string, services: TuiServices) {
     const statuses = useStore(services.statusStore);
-    const [browser, dispatch] = useBrowser(
-        startDirectory,
-        services.statusStore
-    );
+    const [browser, dispatch] = useBrowser(startDirectory, {
+        changes: services.statusStore,
+        moves: services.pathMoves,
+    });
     const hovered = browser.entries[browser.cursor];
     const request = {
         entry: hovered,

@@ -1,16 +1,25 @@
 import * as path from "node:path";
 import { FolderNameCache } from "../library/folder-names.js";
 import type { Logger } from "../shared/logger.js";
+import { movePath, type PathMove } from "../shared/paths.js";
+import { planAlbumFolderNames } from "./album-folder-names.js";
+import {
+    findFolderAlbum,
+    renameAlbumFolder,
+    type AlbumFolderRenaming,
+} from "./album-folders.js";
 import {
     borrowFolderCover,
     FolderCovers,
     type CoverSharing,
 } from "./folder-covers.js";
 import { processTrack, type ProcessingContext } from "./processing.js";
-import { renameTrack } from "./rename.js";
+import { isRenamable, renameTrack } from "./rename.js";
 import type { StoredTags } from "../tags/types.js";
 import type {
     FileStatus,
+    FolderAlbum,
+    FolderName,
     ProcessedTrack,
     ProcessingTrack,
     ProcessingReport,
@@ -44,7 +53,10 @@ export interface BatchRun {
     report: ProcessingReport;
     stopSignal: AbortSignal;
     renameFiles: boolean;
+    // Defaults to the source folder; this folder and its parents keep their names.
+    libraryRoot?: string;
     onTrackProcessed?: (result: ProcessedTrack) => void;
+    onFolderRenamed?: (move: PathMove) => void;
 }
 
 interface BatchTrack extends ProcessingTrack {
@@ -59,9 +71,17 @@ function hasTags(track: BatchTrack): track is TaggedTrack {
     return track.tags !== null;
 }
 
+function isTrusted(track: BatchTrack): track is TaggedTrack {
+    return isRenamable(track.status, track.tags);
+}
+
 interface ActiveBatch extends BatchRun {
     folderNames: FolderNameCache;
     processed: BatchTrack[];
+}
+
+function getReportPath(file: string, sourceRoot: string): string {
+    return path.relative(sourceRoot, file) || ".";
 }
 
 function recordRename(
@@ -71,9 +91,9 @@ function recordRename(
 ): void {
     const { sourceRoot } = run.context;
     const renamed = (run.report.renamed ??= {});
-    renamed[path.relative(sourceRoot, source)] = path.relative(
-        sourceRoot,
-        destination
+    renamed[getReportPath(source, sourceRoot)] = getReportPath(
+        destination,
+        sourceRoot
     );
 }
 
@@ -130,22 +150,34 @@ async function processFiles(files: string[], run: ActiveBatch): Promise<void> {
     }
 }
 
+async function renameWithBorrowedCover(
+    track: BatchTrack,
+    tags: StoredTags,
+    run: ActiveBatch
+): Promise<string | null> {
+    const withCover = { ...tags, hasCover: true };
+    // Not found by any service, so it is trusted only once fully tagged.
+    const destination = await renameProcessedFile(
+        { source: track.source, status: "SKIPPED", tags: withCover },
+        run
+    );
+    track.destination = destination ?? track.destination;
+    track.tags = withCover;
+    return destination;
+}
+
 async function markTaggedByCover(
-    { source, status }: BatchTrack,
+    track: BatchTrack,
     tags: StoredTags,
     run: ActiveBatch
 ): Promise<void> {
+    const { source, status } = track;
     if (status !== "SKIPPED") {
         return;
     }
 
     run.report.files[path.relative(run.context.sourceRoot, source)] = "TAGGED";
-    const withCover = { ...tags, hasCover: true };
-    // The track itself was not found, so its tags stay unverified.
-    const destination = await renameProcessedFile(
-        { source, status: "SKIPPED", tags: withCover },
-        run
-    );
+    const destination = await renameWithBorrowedCover(track, tags, run);
     run.onTrackProcessed?.({ source, status: "TAGGED", destination });
 }
 
@@ -199,6 +231,91 @@ async function shareFolderCoversUnlessStopped(run: ActiveBatch): Promise<void> {
     }
 }
 
+function getTrackFolders(tracks: BatchTrack[]): string[] {
+    return [
+        ...new Set(tracks.map((track) => path.dirname(getCurrentPath(track)))),
+    ];
+}
+
+function moveRenamedPath(
+    reportPath: string,
+    move: PathMove,
+    sourceRoot: string
+): string {
+    const file = path.resolve(sourceRoot, reportPath);
+    return getReportPath(movePath(file, move), sourceRoot);
+}
+
+// Earlier renames must point at where the files are now.
+function moveRenamedPaths(move: PathMove, run: ActiveBatch): void {
+    const { report, context } = run;
+    const renamed = Object.entries(report.renamed ?? {});
+    report.renamed = Object.fromEntries(
+        renamed.map(([from, to]) => [
+            from,
+            moveRenamedPath(to, move, context.sourceRoot),
+        ])
+    );
+}
+
+async function renameFolder(
+    target: FolderName,
+    renaming: AlbumFolderRenaming,
+    run: ActiveBatch
+): Promise<void> {
+    const move = await renameAlbumFolder(target, renaming);
+
+    if (move) {
+        moveRenamedPaths(move, run);
+        recordRename(move.source, move.destination, run);
+        run.onFolderRenamed?.(move);
+    }
+}
+
+function createAlbumFolderRenaming(run: ActiveBatch): AlbumFolderRenaming {
+    return {
+        libraryRoot: run.libraryRoot ?? run.context.sourceRoot,
+        knownTags: getKnownTags(run.processed.filter(isTrusted)),
+        folderNames: new FolderNameCache([]),
+        logger: run.context.logger,
+    };
+}
+
+async function findFolderAlbums(
+    folders: string[],
+    renaming: AlbumFolderRenaming
+): Promise<FolderAlbum[]> {
+    const albums: FolderAlbum[] = [];
+    for (const folder of folders) {
+        const album = await findFolderAlbum(folder, renaming);
+        albums.push(...(album ? [album] : []));
+    }
+    return albums;
+}
+
+async function renameAlbumFolders(run: ActiveBatch): Promise<void> {
+    const renaming = createAlbumFolderRenaming(run);
+    const folders = getTrackFolders(run.processed);
+    const albums = await findFolderAlbums(folders, renaming);
+
+    for (const target of planAlbumFolderNames(albums, renaming.logger)) {
+        if (run.stopSignal.aborted) {
+            run.context.logger.info(
+                "Stopped before renaming the remaining folders."
+            );
+            return;
+        }
+
+        await renameFolder(target, renaming, run);
+    }
+}
+
+async function renameAlbumFoldersIfAllowed(run: ActiveBatch): Promise<void> {
+    if (run.renameFiles && !run.stopSignal.aborted) {
+        await renameAlbumFolders(run);
+    }
+}
+
 export async function processBatch(
     files: string[],
     run: BatchRun
@@ -209,6 +326,7 @@ export async function processBatch(
     try {
         await processFiles(files, batch);
         await shareFolderCoversUnlessStopped(batch);
+        await renameAlbumFoldersIfAllowed(batch);
     } finally {
         folderNames.clear();
         run.context.metadataChain.clearCache();

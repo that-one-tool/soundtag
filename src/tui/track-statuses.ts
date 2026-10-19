@@ -1,4 +1,4 @@
-import * as path from "node:path";
+import { isInsideFolder, movePath, type PathMove } from "../shared/paths.js";
 import type { ProcessedTrack, TrackStatus } from "../processing/types.js";
 import type { BrowserEntry, EntryKind, TrackStatuses } from "./types.js";
 
@@ -15,9 +15,13 @@ export function recordProcessedTrack(
     return updated;
 }
 
-function isInsideFolder(file: string, folder: string): boolean {
-    const relative = path.relative(folder, file);
-    return !relative.startsWith("..") && !path.isAbsolute(relative);
+export function moveStatuses(
+    statuses: TrackStatuses,
+    move: PathMove
+): TrackStatuses {
+    return new Map(
+        [...statuses].map(([file, status]) => [movePath(file, move), status])
+    );
 }
 
 function getStatusesInside(

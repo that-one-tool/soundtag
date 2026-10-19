@@ -139,3 +139,40 @@ test("TaggingQueue notifies subscribers on every change", async () => {
 
     assert.ok(notifications >= 2);
 });
+
+test("TaggingQueue moves the queued targets inside a renamed folder", () => {
+    const { queue } = createControlledQueue();
+    const inside: TagTarget = { kind: "file", path: "/music/Album/a.mp3" };
+    const other: TagTarget = { kind: "file", path: "/music/Albums/a.mp3" };
+    queue.enqueue(album);
+    queue.enqueue(getDiscTarget());
+    queue.enqueue(inside);
+    queue.enqueue(other);
+    let notifications = 0;
+    queue.subscribe(() => notifications++);
+
+    queue.moveTargets({ source: "/music/Album", destination: "/music/A - B" });
+
+    assert.deepEqual(queue.getSnapshot().running, {
+        ...album,
+        path: "/music/A - B",
+    });
+    assert.deepEqual(queue.getSnapshot().pending, [
+        { kind: "folder", path: "/music/A - B/CD1", recursive: false },
+        { kind: "file", path: "/music/A - B/a.mp3" },
+        other,
+    ]);
+    assert.equal(notifications, 1);
+});
+
+function getDiscTarget(): TagTarget {
+    return { kind: "folder", path: "/music/Album/CD1", recursive: false };
+}
+
+test("TaggingQueue moves nothing while idle", () => {
+    const { queue } = createControlledQueue();
+
+    queue.moveTargets({ source: "/music/Album", destination: "/music/A - B" });
+
+    assert.equal(queue.getSnapshot().running, null);
+});

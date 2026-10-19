@@ -1,6 +1,7 @@
 import { createCoverCache } from "../../src/tui/cover-reader.js";
 import { createDetailsCache } from "../../src/tui/entry-details.js";
 import { LogBuffer } from "../../src/tui/log-buffer.js";
+import { PathMoves } from "../../src/tui/path-moves.js";
 import { TaggingQueue } from "../../src/tui/tagging-queue.js";
 import { SubfolderSetting } from "../../src/tui/subfolder-setting.js";
 import { TrackStatusStore } from "../../src/tui/track-status-store.js";
@@ -31,6 +32,7 @@ export function createControlledServices(): {
             queue,
             logBuffer,
             statusStore: new TrackStatusStore(),
+            pathMoves: new PathMoves(),
             subfolders: new SubfolderSetting(true),
             detailsCache: createDetailsCache(),
             coverCache: createCoverCache({ trueColor: true }),

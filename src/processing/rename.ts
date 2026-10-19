@@ -28,7 +28,7 @@ const RENAME_CONDITIONS: Partial<
     SKIPPED: hasCoreTags,
 };
 
-function isRenamable(
+export function isRenamable(
     status: TrackStatus,
     tags: StoredTags | null
 ): tags is StoredTags {

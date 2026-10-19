@@ -11,13 +11,16 @@ import {
 import type { ProcessedTrack, ProcessingReport } from "../processing/types.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
+import type { PathMove } from "../shared/paths.js";
 import type { TagJobRunner, TagTarget } from "./types.js";
 
 export interface TagJobDependencies {
     metadataChain: MetadataChain;
     logger: Logger;
     renameFiles: boolean;
+    libraryRoot: string;
     onTrackProcessed: (result: ProcessedTrack) => void;
+    onFolderRenamed: (move: PathMove) => void;
 }
 
 interface TargetFiles {
@@ -65,16 +68,14 @@ async function runBatch(
     stopSignal: AbortSignal,
     dependencies: TagJobDependencies
 ): Promise<ProcessingReport> {
-    const { metadataChain, logger, renameFiles, onTrackProcessed } =
-        dependencies;
+    const { metadataChain, logger, ...batchSettings } = dependencies;
     logger.info(`Tagging ${files.length} audio files in ${sourceRoot}`);
     const report = createReport(files, sourceRoot);
     await processBatch(files, {
         context: { sourceRoot, metadataChain, logger },
         report,
         stopSignal,
-        renameFiles,
-        onTrackProcessed,
+        ...batchSettings,
     });
     return report;
 }

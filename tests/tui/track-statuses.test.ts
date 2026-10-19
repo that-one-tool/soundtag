@@ -5,6 +5,7 @@ import {
     countFolderStatuses,
     countStatuses,
     getEntryStatus,
+    moveStatuses,
     recordProcessedTrack,
 } from "../../src/tui/track-statuses.js";
 import { TrackStatusStore } from "../../src/tui/track-status-store.js";
@@ -144,4 +145,42 @@ test("TrackStatusStore notifies subscribers with a new snapshot", () => {
     assert.equal(notifications, 1);
     assert.notEqual(store.getSnapshot(), before);
     assert.equal(store.getSnapshot().get(song), "TAGGED");
+});
+
+test("moveStatuses moves the statuses of a renamed folder", () => {
+    const sibling = path.join(root, "Rocky", "song.mp3");
+    const renamed = path.join(root, "Artist - Album");
+    const statuses = new Map([
+        [song, "TAGGED" as const],
+        [sibling, "FAILED" as const],
+    ]);
+
+    const moved = moveStatuses(statuses, {
+        source: rock,
+        destination: renamed,
+    });
+
+    assert.deepEqual(
+        moved,
+        new Map([
+            [path.join(renamed, "song.mp3"), "TAGGED"],
+            [sibling, "FAILED"],
+        ])
+    );
+});
+
+test("TrackStatusStore notifies subscribers of a moved folder", () => {
+    const store = new TrackStatusStore();
+    store.record({ source: song, status: "TAGGED", destination: null });
+    let notifications = 0;
+    store.subscribe(() => notifications++);
+    const renamed = path.join(root, "Artist - Album");
+
+    store.recordMove({ source: rock, destination: renamed });
+
+    assert.equal(notifications, 1);
+    assert.equal(
+        store.getSnapshot().get(path.join(renamed, "song.mp3")),
+        "TAGGED"
+    );
 });

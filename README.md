@@ -150,8 +150,26 @@ name differs (letter case is ignored). Files skipped because no service found
 them keep their name, since their tags are unverified. Characters that
 filenames cannot hold, such as `/` or `?`, become `_`, a leading `.` becomes
 `_`, and names are shortened to 200 bytes. An existing file is never
-overwritten, even one whose name differs only in letter case. Use
-`--no-rename` to keep file names:
+overwritten, even one whose name differs only in letter case.
+
+At the end of a run that was not stopped, each folder holding processed tracks
+is renamed to `<Artist> - <Album>` when all its audio files share the same
+artist and album tags (ignoring case). The album artist is used when a track
+has one, so soundtracks and albums with guest artists count as one album. The
+folder needs at least two tracks, all processed in the same run and trusted
+enough to be renamed themselves. Other files, such as images, and subfolders
+without audio files do not matter, but a subfolder holding tracks keeps the
+folder as it is.
+
+A disc folder such as `CD1` or `Disc 2` becomes `<Artist> - <Album> - CD1`,
+unless the album title already ends with that disc. When sibling folders hold
+the same album, each is suffixed with its disc number tag (`- CD3`); without a
+distinct disc for each, they all keep their names and the log says so. A lone
+folder of a multi-disc album also gets its disc number. The source folder and
+its parents keep their names; in the browser, this is the folder it started
+in. Runs of spaces in generated names are collapsed, so files whose tags hold
+such spaces are renamed once. Use `--no-rename` to keep
+file and folder names:
 
 ```sh
 soundtag /path/to/music --no-rename

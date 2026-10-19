@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { movePath, type PathMove } from "../shared/paths.js";
 import type { BrowserEntry, BrowserListing } from "./types.js";
 
 export interface BrowserState {
@@ -13,7 +14,8 @@ export type BrowserAction =
     | { type: "loaded"; directory: string; listing: BrowserListing }
     | { type: "move"; delta: number }
     | { type: "open" }
-    | { type: "parent" };
+    | { type: "parent" }
+    | { type: "moved"; move: PathMove };
 
 export function createBrowserState(directory: string): BrowserState {
     return { directory, entries: [], cursor: 0 };
@@ -27,8 +29,12 @@ function clampCursor(cursor: number, entryCount: number): number {
     return Math.max(0, Math.min(cursor, entryCount - 1));
 }
 
+function getFocusPath(state: BrowserState): string | undefined {
+    return state.focusPath ?? getHoveredPath(state);
+}
+
 function selectCursor(state: BrowserState, entries: BrowserEntry[]): number {
-    const focusPath = state.focusPath ?? getHoveredPath(state);
+    const focusPath = getFocusPath(state);
     const focusIndex = entries.findIndex((entry) => entry.path === focusPath);
     return focusIndex >= 0
         ? focusIndex
@@ -77,6 +83,30 @@ function goToParent(state: BrowserState): BrowserState {
     return { ...createBrowserState(parent), focusPath: state.directory };
 }
 
+function getMovedFocusPath(
+    state: BrowserState,
+    move: PathMove
+): string | undefined {
+    const focusPath = getFocusPath(state);
+    const movedPath = focusPath && movePath(focusPath, move);
+    return movedPath === focusPath ? state.focusPath : movedPath;
+}
+
+// Names stay stale until the next listing load, which focuses the moved entry.
+function applyMove(state: BrowserState, move: PathMove): BrowserState {
+    return {
+        ...state,
+        directory: movePath(state.directory, move),
+        entries: state.entries.map((entry) => moveEntry(entry, move)),
+        focusPath: getMovedFocusPath(state, move),
+    };
+}
+
+function moveEntry(entry: BrowserEntry, move: PathMove): BrowserEntry {
+    const movedPath = movePath(entry.path, move);
+    return movedPath === entry.path ? entry : { ...entry, path: movedPath };
+}
+
 const OPENERS: Record<
     BrowserEntry["kind"],
     (state: BrowserState, entry: BrowserEntry) => BrowserState
@@ -104,6 +134,7 @@ const REDUCERS: {
     }),
     open: openHovered,
     parent: goToParent,
+    moved: (state, { move }) => applyMove(state, move),
 };
 
 export function reduceBrowserState(

@@ -9,7 +9,10 @@ interface TrackName {
 }
 
 function cleanNamePart(value: string): string {
-    return value.trim().replace(FORBIDDEN_FILENAME_CHARACTERS, "_");
+    return value
+        .trim()
+        .replace(/\s+/g, " ")
+        .replace(FORBIDDEN_FILENAME_CHARACTERS, "_");
 }
 
 function truncateToBytes(text: string, maxBytes: number): string {
@@ -26,15 +29,23 @@ function truncateToBytes(text: string, maxBytes: number): string {
     return truncated;
 }
 
+export function buildArtistName(
+    artist: string,
+    name: string,
+    suffix: string
+): string {
+    const maxStemBytes = MAX_FILENAME_BYTES - Buffer.byteLength(suffix);
+    // Capping the artist keeps the name, so long-named artists don't collide.
+    const artistPart = truncateToBytes(cleanNamePart(artist), maxStemBytes / 2);
+    const stem = `${artistPart.trimEnd()} - ${cleanNamePart(name)}`
+        .normalize("NFC")
+        .replace(/^\./, "_");
+    return `${truncateToBytes(stem, maxStemBytes).trimEnd()}${suffix}`;
+}
+
 export function buildTrackFilename(
     { artist, title }: TrackName,
     extension: string
 ): string {
-    const maxStemBytes = MAX_FILENAME_BYTES - Buffer.byteLength(extension);
-    // Capping the artist keeps the title, so long-named artists don't collide.
-    const artistPart = truncateToBytes(cleanNamePart(artist), maxStemBytes / 2);
-    const stem = `${artistPart.trimEnd()} - ${cleanNamePart(title)}`
-        .normalize("NFC")
-        .replace(/^\./, "_");
-    return `${truncateToBytes(stem, maxStemBytes).trimEnd()}${extension}`;
+    return buildArtistName(artist, title, extension);
 }

@@ -6,6 +6,7 @@ import { createTagJobRunner } from "../../src/tui/tag-job.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import { getTagStore } from "../../src/tags/audio-tags.js";
 import type { ProcessedTrack } from "../../src/processing/types.js";
+import type { PathMove } from "../../src/shared/paths.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { assertNoReport } from "../helpers/no-report.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
@@ -45,17 +46,22 @@ async function createTrack(
     return source;
 }
 
-function createRunner(overrides: { renameFiles?: boolean } = {}) {
+function createRunner(
+    overrides: { renameFiles?: boolean; libraryRoot?: string } = {}
+) {
     const processed: ProcessedTrack[] = [];
+    const moves: PathMove[] = [];
     const logger = createRecordingLogger();
     const runJob = createTagJobRunner({
         metadataChain: foundChain,
         logger,
         renameFiles: false,
+        libraryRoot: path.parse(process.cwd()).root,
         onTrackProcessed: (result) => processed.push(result),
+        onFolderRenamed: (move) => moves.push(move),
         ...overrides,
     });
-    return { runJob, processed, logger };
+    return { runJob, processed, moves, logger };
 }
 
 test("a file job tags the file without writing a report", async () => {
@@ -214,4 +220,24 @@ test("a file job skips a file that no longer exists", async () => {
     assert.deepEqual(processed, []);
     assert.ok(logger.infos.includes(`Skipped: ${source} no longer exists.`));
     assert.equal(logger.infos.at(-1), "Done!");
+});
+
+test("a folder job renames the album folder below the library root", async () => {
+    const libraryRoot = await createTemporaryDirectory();
+    const album = path.join(libraryRoot, "old");
+    await createTrack(album, "a.mp3");
+    await createTrack(album, "b.mp3");
+    const { runJob, moves } = createRunner({ renameFiles: true, libraryRoot });
+
+    await runJob(
+        { kind: "folder", path: album, recursive: false },
+        new AbortController().signal
+    );
+
+    assert.deepEqual(moves, [
+        {
+            source: album,
+            destination: path.join(libraryRoot, "Artist - Album"),
+        },
+    ]);
 });

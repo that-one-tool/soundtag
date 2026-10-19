@@ -1,7 +1,12 @@
 import type { Logger } from "../shared/logger.js";
+import { movePath, type PathMove } from "../shared/paths.js";
 import { Listeners } from "./listeners.js";
 import { describeTarget } from "./queue-summary.js";
 import type { QueueState, TagJobRunner, TagTarget } from "./types.js";
+
+function moveTarget(target: TagTarget, move: PathMove): TagTarget {
+    return { ...target, path: movePath(target.path, move) };
+}
 
 export class TaggingQueue {
     private readonly listeners = new Listeners();
@@ -50,6 +55,14 @@ export class TaggingQueue {
 
         this.controller.abort();
         this.update({ pending: [], stopping: true });
+    }
+
+    moveTargets(move: PathMove): void {
+        const { running, pending } = this.state;
+        this.update({
+            running: running && moveTarget(running, move),
+            pending: pending.map((target) => moveTarget(target, move)),
+        });
     }
 
     private findQueued({ path }: TagTarget): TagTarget | null | undefined {

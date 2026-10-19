@@ -46,3 +46,10 @@ test("buildTrackFilename keeps the title when the artist is very long", () => {
     assert.ok(filename.endsWith(" - Title.mp3"));
     assert.ok(Buffer.byteLength(filename) <= 200);
 });
+
+test("buildTrackFilename collapses runs of spaces", () => {
+    assert.equal(
+        buildTrackFilename({ artist: "A  B", title: "C \t D" }, ".mp3"),
+        "A B - C D.mp3"
+    );
+});
