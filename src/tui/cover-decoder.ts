@@ -30,3 +30,15 @@ export async function decodeWithSharp(
         .toBuffer({ resolveWithObject: true });
     return { width: info.width, height: info.height, pixels: data };
 }
+
+// Large enough for the cover box at common cell sizes; the terminal scales it.
+const PNG_COVER_PIXELS = 512;
+
+export async function decodeToPng(image: Buffer): Promise<Buffer> {
+    const sharp = await loadSharp();
+    return sharp(image, { failOn: "none" })
+        .resize(PNG_COVER_PIXELS, PNG_COVER_PIXELS, { fit: "cover" })
+        .flatten({ background: "#000000" })
+        .png()
+        .toBuffer();
+}

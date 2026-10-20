@@ -97,3 +97,32 @@ test("createTuiServices moves statuses and queued targets of a renamed album fol
     const logText = services.logBuffer.getSnapshot().map((line) => line.text);
     assert.ok(!logText.some((text) => text.includes("no longer exists")));
 });
+
+test("createTuiServices draws no covers by default", async () => {
+    const services = createTuiServices({
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: false,
+        renameFiles: false,
+        startDirectory: process.cwd(),
+    });
+    const entry = {
+        name: "a.mp3",
+        path: "/missing/a.mp3",
+        kind: "file" as const,
+    };
+
+    services.coverOverlay.show(
+        { png: Buffer.from("png"), key: "png", width: 2, height: 2 },
+        {
+            row: 0,
+            column: 0,
+            columns: 2,
+            rows: 1,
+        }
+    );
+
+    assert.deepEqual(await services.coverCache.read(entry), {
+        kind: "missing",
+    });
+});

@@ -1,3 +1,4 @@
+import { CoverOverlay } from "../../src/tui/cover-overlay.js";
 import { createCoverCache } from "../../src/tui/cover-reader.js";
 import { createDetailsCache } from "../../src/tui/entry-details.js";
 import { EntryRenamer } from "../../src/tui/entry-renamer.js";
@@ -37,7 +38,8 @@ export function createControlledServices(): {
             pathMoves,
             subfolders: new SubfolderSetting(true),
             detailsCache: createDetailsCache(),
-            coverCache: createCoverCache({ trueColor: true }),
+            coverCache: createCoverCache("blocks"),
+            coverOverlay: new CoverOverlay(() => {}),
             renamer: new EntryRenamer({ queue, pathMoves, logger: logBuffer }),
         },
         jobs,

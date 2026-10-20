@@ -30,13 +30,15 @@ Provide your API keys in a `.env` file. SoundTag reads `.env` from the folder
 you run it in and from `~/.config/soundtag/.env` (or
 `$XDG_CONFIG_HOME/soundtag/.env`). A key in the local file wins over the same
 key in the config file, and variables already set in your shell win over both.
-Only the three keys below are read from these files; other variables are
+Only the four keys below are read from these files; other variables are
 ignored:
 
 ```env
 LASTFM_API_KEY=your_lastfm_api_key
 MUSICBRAINZ_USER_AGENT=SoundTag/1.0.0 (your-contact-information)
 YOUTUBE_API_KEY=your_youtube_data_api_key
+# Optional: kitty, blocks or none (detected from the terminal by default)
+# SOUNDTAG_COVER=kitty
 ```
 
 Last.fm API requests (up to two per track: a search, then the track details)
@@ -82,9 +84,13 @@ current directory. The left pane lists subfolders and audio files, and the right
 pane shows the stored tags of the file under the cursor (or, for a folder, its
 file counts). When the terminal is tall enough (about 37 rows or more), the
 file's embedded cover is drawn below its tags, growing with the terminal up to
-48 columns by 24 rows (from about 61 rows and 104 columns); this needs a
-terminal with true color support (`COLORTERM=truecolor`, which tmux only passes
-on when configured to). Processing messages appear in the log pane below.
+48 columns by 24 rows (from about 61 rows and 104 columns). Konsole 22.04 or
+later, kitty and Ghostty show it at full quality through the kitty graphics
+protocol; other terminals draw it with colored half blocks, which needs true
+color support (`COLORTERM=truecolor`, which tmux only passes on when configured
+to). Inside tmux, screen or Zellij the kitty protocol is not detected. Set
+`SOUNDTAG_COVER` to `kitty`, `blocks` or `none` to choose instead, for example
+`kitty` in WezTerm with its kitty graphics enabled. Processing messages appear in the log pane below.
 
 | Key                    | Action                                          |
 | ---------------------- | ----------------------------------------------- |

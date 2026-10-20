@@ -207,6 +207,7 @@ test("runApp opens the folder browser in the working directory", async () => {
             renameFiles: false,
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
             youtubeApiKey: undefined,
+            coverMode: undefined,
         },
     ]);
     assert.deepEqual(output.errors, []);

@@ -14,16 +14,21 @@ import {
 import type {
     BrowserEntry,
     CoverLookup,
+    CoverSpot,
     EntryDetails,
 } from "../../../src/tui/types.js";
 import { VersionedCache } from "../../../src/tui/versioned-cache.js";
 import type { EntryRenamer } from "../../../src/tui/entry-renamer.js";
 import { startRenameDraft } from "../../../src/tui/rename-draft.js";
+import { CoverOverlay } from "../../../src/tui/cover-overlay.js";
+import { renderTui } from "../../../src/tui/run-tui.js";
 import {
+    createFakeTerminal,
     findFrameLine,
     KEYS,
     waitFor,
     waitForFrame,
+    waitForInput,
 } from "../../helpers/ink.js";
 import { createControlledServices } from "../../helpers/tui.js";
 import { useTemporaryDirectories } from "../../helpers/temporary-directories.js";
@@ -620,4 +625,79 @@ test("App reads the cover of the hovered file again once it is processed", async
         () => covers.filter((name) => name === "song.mp3").length >= 2
     );
     await waitForFrame(lastFrame, "Black Sabbath");
+});
+
+function createRecordingOverlay() {
+    const spots: CoverSpot[] = [];
+    const counts = { invalidated: 0, cleared: 0 };
+    const overlay = {
+        show: (_cover: unknown, spot: CoverSpot) => spots.push(spot),
+        hide: () => {},
+        invalidate: () => counts.invalidated++,
+        clear: () => counts.cleared++,
+    };
+    return { overlay, spots, counts };
+}
+
+test("App places the kitty cover at its spot on screen, again after a resize, and clears it on exit", async () => {
+    const directory = await createLibrary();
+    const { services } = createControlledServices();
+    const { overlay, spots, counts } = createRecordingOverlay();
+    services.coverOverlay = overlay;
+    const art = { png: Buffer.from("png"), key: "png", width: 48, height: 48 };
+    services.coverCache = new VersionedCache<CoverLookup>(async () => ({
+        kind: "found",
+        art,
+    }));
+    const terminal = createFakeTerminal({ columns: 120, rows: 60 });
+    const outcome = renderTui(services, directory, terminal.streams);
+    await waitForInput(terminal.stdin);
+    await waitFor(() => terminal.stdout.output.includes("song.mp3"));
+    terminal.stdin.write(KEYS.down);
+    terminal.stdin.write(KEYS.down);
+
+    await waitFor(() => spots.length > 0);
+    assert.deepEqual(spots.at(-1), {
+        row: 15,
+        column: 70,
+        columns: 46,
+        rows: 23,
+    });
+    const invalidatedBeforeResize = counts.invalidated;
+    terminal.stdout.rows = 62;
+    terminal.stdout.emit("resize");
+    await waitFor(() => counts.invalidated > invalidatedBeforeResize);
+    terminal.stdin.write("q");
+    await outcome;
+
+    assert.equal(counts.cleared, 1);
+});
+
+test("App frees the kitty covers before leaving the alternate screen", async () => {
+    const directory = await createLibrary();
+    const { services } = createControlledServices();
+    const terminal = createFakeTerminal({ columns: 120, rows: 60 });
+    Object.assign(terminal.stdout, { isTTY: true });
+    services.coverOverlay = new CoverOverlay((text) =>
+        terminal.streams.stdout.write(text)
+    );
+    const art = { png: Buffer.from("png"), key: "png", width: 48, height: 48 };
+    services.coverCache = new VersionedCache<CoverLookup>(async () => ({
+        kind: "found",
+        art,
+    }));
+    const outcome = renderTui(services, directory, terminal.streams);
+    await waitForInput(terminal.stdin);
+    await waitFor(() => terminal.stdout.output.includes("song.mp3"));
+    terminal.stdin.write(KEYS.down);
+    terminal.stdin.write(KEYS.down);
+    await waitFor(() => terminal.stdout.output.includes("a=p,"));
+
+    terminal.stdin.write("q");
+    await outcome;
+
+    const { output } = terminal.stdout;
+    const freed = output.indexOf("a=d,d=I,");
+    assert.ok(freed > 0);
+    assert.ok(freed < output.lastIndexOf("\u001B[?1049l"));
 });

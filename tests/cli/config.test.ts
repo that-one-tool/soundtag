@@ -37,6 +37,7 @@ test("loadSessionConfig reads arguments and environment without prompting", asyn
             LASTFM_API_KEY: " lastfm-key ",
             MUSICBRAINZ_USER_AGENT: "SoundTag/1.0",
             YOUTUBE_API_KEY: "youtube-key",
+            SOUNDTAG_COVER: "blocks",
         },
         ask,
         workingDirectory,
@@ -51,6 +52,7 @@ test("loadSessionConfig reads arguments and environment without prompting", asyn
             renameFiles: false,
             musicBrainzUserAgent: "SoundTag/1.0",
             youtubeApiKey: "youtube-key",
+            coverMode: "blocks",
         },
     });
     assert.deepEqual(questions, []);
@@ -88,6 +90,10 @@ test("loadSessionConfig rejects a missing API key or an unknown option", async (
     await assert.rejects(
         load(["--unknown"], { LASTFM_API_KEY: "key" }),
         /^Error: Unknown option: --unknown$/
+    );
+    await assert.rejects(
+        load([], { LASTFM_API_KEY: "key", SOUNDTAG_COVER: "sixel" }),
+        /^Error: SOUNDTAG_COVER must be kitty, blocks or none\.$/
     );
 });
 

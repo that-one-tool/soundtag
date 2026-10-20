@@ -1,7 +1,9 @@
 import { render } from "ink";
+import { detectCoverMode } from "./cover-mode.js";
 import { App } from "./components/app.js";
 import {
     createTuiServices,
+    type CoverDisplay,
     type TaggingOptions,
     type TuiServices,
 } from "./tui-services.js";
@@ -43,13 +45,28 @@ export async function renderTui(
     return (await instance.waitUntilExit()) as TuiOutcome;
 }
 
+export function createCoverDisplay(
+    options: TuiOptions,
+    stdout: NodeJS.WriteStream,
+    env: NodeJS.ProcessEnv
+): CoverDisplay {
+    const trueColor = hasTrueColor(stdout);
+    return {
+        mode: detectCoverMode({ env, trueColor, override: options.coverMode }),
+        writeToTerminal: (text) => stdout.write(text),
+    };
+}
+
 export function runTui(
     options: TuiOptions,
-    streams: TerminalStreams = processStreams
+    streams: TerminalStreams = processStreams,
+    env: NodeJS.ProcessEnv = process.env
 ): Promise<TuiOutcome> {
-    const display = { trueColor: hasTrueColor(streams.stdout) };
     return renderTui(
-        createTuiServices(options, display),
+        createTuiServices(
+            options,
+            createCoverDisplay(options, streams.stdout, env)
+        ),
         options.startDirectory,
         streams
     );

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { test } from "node:test";
+import sharp from "sharp";
 import {
     COVER_SIZE,
     createCoverCache,
@@ -36,6 +37,7 @@ test("createCoverReader decodes the embedded cover to the cover size", async () 
 
     assert.equal(lookup.kind, "found");
     const { art } = lookup as Extract<typeof lookup, { kind: "found" }>;
+    assert.ok("pixels" in art);
     assert.equal(art.width, COVER_SIZE.width);
     assert.equal(art.height, COVER_SIZE.height);
     assert.equal(art.pixels.length, COVER_SIZE.width * COVER_SIZE.height * 3);
@@ -76,7 +78,7 @@ test("createCoverReader reports files it cannot read", async () => {
 
 test("createCoverCache keeps no unreadable result", async () => {
     const entry = await createSong(await createSplitImage());
-    const cache = createCoverCache({ trueColor: true });
+    const cache = createCoverCache("blocks");
     await fs.chmod(entry.path, 0o000);
 
     const lookup = await cache.read(entry);
@@ -86,9 +88,26 @@ test("createCoverCache keeps no unreadable result", async () => {
     assert.equal(cache.peek(entry), undefined);
 });
 
-test("createCoverCache reads no cover without true color", async () => {
+test("createCoverCache reads no cover in the none mode", async () => {
     const entry = await createSong(await createSplitImage());
-    const cache = createCoverCache({ trueColor: false });
+    const cache = createCoverCache("none");
 
     assert.deepEqual(await cache.read(entry), { kind: "missing" });
+});
+
+test("createCoverCache decodes a 512 pixel PNG in the kitty mode", async () => {
+    const entry = await createSong(await createSplitImage());
+    const cache = createCoverCache("kitty");
+
+    const lookup = await cache.read(entry);
+
+    const { art } = lookup as Extract<typeof lookup, { kind: "found" }>;
+    assert.ok("png" in art);
+    const metadata = await sharp(art.png).metadata();
+    assert.deepEqual(
+        [metadata.format, metadata.width, metadata.height],
+        ["png", 512, 512]
+    );
+    assert.deepEqual([art.width, art.height], [48, 48]);
+    assert.match(art.key, /^[0-9a-f]{40}$/);
 });

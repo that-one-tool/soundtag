@@ -46,14 +46,28 @@ export function findFrameLine(
     );
 }
 
+interface TerminalSize {
+    columns: number;
+    rows: number;
+}
+
 class FakeStdout extends EventEmitter {
-    readonly columns = 100;
-    readonly rows = 30;
+    columns: number;
+    rows: number;
+    output = "";
+
+    constructor({ columns, rows }: TerminalSize = { columns: 100, rows: 30 }) {
+        super();
+        this.columns = columns;
+        this.rows = rows;
+    }
+
     write = (...chunkAndCallback: unknown[]): boolean => {
         const callback = chunkAndCallback.findLast(
             (argument) => typeof argument === "function"
         ) as (() => void) | undefined;
         callback?.();
+        this.output += String(chunkAndCallback[0]);
         return true;
     };
 }
@@ -86,12 +100,13 @@ export function waitForInput(stdin: EventEmitter): Promise<void> {
     return waitFor(() => stdin.listenerCount("readable") > 0);
 }
 
-export function createFakeTerminal() {
+export function createFakeTerminal(size?: TerminalSize) {
     const stdin = new FakeStdin();
+    const stdout = new FakeStdout(size);
     const streams = {
         stdin: stdin as unknown as NodeJS.ReadStream,
-        stdout: new FakeStdout() as unknown as NodeJS.WriteStream,
+        stdout: stdout as unknown as NodeJS.WriteStream,
         stderr: new FakeStdout() as unknown as NodeJS.WriteStream,
     };
-    return { stdin, streams };
+    return { stdin, stdout, streams };
 }

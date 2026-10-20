@@ -12,6 +12,7 @@ import type { TuiServices } from "../tui-services.js";
 import { getShownCover } from "../shown-cover.js";
 import { BrowserPane, type BrowserPaneProps } from "./browser-pane.js";
 import { Header } from "./header.js";
+import { CoverPlacerContext } from "./kitty-cover-view.js";
 import { LogPane, type LogPaneProps } from "./log-pane.js";
 import { MetadataPanel, type MetadataPanelProps } from "./metadata-panel.js";
 import { StatusBar } from "./status-bar.js";
@@ -49,10 +50,10 @@ function useBrowsing(startDirectory: string, services: TuiServices) {
     return { browser, dispatch, hovered, details, statuses };
 }
 
-function useStatus({ queue, subfolders }: TuiServices) {
+function useStatus({ queue, subfolders, coverOverlay }: TuiServices) {
     const queueState = useStore(queue);
     const subfoldersIncluded = useStore(subfolders);
-    const { quitting, requestQuit } = useQuit(queue, queueState);
+    const { quitting, requestQuit } = useQuit(queue, queueState, coverOverlay);
     return {
         status: { queueState, quitting, subfoldersIncluded },
         requestQuit,
@@ -132,11 +133,13 @@ function getWorkspaceProps(
 export function App(props: AppProps) {
     const state = useAppState(props);
     return (
-        <Box flexDirection="column" height={state.rows}>
-            <Header statuses={state.statuses} />
-            <Workspace {...getWorkspaceProps(state)} />
-            <LogPane {...getLogPaneProps(state)} />
-            <StatusBar {...state.status} />
-        </Box>
+        <CoverPlacerContext.Provider value={state.services.coverOverlay}>
+            <Box flexDirection="column" height={state.rows}>
+                <Header statuses={state.statuses} />
+                <Workspace {...getWorkspaceProps(state)} />
+                <LogPane {...getLogPaneProps(state)} />
+                <StatusBar {...state.status} />
+            </Box>
+        </CoverPlacerContext.Provider>
     );
 }

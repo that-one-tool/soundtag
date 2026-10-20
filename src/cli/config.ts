@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { parseArguments } from "./cli-options.js";
 import { isDirectory } from "../library/file.js";
+import { parseCoverMode } from "../tui/cover-mode.js";
 import type { SessionConfig } from "./types.js";
 
 export type Ask = (question: string) => Promise<string>;
@@ -67,6 +68,7 @@ export async function loadSessionConfig(
             renameFiles: options.renameFiles,
             musicBrainzUserAgent: sources.env.MUSICBRAINZ_USER_AGENT,
             youtubeApiKey: sources.env.YOUTUBE_API_KEY,
+            coverMode: parseCoverMode(sources.env.SOUNDTAG_COVER),
         },
     };
 }

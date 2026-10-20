@@ -1,3 +1,5 @@
+import type { CoverMode } from "../tui/cover-mode.js";
+
 export interface TaggingSettings {
     lastFmApiKey: string;
     recursive: boolean;
@@ -5,6 +7,7 @@ export interface TaggingSettings {
     renameFiles: boolean;
     musicBrainzUserAgent?: string;
     youtubeApiKey?: string;
+    coverMode?: CoverMode;
 }
 
 export interface AppConfig extends TaggingSettings {

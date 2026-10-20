@@ -17,11 +17,12 @@ import type { TrackExtras } from "../../metadata/types.js";
 import type { TrackDetails } from "../../tags/types.js";
 import type {
     BrowserEntry,
-    CoverArt,
+    CoverPicture,
     EntryDetails,
     TrackStatuses,
 } from "../types.js";
 import { CoverArtView } from "./cover-art-view.js";
+import { KittyCoverView } from "./kitty-cover-view.js";
 
 // Border and padding on both sides.
 const PANEL_FRAME_COLUMNS = 4;
@@ -56,7 +57,7 @@ interface DetailsViewProps<Kind extends EntryDetails["kind"]> {
     details: Extract<EntryDetails, { kind: Kind }>;
     entry: BrowserEntry;
     statuses: TrackStatuses;
-    cover: CoverArt | null;
+    cover: CoverPicture | null;
     detailRows: number;
     width: number;
 }
@@ -124,16 +125,27 @@ function roundDownToEven(value: number): number {
 }
 
 // Each row holds two pixels and one blank row sits above the cover.
-function getCoverSize(cover: CoverArt, { freeRows, freeColumns }: CoverSpace) {
+function getCoverSize(
+    cover: CoverPicture,
+    { freeRows, freeColumns }: CoverSpace
+) {
     const sizeByRows = (freeRows - 1) * 2;
     return roundDownToEven(Math.min(cover.height, sizeByRows, freeColumns));
+}
+
+function CoverView({ cover, size }: { cover: CoverPicture; size: number }) {
+    if ("png" in cover) {
+        return <KittyCoverView cover={cover} size={size} />;
+    }
+
+    return <CoverArtView cover={cover} size={size} />;
 }
 
 function FittingCover({
     cover,
     space,
 }: {
-    cover: CoverArt;
+    cover: CoverPicture;
     space: CoverSpace;
 }) {
     const size = getCoverSize(cover, space);
@@ -143,7 +155,7 @@ function FittingCover({
 
     return (
         <Box marginTop={1}>
-            <CoverArtView cover={cover} size={size} />
+            <CoverView cover={cover} size={size} />
         </Box>
     );
 }
@@ -235,7 +247,7 @@ export interface MetadataPanelProps {
     details: EntryDetails | null;
     loading: boolean;
     statuses: TrackStatuses;
-    cover: CoverArt | null;
+    cover: CoverPicture | null;
     detailRows: number;
     width: number;
 }

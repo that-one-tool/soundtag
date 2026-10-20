@@ -51,6 +51,8 @@ graph free of cycles.
   - `LASTFM_API_KEY` is required (prompted when missing).
   - `MUSICBRAINZ_USER_AGENT` enables MusicBrainz.
   - `YOUTUBE_API_KEY` enables the YouTube cover fallback.
+  - `SOUNDTAG_COVER` (`kitty`, `blocks` or `none`) overrides how the TUI draws
+    covers; otherwise `src/tui/cover-mode.ts` detects it from the terminal.
 - Runs write no report file: headless runs print failed files and renames in
   the summary, and the TUI keeps statuses for the session only.
 

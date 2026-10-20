@@ -3,7 +3,9 @@ import {
     type MetadataChainConfig,
 } from "../metadata/create-metadata-chain.js";
 import { systemClock } from "../shared/rate-limiter.js";
-import { createCoverCache, type CoverDisplay } from "./cover-reader.js";
+import type { CoverMode } from "./cover-mode.js";
+import { CoverOverlay, type CoverPlacer } from "./cover-overlay.js";
+import { createCoverCache } from "./cover-reader.js";
 import { createDetailsCache } from "./entry-details.js";
 import { EntryRenamer } from "./entry-renamer.js";
 import { LogBuffer } from "./log-buffer.js";
@@ -16,6 +18,7 @@ import type { CoverLookup, EntryDetails } from "./types.js";
 import type { VersionedCache } from "./versioned-cache.js";
 
 export interface TaggingOptions extends MetadataChainConfig {
+    coverMode?: CoverMode;
     recursive: boolean;
     renameFiles: boolean;
     startDirectory: string;
@@ -30,7 +33,18 @@ export interface TuiServices {
     detailsCache: VersionedCache<EntryDetails>;
     coverCache: VersionedCache<CoverLookup>;
     renamer: EntryRenamer;
+    coverOverlay: CoverPlacer;
 }
+
+export interface CoverDisplay {
+    mode: CoverMode;
+    writeToTerminal: (text: string) => void;
+}
+
+const NO_COVER_DISPLAY: CoverDisplay = {
+    mode: "none",
+    writeToTerminal: () => {},
+};
 
 function createJobRunner(
     options: TaggingOptions,
@@ -71,7 +85,7 @@ function createRenamer({ queue, pathMoves, logBuffer }: JobServices) {
 
 export function createTuiServices(
     options: TaggingOptions,
-    display: CoverDisplay = { trueColor: false }
+    display: CoverDisplay = NO_COVER_DISPLAY
 ): TuiServices {
     const jobServices = createJobServices(options);
     return {
@@ -79,6 +93,7 @@ export function createTuiServices(
         renamer: createRenamer(jobServices),
         subfolders: new SubfolderSetting(options.recursive),
         detailsCache: createDetailsCache(),
-        coverCache: createCoverCache(display),
+        coverCache: createCoverCache(display.mode),
+        coverOverlay: new CoverOverlay(display.writeToTerminal),
     };
 }

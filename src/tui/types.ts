@@ -7,8 +7,25 @@ export interface CoverArt {
     pixels: Uint8Array;
 }
 
+// Sized like a full half-block cover, so both fill the same cell box.
+export interface PngCover {
+    png: Buffer;
+    key: string;
+    width: number;
+    height: number;
+}
+
+export type CoverPicture = CoverArt | PngCover;
+
+export interface CoverSpot {
+    row: number;
+    column: number;
+    columns: number;
+    rows: number;
+}
+
 export type CoverLookup =
-    | { kind: "found"; art: CoverArt }
+    | { kind: "found"; art: CoverPicture }
     | { kind: "missing" }
     | { kind: "unreadable" };
 

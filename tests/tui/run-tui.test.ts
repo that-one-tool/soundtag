@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { hasTrueColor, renderTui, runTui } from "../../src/tui/run-tui.js";
+import {
+    createCoverDisplay,
+    hasTrueColor,
+    renderTui,
+    runTui,
+} from "../../src/tui/run-tui.js";
 import {
     createFakeTerminal,
     KEYS,
@@ -118,4 +123,31 @@ test("hasTrueColor needs a terminal with 24-bit colors", () => {
     assert.equal(hasTrueColor(createStdoutWithDepth(24)), true);
     assert.equal(hasTrueColor(createStdoutWithDepth(8)), false);
     assert.equal(hasTrueColor({} as NodeJS.WriteStream), false);
+});
+
+test("createCoverDisplay detects the mode and writes images to stdout", () => {
+    const writes: string[] = [];
+    const stdout = {
+        getColorDepth: () => 24,
+        write: (text: string) => writes.push(text),
+    } as unknown as NodeJS.WriteStream;
+    const options = {
+        startDirectory: process.cwd(),
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: true,
+        renameFiles: true,
+    };
+
+    const display = createCoverDisplay(options, stdout, {
+        TERM: "xterm-kitty",
+    });
+    display.writeToTerminal("image");
+
+    assert.equal(display.mode, "kitty");
+    assert.deepEqual(writes, ["image"]);
+    assert.equal(
+        createCoverDisplay({ ...options, coverMode: "none" }, stdout, {}).mode,
+        "none"
+    );
 });
