@@ -2,6 +2,7 @@ import { useInput } from "ink";
 import type { Dispatch } from "react";
 import type { BrowserAction } from "../browser-state.js";
 import { getKeyAction, type KeyAction } from "../key-actions.js";
+import type { KeyPress } from "../name-field.js";
 import type { SubfolderSetting } from "../subfolder-setting.js";
 import type { TaggingQueue } from "../tagging-queue.js";
 import type {
@@ -11,6 +12,7 @@ import type {
     TagTarget,
 } from "../types.js";
 import type { LogView } from "./use-log-view.js";
+import type { RenameControls } from "./use-rename.js";
 
 export interface KeyboardControls {
     dispatch: Dispatch<BrowserAction>;
@@ -23,6 +25,7 @@ export interface KeyboardControls {
     subfolders: SubfolderSetting;
     logView: LogView;
     logPageSize: number;
+    rename: RenameControls;
 }
 
 type NavigationAction =
@@ -54,13 +57,21 @@ function getTagTarget(
     return entry ? TARGET_BUILDERS[entry.kind](entry, controls) : null;
 }
 
-// Nothing new may start once the user asked to quit.
-function enqueue(
-    target: TagTarget | null,
-    { queue, quitting }: KeyboardControls
-): void {
-    if (target && !quitting) {
-        queue.enqueue(target);
+// Nothing new may start once the user asked to quit, nor while a rename may
+// still pull files away from a job.
+function canStartWork({ quitting, rename }: KeyboardControls): boolean {
+    return !quitting && !rename.isSaving();
+}
+
+function enqueue(target: TagTarget | null, controls: KeyboardControls): void {
+    if (target && canStartWork(controls)) {
+        controls.queue.enqueue(target);
+    }
+}
+
+function startRename(controls: KeyboardControls): void {
+    if (canStartWork(controls)) {
+        controls.rename.startRename(controls.hovered);
     }
 }
 
@@ -110,17 +121,32 @@ function createKeyHandlers(controls: KeyboardControls): KeyHandlers<KeyAction> {
             enqueue(getFolderTarget(controls.directory, controls), controls),
         stop: () => controls.queue.stop(),
         toggleSubfolders: () => controls.subfolders.toggle(),
+        rename: () => startRename(controls),
         toggleFocus: () => controls.logView.toggleFocus(),
         quit: () => controls.requestQuit(),
     };
 }
 
+function handleBrowserKey(
+    controls: KeyboardControls,
+    { input, key }: KeyPress
+) {
+    const action = getKeyAction(input, key);
+
+    if (action) {
+        createKeyHandlers(controls)[action]();
+    }
+}
+
+// One handler routes every key, so a key read right after e already goes to
+// the name field.
 export function useKeyboard(controls: KeyboardControls): void {
     useInput((input, key) => {
-        const action = getKeyAction(input, key);
-
-        if (action) {
-            createKeyHandlers(controls)[action]();
+        if (controls.rename.isEditing()) {
+            controls.rename.editDraft({ input, key });
+            return;
         }
+
+        handleBrowserKey(controls, { input, key });
     });
 }

@@ -1,5 +1,6 @@
 import { createCoverCache } from "../../src/tui/cover-reader.js";
 import { createDetailsCache } from "../../src/tui/entry-details.js";
+import { EntryRenamer } from "../../src/tui/entry-renamer.js";
 import { LogBuffer } from "../../src/tui/log-buffer.js";
 import { PathMoves } from "../../src/tui/path-moves.js";
 import { TaggingQueue } from "../../src/tui/tagging-queue.js";
@@ -27,15 +28,17 @@ export function createControlledServices(): {
             ),
         logBuffer
     );
+    const pathMoves = new PathMoves();
     return {
         services: {
             queue,
             logBuffer,
             statusStore: new TrackStatusStore(),
-            pathMoves: new PathMoves(),
+            pathMoves,
             subfolders: new SubfolderSetting(true),
             detailsCache: createDetailsCache(),
             coverCache: createCoverCache({ trueColor: true }),
+            renamer: new EntryRenamer({ queue, pathMoves, logger: logBuffer }),
         },
         jobs,
     };

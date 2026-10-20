@@ -1,11 +1,26 @@
+import { dirname } from "node:path";
 import type { Logger } from "../shared/logger.js";
-import { movePath, type PathMove } from "../shared/paths.js";
+import { isInsideFolder, movePath, type PathMove } from "../shared/paths.js";
 import { Listeners } from "./listeners.js";
 import { describeTarget } from "./queue-summary.js";
 import type { QueueState, TagJobRunner, TagTarget } from "./types.js";
 
 function moveTarget(target: TagTarget, move: PathMove): TagTarget {
     return { ...target, path: movePath(target.path, move) };
+}
+
+// A file job also renames its folder once done, which moves its siblings.
+const OCCUPIED_PATHS: Record<TagTarget["kind"], (target: string) => string> = {
+    file: (target) => dirname(target),
+    folder: (target) => target,
+};
+
+function getOccupiedPath({ kind, path: target }: TagTarget): string {
+    return OCCUPIED_PATHS[kind](target);
+}
+
+function areNested(first: string, second: string): boolean {
+    return isInsideFolder(first, second) || isInsideFolder(second, first);
 }
 
 export class TaggingQueue {
@@ -63,6 +78,13 @@ export class TaggingQueue {
             running: running && moveTarget(running, move),
             pending: pending.map((target) => moveTarget(target, move)),
         });
+    }
+
+    isBusyWith(entryPath: string): boolean {
+        const { running, pending } = this.state;
+        return [running, ...pending].some((target) =>
+            Boolean(target && areNested(getOccupiedPath(target), entryPath))
+        );
     }
 
     private findQueued({ path }: TagTarget): TagTarget | null | undefined {

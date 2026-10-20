@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getLayout, getPanelWidth } from "../../src/tui/layout.js";
+import {
+    getLayout,
+    getNameWidth,
+    getPanelWidth,
+} from "../../src/tui/layout.js";
 
 test("getLayout gives the log pane a third of the terminal", () => {
     assert.deepEqual(getLayout(45), {
@@ -32,4 +36,9 @@ test("getPanelWidth fits the cover but takes at most half the terminal", () => {
     assert.equal(getPanelWidth(200), 52);
     assert.equal(getPanelWidth(80), 40);
     assert.equal(getPanelWidth(81), 40);
+});
+
+test("getNameWidth leaves the browser row frame and the panel aside", () => {
+    assert.equal(getNameWidth(100), 42);
+    assert.equal(getNameWidth(200), 140);
 });

@@ -17,6 +17,8 @@ import type {
     EntryDetails,
 } from "../../../src/tui/types.js";
 import { VersionedCache } from "../../../src/tui/versioned-cache.js";
+import type { EntryRenamer } from "../../../src/tui/entry-renamer.js";
+import { startRenameDraft } from "../../../src/tui/rename-draft.js";
 import {
     findFrameLine,
     KEYS,
@@ -231,6 +233,136 @@ test("App refreshes the listing after a subfolder is renamed", async () => {
 
     await waitForFrame(lastFrame, "Black Sabbath - Paranoid/");
     assert.equal(findFrameLine(lastFrame, "Album/"), "");
+});
+
+async function startSongRename(directory: string) {
+    const app = await renderApp(directory);
+    app.stdin.write(KEYS.down);
+    app.stdin.write(KEYS.down);
+    await waitForFrame(app.lastFrame, "Black Sabbath");
+    app.stdin.write("e");
+    await waitFor(
+        () => !findFrameLine(app.lastFrame, "▸").includes("song.mp3")
+    );
+    return app;
+}
+
+test("App renames the hovered file inline with e", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin } = await startSongRename(directory);
+
+    assert.match(findFrameLine(lastFrame, "▸"), /song.*\.mp3/);
+    for (let deleted = 0; deleted < 4; deleted++) {
+        stdin.write(KEYS.backspace);
+    }
+    stdin.write("Paranoid");
+    await waitFor(() => findFrameLine(lastFrame, "▸").includes("Paranoid"));
+    stdin.write(KEYS.enter);
+
+    await waitForFrame(lastFrame, "Renamed song.mp3 to Paranoid.mp3.");
+    assert.match(findFrameLine(lastFrame, "Paranoid.mp3"), /▸/);
+    await fs.access(path.join(directory, "Paranoid.mp3"));
+});
+
+test("App cancels an inline rename with Escape and keeps keys for the field", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin } = await startSongRename(directory);
+
+    stdin.write("q");
+    await waitFor(() => findFrameLine(lastFrame, "▸").includes("songq"));
+    stdin.write(KEYS.escape);
+
+    await waitFor(() => findFrameLine(lastFrame, "▸").includes("song.mp3"));
+    await fs.access(path.join(directory, "song.mp3"));
+});
+
+test("App cancels an inline rename with Ctrl+C without quitting", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin } = await startSongRename(directory);
+
+    stdin.write("x");
+    await waitFor(() => findFrameLine(lastFrame, "▸").includes("songx"));
+    stdin.write(KEYS.ctrlC);
+    await waitFor(() => findFrameLine(lastFrame, "▸").includes("song.mp3"));
+    stdin.write("e");
+
+    await waitFor(() => !findFrameLine(lastFrame, "▸").includes("song.mp3"));
+});
+
+test("App sends keys typed right after e to the name field", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, jobs } = await renderApp(directory);
+    stdin.write(KEYS.down);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Black Sabbath");
+
+    stdin.write("e");
+    stdin.write("t");
+
+    await waitFor(() => findFrameLine(lastFrame, "▸").includes("songt"));
+    assert.equal(jobs.length, 0);
+});
+
+test("App ignores e while quitting", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin } = await renderApp(directory);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Audio files");
+    stdin.write("t");
+    stdin.write("q");
+    await waitForFrame(lastFrame, "quitting");
+
+    stdin.write("e");
+    await delay(50);
+
+    assert.match(findFrameLine(lastFrame, "▸"), /Album\//);
+});
+
+test("App queues nothing while a rename is in flight", async () => {
+    const directory = await createLibrary();
+    const { services, jobs } = createControlledServices();
+    const pendingRename: { finish?: () => void } = {};
+    services.renamer = {
+        startDraft: startRenameDraft,
+        rename: () =>
+            new Promise<void>((resolve) => (pendingRename.finish = resolve)),
+    } as unknown as EntryRenamer;
+    const { lastFrame, stdin } = render(
+        createElement(App, { startDirectory: directory, services })
+    );
+    await waitForFrame(lastFrame, "song.mp3");
+    stdin.write(KEYS.down);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Black Sabbath");
+
+    stdin.write("e");
+    stdin.write(KEYS.enter);
+    stdin.write("t");
+    await delay(50);
+    assert.equal(jobs.length, 0);
+    pendingRename.finish?.();
+    await delay(10);
+    stdin.write("t");
+
+    await waitFor(() => jobs.length === 1);
+});
+
+test("App keeps the caret and extension of a long name in view", async () => {
+    const directory = await createTemporaryDirectory();
+    const longName = `${"Very Long Artist Name ".repeat(5)}- Title.mp3`;
+    await fs.writeFile(path.join(directory, longName), "audio");
+    const { services } = createControlledServices();
+    const { lastFrame, stdin } = render(
+        createElement(App, { startDirectory: directory, services })
+    );
+    await waitForFrame(lastFrame, "Very Long");
+    stdin.write(KEYS.down);
+    await waitFor(() => findFrameLine(lastFrame, "▸").includes("Very Long"));
+
+    stdin.write("e");
+    stdin.write("ZZ");
+
+    await waitFor(() => findFrameLine(lastFrame, "▸").includes("TitleZZ .mp3"));
 });
 
 test("App shows the latest log lines", async () => {

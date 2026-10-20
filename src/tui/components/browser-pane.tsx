@@ -1,6 +1,8 @@
 import { Box, Text, type TextProps } from "ink";
 import type { BrowserState } from "../browser-state.js";
 import { getVisibleRange } from "../list-window.js";
+import { getFieldWindow } from "../name-field.js";
+import type { RenameDraft } from "../rename-draft.js";
 import { getEntryStatus } from "../track-statuses.js";
 import {
     ACCENT,
@@ -17,6 +19,8 @@ interface EntryRowProps {
     entry: BrowserEntry;
     statuses: TrackStatuses;
     hovered: boolean;
+    draft: RenameDraft | null;
+    nameWidth: number;
 }
 
 const ENTRY_COLORS: Record<EntryKind, string | undefined> = {
@@ -38,7 +42,37 @@ function getEntryStyle(entry: BrowserEntry, hovered: boolean): TextProps {
     return hovered ? HOVERED_STYLE : { color: ENTRY_COLORS[entry.kind] };
 }
 
-function EntryRow({ entry, statuses, hovered }: EntryRowProps) {
+function DraftField({ draft, width }: { draft: RenameDraft; width: number }) {
+    const fieldWidth = Math.max(1, width - draft.extension.length);
+    const { beforeCaret, atCaret, afterCaret } = getFieldWindow(
+        draft.field,
+        fieldWidth
+    );
+    return (
+        <Text wrap="truncate">
+            {beforeCaret}
+            <Text inverse>{atCaret}</Text>
+            {afterCaret}
+            <Text dimColor>{draft.extension}</Text>
+        </Text>
+    );
+}
+
+// The field follows its own entry, wherever the cursor is.
+function EntryLabel({ entry, hovered, draft, nameWidth }: EntryRowProps) {
+    if (draft?.entry.path === entry.path) {
+        return <DraftField draft={draft} width={nameWidth} />;
+    }
+
+    return (
+        <Text {...getEntryStyle(entry, hovered)} wrap="truncate">
+            {getEntryLabel(entry)}
+        </Text>
+    );
+}
+
+function EntryRow(props: EntryRowProps) {
+    const { entry, statuses, hovered } = props;
     return (
         <Box>
             <Text color={ACCENT}>
@@ -46,9 +80,7 @@ function EntryRow({ entry, statuses, hovered }: EntryRowProps) {
             </Text>
             <StatusDot status={getEntryStatus(statuses, entry)} />
             <Text> </Text>
-            <Text {...getEntryStyle(entry, hovered)} wrap="truncate">
-                {getEntryLabel(entry)}
-            </Text>
+            <EntryLabel {...props} />
         </Box>
     );
 }
@@ -58,9 +90,12 @@ export interface BrowserPaneProps {
     statuses: TrackStatuses;
     height: number;
     focused: boolean;
+    draft: RenameDraft | null;
+    nameWidth: number;
 }
 
-function EntryList({ state, statuses, height }: BrowserPaneProps) {
+function EntryList(props: BrowserPaneProps) {
+    const { state, statuses, height, draft, nameWidth } = props;
     const { entries, cursor } = state;
     const { start, end } = getVisibleRange(entries.length, cursor, height);
     return entries
@@ -71,6 +106,8 @@ function EntryList({ state, statuses, height }: BrowserPaneProps) {
                 entry={entry}
                 statuses={statuses}
                 hovered={start + index === cursor}
+                draft={draft}
+                nameWidth={nameWidth}
             />
         ));
 }

@@ -9,6 +9,7 @@ import {
     isDirectory,
     listSubfolders,
     renameIfFree,
+    renameIfNameFree,
     writeTemporaryCopy,
 } from "../../src/library/file.js";
 import { FolderNameCache } from "../../src/library/folder-names.js";
@@ -94,6 +95,39 @@ test("renameIfFree records the rename so the new name stays taken", async () => 
     assert.equal(await renameIfFree(first, target, folderNames), true);
     assert.equal(await renameIfFree(second, target, folderNames), false);
     assert.equal(await fs.readFile(target, "utf8"), "first");
+});
+
+test("renameIfNameFree refuses a name twin and never overwrites", async () => {
+    const source = path.join(temporaryDirectory, "old.mp3");
+    const taken = path.join(temporaryDirectory, "Taken.mp3");
+    await fs.writeFile(source, "source");
+    await fs.writeFile(taken, "taken");
+
+    const twin = path.join(temporaryDirectory, "taken.mp3");
+    assert.equal(await renameIfNameFree(source, twin), false);
+    assert.equal(await fs.readFile(taken, "utf8"), "taken");
+    await fs.access(source);
+});
+
+test("renameIfNameFree refuses a case twin of the source itself", async () => {
+    const upper = path.join(temporaryDirectory, "A.mp3");
+    const lower = path.join(temporaryDirectory, "a.mp3");
+    await fs.writeFile(upper, "upper");
+    await fs.writeFile(lower, "lower");
+
+    assert.equal(await renameIfNameFree(upper, lower), false);
+    assert.equal(await fs.readFile(lower, "utf8"), "lower");
+});
+
+test("renameIfNameFree renames into a free or case-only changed name", async () => {
+    const source = path.join(temporaryDirectory, "old song");
+    const free = path.join(temporaryDirectory, "new song");
+    const recased = path.join(temporaryDirectory, "New Song");
+    await fs.mkdir(source);
+
+    assert.equal(await renameIfNameFree(source, free), true);
+    assert.equal(await renameIfNameFree(free, recased), true);
+    assert.deepEqual(await fs.readdir(temporaryDirectory), ["New Song"]);
 });
 
 test("getAudioFormat recognizes supported extensions case-insensitively", () => {

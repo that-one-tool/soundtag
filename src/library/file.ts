@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { constants, type Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import type { FolderNameCache } from "./folder-names.js";
+import { isSameFilename, type FolderNameCache } from "./folder-names.js";
 
 const AUDIO_FORMATS = ["mp3", "ogg", "flac", "wav"] as const;
 
@@ -126,6 +126,32 @@ export async function renameIfFree(
 
     await fs.rename(source, destination);
     folderNames.recordRename(source, destination);
+    return true;
+}
+
+// The source itself is skipped so that a case-only rename stays allowed.
+async function hasNameTwin(
+    source: string,
+    destination: string
+): Promise<boolean> {
+    const sourceName = path.basename(source);
+    const names = await fs.readdir(path.dirname(destination));
+    return names.some(
+        (name) =>
+            name !== sourceName &&
+            isSameFilename(name, path.basename(destination))
+    );
+}
+
+export async function renameIfNameFree(
+    source: string,
+    destination: string
+): Promise<boolean> {
+    if (await hasNameTwin(source, destination)) {
+        return false;
+    }
+
+    await fs.rename(source, destination);
     return true;
 }
 

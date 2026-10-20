@@ -7,6 +7,8 @@ export const KEYS = {
     right: "\u001B[C",
     left: "\u001B[D",
     enter: "\r",
+    escape: "\u001B",
+    backspace: "\u007F",
     ctrlC: "\u0003",
 };
 

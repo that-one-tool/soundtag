@@ -33,3 +33,10 @@ const FULL_PANEL_WIDTH = 52;
 export function getPanelWidth(columns: number): number {
     return Math.min(FULL_PANEL_WIDTH, Math.floor(columns / 2));
 }
+
+// Browser border, padding, cursor marker, status dot and the space after it.
+const BROWSER_ROW_FRAME_COLUMNS = 8;
+
+export function getNameWidth(columns: number): number {
+    return columns - getPanelWidth(columns) - BROWSER_ROW_FRAME_COLUMNS;
+}

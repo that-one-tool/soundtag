@@ -176,3 +176,39 @@ test("TaggingQueue moves nothing while idle", () => {
 
     assert.equal(queue.getSnapshot().running, null);
 });
+
+test("TaggingQueue is busy with paths inside or around its targets", () => {
+    const { queue } = createControlledQueue();
+    queue.enqueue(album);
+    queue.enqueue(single);
+
+    assert.equal(queue.isBusyWith("/music/Album"), true);
+    assert.equal(queue.isBusyWith("/music/Album/a.mp3"), true);
+    assert.equal(queue.isBusyWith("/music"), true);
+    assert.equal(queue.isBusyWith("/music/single.mp3"), true);
+    assert.equal(queue.isBusyWith("/music/Other"), true);
+    assert.equal(queue.isBusyWith("/elsewhere/Other"), false);
+});
+
+// A file job may rename its siblings' folder once it is done.
+test("TaggingQueue is busy with the folder of a queued file", () => {
+    const { queue } = createControlledQueue();
+    queue.enqueue({ kind: "file", path: "/music/Album/a.mp3" });
+
+    assert.equal(queue.isBusyWith("/music/Album/b.mp3"), true);
+    assert.equal(queue.isBusyWith("/music/Album/CD1"), true);
+    assert.equal(queue.isBusyWith("/music/Other"), false);
+});
+
+test("TaggingQueue leaves the siblings of a queued folder alone", () => {
+    const { queue } = createControlledQueue();
+    queue.enqueue(album);
+
+    assert.equal(queue.isBusyWith("/music/Album 2"), false);
+});
+
+test("TaggingQueue is busy with nothing while idle", () => {
+    const { queue } = createControlledQueue();
+
+    assert.equal(queue.isBusyWith("/music/Album"), false);
+});

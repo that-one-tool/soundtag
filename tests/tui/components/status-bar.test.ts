@@ -31,7 +31,7 @@ test("StatusBar shows the queue state and the key hints", () => {
     assert.match(frame, /Idle · subfolders on/);
     assert.match(
         frame,
-        /t tag {2}a tag all {2}r subdirs {2}s stop {2}q quit {2}⇥ log$/m
+        /t tag {2}a all {2}e name {2}r subs {2}s stop {2}q quit {2}⇥ log$/m
     );
 });
 

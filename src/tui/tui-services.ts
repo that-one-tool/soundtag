@@ -5,6 +5,7 @@ import {
 import { systemClock } from "../shared/rate-limiter.js";
 import { createCoverCache, type CoverDisplay } from "./cover-reader.js";
 import { createDetailsCache } from "./entry-details.js";
+import { EntryRenamer } from "./entry-renamer.js";
 import { LogBuffer } from "./log-buffer.js";
 import { PathMoves } from "./path-moves.js";
 import { SubfolderSetting } from "./subfolder-setting.js";
@@ -28,6 +29,7 @@ export interface TuiServices {
     subfolders: SubfolderSetting;
     detailsCache: VersionedCache<EntryDetails>;
     coverCache: VersionedCache<CoverLookup>;
+    renamer: EntryRenamer;
 }
 
 function createJobRunner(
@@ -63,12 +65,18 @@ function createJobServices(options: TaggingOptions): JobServices {
     return { queue, logBuffer, statusStore, pathMoves };
 }
 
+function createRenamer({ queue, pathMoves, logBuffer }: JobServices) {
+    return new EntryRenamer({ queue, pathMoves, logger: logBuffer });
+}
+
 export function createTuiServices(
     options: TaggingOptions,
     display: CoverDisplay = { trueColor: false }
 ): TuiServices {
+    const jobServices = createJobServices(options);
     return {
-        ...createJobServices(options),
+        ...jobServices,
+        renamer: createRenamer(jobServices),
         subfolders: new SubfolderSetting(options.recursive),
         detailsCache: createDetailsCache(),
         coverCache: createCoverCache(display),

@@ -4,8 +4,9 @@ import { useEntryValue } from "../hooks/use-entry-value.js";
 import { useKeyboard } from "../hooks/use-keyboard.js";
 import { useLogView } from "../hooks/use-log-view.js";
 import { useQuit } from "../hooks/use-quit.js";
+import { useRename } from "../hooks/use-rename.js";
 import { useStore } from "../hooks/use-store.js";
-import { getLayout, getPanelWidth } from "../layout.js";
+import { getLayout, getNameWidth, getPanelWidth } from "../layout.js";
 import { getEntryStatus } from "../track-statuses.js";
 import type { TuiServices } from "../tui-services.js";
 import { getShownCover } from "../shown-cover.js";
@@ -22,7 +23,12 @@ export interface AppProps {
 
 function useLayout() {
     const { rows, columns } = useWindowSize();
-    return { rows, ...getLayout(rows), panelWidth: getPanelWidth(columns) };
+    return {
+        rows,
+        ...getLayout(rows),
+        panelWidth: getPanelWidth(columns),
+        nameWidth: getNameWidth(columns),
+    };
 }
 
 function useBrowsing(startDirectory: string, services: TuiServices) {
@@ -58,6 +64,7 @@ function useAppState({ startDirectory, services }: AppProps) {
     const browsing = useBrowsing(startDirectory, services);
     const { status, requestQuit } = useStatus(services);
     const logView = useLogView(services.logBuffer, layout.logLines);
+    const rename = useRename(services.renamer);
     useKeyboard({
         ...browsing,
         directory: browsing.browser.directory,
@@ -68,8 +75,9 @@ function useAppState({ startDirectory, services }: AppProps) {
         subfolders: services.subfolders,
         logView,
         logPageSize: layout.logLines,
+        rename,
     });
-    return { ...layout, ...browsing, status, logView, services };
+    return { ...layout, ...browsing, status, logView, services, rename };
 }
 
 function getLogPaneProps({
@@ -92,9 +100,11 @@ function Workspace({
     statuses,
     height,
     focused,
+    draft,
+    nameWidth,
     ...details
 }: WorkspaceProps) {
-    const browser = { state, statuses, height, focused };
+    const browser = { state, statuses, height, focused, draft, nameWidth };
     return (
         <Box flexGrow={1} overflow="hidden">
             <BrowserPane {...browser} />
@@ -103,20 +113,28 @@ function Workspace({
     );
 }
 
+function getWorkspaceProps(
+    state: ReturnType<typeof useAppState>
+): WorkspaceProps {
+    return {
+        state: state.browser,
+        ...state.details,
+        statuses: state.statuses,
+        height: state.listHeight,
+        detailRows: state.detailRows,
+        width: state.panelWidth,
+        focused: state.logView.focus === "browser",
+        draft: state.rename.draft,
+        nameWidth: state.nameWidth,
+    };
+}
+
 export function App(props: AppProps) {
     const state = useAppState(props);
     return (
         <Box flexDirection="column" height={state.rows}>
             <Header statuses={state.statuses} />
-            <Workspace
-                state={state.browser}
-                {...state.details}
-                statuses={state.statuses}
-                height={state.listHeight}
-                detailRows={state.detailRows}
-                width={state.panelWidth}
-                focused={state.logView.focus === "browser"}
-            />
+            <Workspace {...getWorkspaceProps(state)} />
             <LogPane {...getLogPaneProps(state)} />
             <StatusBar {...state.status} />
         </Box>

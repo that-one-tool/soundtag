@@ -93,10 +93,17 @@ on when configured to). Processing messages appear in the log pane below.
 | `←`, Backspace, Delete | Go up one folder                                |
 | `t`                    | Tag the file or folder under the cursor         |
 | `a`                    | Tag the folder being browsed                    |
+| `e`                    | Rename the file or folder under the cursor      |
 | `r`                    | Include or exclude subfolders in folder runs    |
 | `s`                    | Stop the current run after the file in progress |
 | `q`, Ctrl+C            | Quit (press again during a run to quit at once) |
 | Tab                    | Switch between the browser and the log pane     |
+
+`e` edits the name in place: Enter saves it, Esc or Ctrl+C cancels. A file
+keeps its extension. A name already used in the folder (ignoring case) is
+refused, and so is renaming a file or folder that a queued or running tag job
+works on, including the other entries in the folder of a queued file (its job
+may rename that folder).
 
 While the log pane has focus, `↑` `↓`, PgUp and PgDn scroll it; it stays in
 place as new messages arrive until you scroll back to the bottom.
