@@ -34,6 +34,7 @@ function useLayout() {
 
 function useBrowsing(startDirectory: string, services: TuiServices) {
     const statuses = useStore(services.statusStore);
+    const redoneFiles = useStore(services.redoneFiles);
     const [browser, dispatch] = useBrowser(startDirectory, {
         changes: services.statusStore,
         moves: services.pathMoves,
@@ -47,7 +48,7 @@ function useBrowsing(startDirectory: string, services: TuiServices) {
     const coverView = useEntryValue(request, services.coverCache);
     const cover = getShownCover(view.entry, coverView);
     const details = { ...view, details: view.value, cover };
-    return { browser, dispatch, hovered, details, statuses };
+    return { browser, dispatch, hovered, details, statuses, redoneFiles };
 }
 
 function useStatus({ queue, subfolders, coverOverlay }: TuiServices) {
@@ -94,39 +95,45 @@ function getLogPaneProps({
     };
 }
 
-type WorkspaceProps = BrowserPaneProps & MetadataPanelProps;
+interface WorkspaceProps {
+    browser: BrowserPaneProps;
+    details: MetadataPanelProps;
+}
 
-function Workspace({
-    state,
-    statuses,
-    height,
-    focused,
-    draft,
-    nameWidth,
-    ...details
-}: WorkspaceProps) {
-    const browser = { state, statuses, height, focused, draft, nameWidth };
+function Workspace({ browser, details }: WorkspaceProps) {
     return (
         <Box flexGrow={1} overflow="hidden">
             <BrowserPane {...browser} />
-            <MetadataPanel {...details} statuses={statuses} />
+            <MetadataPanel {...details} />
         </Box>
     );
 }
 
-function getWorkspaceProps(
+function getBrowserPaneProps(
     state: ReturnType<typeof useAppState>
-): WorkspaceProps {
+): BrowserPaneProps {
     return {
         state: state.browser,
-        ...state.details,
-        statuses: state.statuses,
+        dotSources: {
+            queue: state.status.queueState,
+            statuses: state.statuses,
+            redoneFiles: state.redoneFiles,
+        },
         height: state.listHeight,
-        detailRows: state.detailRows,
-        width: state.panelWidth,
         focused: state.logView.focus === "browser",
         draft: state.rename.draft,
         nameWidth: state.nameWidth,
+    };
+}
+
+function getMetadataPanelProps(
+    state: ReturnType<typeof useAppState>
+): MetadataPanelProps {
+    return {
+        ...state.details,
+        statuses: state.statuses,
+        detailRows: state.detailRows,
+        width: state.panelWidth,
     };
 }
 
@@ -136,7 +143,10 @@ export function App(props: AppProps) {
         <CoverPlacerContext.Provider value={state.services.coverOverlay}>
             <Box flexDirection="column" height={state.rows}>
                 <Header statuses={state.statuses} />
-                <Workspace {...getWorkspaceProps(state)} />
+                <Workspace
+                    browser={getBrowserPaneProps(state)}
+                    details={getMetadataPanelProps(state)}
+                />
                 <LogPane {...getLogPaneProps(state)} />
                 <StatusBar {...state.status} />
             </Box>

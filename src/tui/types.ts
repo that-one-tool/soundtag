@@ -46,6 +46,8 @@ export interface BrowserListing {
 
 export type TrackStatuses = ReadonlyMap<string, TrackStatus>;
 
+export type EntryDot = TrackStatus | "QUEUED";
+
 export type TagTarget =
     | { kind: "file"; path: string }
     | { kind: "folder"; path: string; recursive: boolean };
@@ -74,3 +76,9 @@ export type EntryDetails =
     | { kind: "parent" };
 
 export type TuiOutcome = "success" | "failure" | "forced";
+
+export interface DotSources {
+    queue: QueueState;
+    statuses: TrackStatuses;
+    redoneFiles: ReadonlySet<string>;
+}

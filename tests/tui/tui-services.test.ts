@@ -40,6 +40,59 @@ test("createTuiServices routes job results to the status store and logs", async 
     assert.ok(logText.some((text) => text.startsWith("Searching:")));
 });
 
+test("createTuiServices marks files as redone only once their new status is recorded", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "Artist - Title.mp3");
+    await fs.writeFile(source, "audio bytes");
+    globalThis.fetch = async () => new Response(null, { status: 500 });
+    const services = createTuiServices({
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: true,
+        renameFiles: false,
+        startDirectory: directory,
+    });
+    services.statusStore.record({
+        source,
+        status: "FAILED",
+        destination: null,
+    });
+    const seen: string[] = [];
+    const isRedone = () => services.redoneFiles.getSnapshot().has(source);
+    services.statusStore.subscribe(() =>
+        seen.push(
+            `${services.statusStore.getSnapshot().get(source)}:${isRedone()}`
+        )
+    );
+    services.redoneFiles.subscribe(() => seen.push(`redone:${isRedone()}`));
+
+    services.queue.enqueue({ kind: "file", path: source });
+    await services.queue.whenIdle();
+
+    assert.deepEqual(seen, ["SKIPPED:false", "redone:true", "redone:false"]);
+});
+
+test("createTuiServices forgets redone files when a job fails", async () => {
+    const directory = await createTemporaryDirectory();
+    const services = createTuiServices({
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: true,
+        renameFiles: false,
+        startDirectory: directory,
+    });
+    services.redoneFiles.add(path.join(directory, "song.mp3"));
+
+    services.queue.enqueue({
+        kind: "folder",
+        path: path.join(directory, "missing"),
+        recursive: true,
+    });
+    await services.queue.whenIdle();
+
+    assert.equal(services.redoneFiles.getSnapshot().size, 0);
+});
+
 test("createTuiServices starts the subfolder choice from the options", () => {
     const services = createTuiServices({
         lastFmApiKey: "key",

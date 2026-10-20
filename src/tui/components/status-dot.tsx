@@ -1,11 +1,11 @@
 import { Text } from "ink";
-import type { TrackStatus } from "../../processing/types.js";
-import { STATUS_COLOR, STATUS_GLYPH } from "../theme.js";
+import { DOT_COLOR, STATUS_GLYPH } from "../theme.js";
+import type { EntryDot } from "../types.js";
 
-export function StatusDot({ status }: { status: TrackStatus | undefined }) {
-    if (!status) {
+export function StatusDot({ dot }: { dot: EntryDot | undefined }) {
+    if (!dot) {
         return <Text> </Text>;
     }
 
-    return <Text color={STATUS_COLOR[status]}>{STATUS_GLYPH}</Text>;
+    return <Text color={DOT_COLOR[dot]}>{STATUS_GLYPH}</Text>;
 }

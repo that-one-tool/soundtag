@@ -10,11 +10,12 @@ import { createDetailsCache } from "./entry-details.js";
 import { EntryRenamer } from "./entry-renamer.js";
 import { LogBuffer } from "./log-buffer.js";
 import { PathMoves } from "./path-moves.js";
+import { RedoneFiles } from "./redone-files.js";
 import { SubfolderSetting } from "./subfolder-setting.js";
 import { createTagJobRunner } from "./tag-job.js";
 import { TaggingQueue } from "./tagging-queue.js";
 import { TrackStatusStore } from "./track-status-store.js";
-import type { CoverLookup, EntryDetails } from "./types.js";
+import type { CoverLookup, EntryDetails, TagJobRunner } from "./types.js";
 import type { VersionedCache } from "./versioned-cache.js";
 
 export interface TaggingOptions extends MetadataChainConfig {
@@ -28,6 +29,7 @@ export interface TuiServices {
     queue: TaggingQueue;
     logBuffer: LogBuffer;
     statusStore: TrackStatusStore;
+    redoneFiles: RedoneFiles;
     pathMoves: PathMoves;
     subfolders: SubfolderSetting;
     detailsCache: VersionedCache<EntryDetails>;
@@ -46,37 +48,58 @@ const NO_COVER_DISPLAY: CoverDisplay = {
     writeToTerminal: () => {},
 };
 
+function clearRedoneFilesAfterJob(
+    runJob: TagJobRunner,
+    redoneFiles: RedoneFiles
+): TagJobRunner {
+    return async (target, stopSignal) => {
+        try {
+            return await runJob(target, stopSignal);
+        } finally {
+            redoneFiles.clear();
+        }
+    };
+}
+
 function createJobRunner(
     options: TaggingOptions,
     logBuffer: LogBuffer,
-    { statusStore, pathMoves }: Pick<TuiServices, "statusStore" | "pathMoves">
+    services: Pick<TuiServices, "statusStore" | "redoneFiles" | "pathMoves">
 ) {
-    return createTagJobRunner({
+    const { statusStore, redoneFiles, pathMoves } = services;
+    const runJob = createTagJobRunner({
         metadataChain: createMetadataChain(options, systemClock, logBuffer),
         logger: logBuffer,
         renameFiles: options.renameFiles,
         libraryRoot: options.startDirectory,
-        onTrackProcessed: (result) => statusStore.record(result),
+        onTrackProcessed: (result) => {
+            statusStore.record(result);
+            redoneFiles.add(result.destination ?? result.source);
+        },
         onFolderRenamed: (move) => pathMoves.record(move),
     });
+    return clearRedoneFilesAfterJob(runJob, redoneFiles);
 }
 
 type JobServices = Pick<
     TuiServices,
-    "queue" | "logBuffer" | "statusStore" | "pathMoves"
+    "queue" | "logBuffer" | "statusStore" | "redoneFiles" | "pathMoves"
 >;
 
 function createJobServices(options: TaggingOptions): JobServices {
     const logBuffer = new LogBuffer();
     const statusStore = new TrackStatusStore();
+    const redoneFiles = new RedoneFiles();
     const pathMoves = new PathMoves();
+    const statusServices = { statusStore, redoneFiles, pathMoves };
     const queue = new TaggingQueue(
-        createJobRunner(options, logBuffer, { statusStore, pathMoves }),
+        createJobRunner(options, logBuffer, statusServices),
         logBuffer
     );
     pathMoves.subscribe((move) => queue.moveTargets(move));
     pathMoves.subscribe((move) => statusStore.recordMove(move));
-    return { queue, logBuffer, statusStore, pathMoves };
+    pathMoves.subscribe((move) => redoneFiles.recordMove(move));
+    return { queue, logBuffer, ...statusServices };
 }
 
 function createRenamer({ queue, pathMoves, logBuffer }: JobServices) {

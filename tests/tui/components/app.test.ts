@@ -180,6 +180,24 @@ test("App marks processed files and their folders with a dot", async () => {
     assert.doesNotMatch(findFrameLine(lastFrame, ".."), /●/);
 });
 
+test("App marks queued entries and their folders with a dot", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, services } = await renderApp(directory);
+    const album = path.join(directory, "Album");
+
+    services.queue.enqueue({ kind: "folder", path: album, recursive: true });
+
+    await waitFor(() => findFrameLine(lastFrame, "Album/").includes("●"));
+    assert.doesNotMatch(findFrameLine(lastFrame, "song.mp3"), /●/);
+    assert.doesNotMatch(findFrameLine(lastFrame, ".."), /●/);
+
+    services.queue.enqueue({
+        kind: "file",
+        path: path.join(directory, "song.mp3"),
+    });
+    await waitFor(() => findFrameLine(lastFrame, "song.mp3").includes("●"));
+});
+
 test("App refreshes the listing after a file is renamed", async () => {
     const directory = await createLibrary();
     const { lastFrame, services } = await renderApp(directory);

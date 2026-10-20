@@ -1,4 +1,5 @@
 import type { TrackStatus } from "../processing/types.js";
+import type { EntryDot } from "./types.js";
 
 export const ACCENT = "cyan";
 export const ERROR_COLOR = "red";
@@ -17,4 +18,9 @@ export const STATUS_COLOR: Record<TrackStatus, string> = {
     TAGGED: "green",
     SKIPPED: "yellow",
     FAILED: "red",
+};
+
+export const DOT_COLOR: Record<EntryDot, string> = {
+    ...STATUS_COLOR,
+    QUEUED: "gray",
 };

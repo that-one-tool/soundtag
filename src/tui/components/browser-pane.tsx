@@ -3,7 +3,7 @@ import type { BrowserState } from "../browser-state.js";
 import { getVisibleRange } from "../list-window.js";
 import { getFieldWindow } from "../name-field.js";
 import type { RenameDraft } from "../rename-draft.js";
-import { getEntryStatus } from "../track-statuses.js";
+import { getEntryDot } from "../entry-dot.js";
 import {
     ACCENT,
     ERROR_COLOR,
@@ -12,12 +12,12 @@ import {
     SELECTION_MARKER,
     SELECTION_TEXT,
 } from "../theme.js";
-import type { BrowserEntry, EntryKind, TrackStatuses } from "../types.js";
+import type { BrowserEntry, DotSources, EntryKind } from "../types.js";
 import { StatusDot } from "./status-dot.js";
 
 interface EntryRowProps {
     entry: BrowserEntry;
-    statuses: TrackStatuses;
+    dotSources: DotSources;
     hovered: boolean;
     draft: RenameDraft | null;
     nameWidth: number;
@@ -72,13 +72,13 @@ function EntryLabel({ entry, hovered, draft, nameWidth }: EntryRowProps) {
 }
 
 function EntryRow(props: EntryRowProps) {
-    const { entry, statuses, hovered } = props;
+    const { entry, dotSources, hovered } = props;
     return (
         <Box>
             <Text color={ACCENT}>
                 {hovered ? `${SELECTION_MARKER} ` : "  "}
             </Text>
-            <StatusDot status={getEntryStatus(statuses, entry)} />
+            <StatusDot dot={getEntryDot(dotSources, entry)} />
             <Text> </Text>
             <EntryLabel {...props} />
         </Box>
@@ -87,7 +87,7 @@ function EntryRow(props: EntryRowProps) {
 
 export interface BrowserPaneProps {
     state: BrowserState;
-    statuses: TrackStatuses;
+    dotSources: DotSources;
     height: number;
     focused: boolean;
     draft: RenameDraft | null;
@@ -95,7 +95,7 @@ export interface BrowserPaneProps {
 }
 
 function EntryList(props: BrowserPaneProps) {
-    const { state, statuses, height, draft, nameWidth } = props;
+    const { state, dotSources, height, draft, nameWidth } = props;
     const { entries, cursor } = state;
     const { start, end } = getVisibleRange(entries.length, cursor, height);
     return entries
@@ -104,7 +104,7 @@ function EntryList(props: BrowserPaneProps) {
             <EntryRow
                 key={entry.path}
                 entry={entry}
-                statuses={statuses}
+                dotSources={dotSources}
                 hovered={start + index === cursor}
                 draft={draft}
                 nameWidth={nameWidth}

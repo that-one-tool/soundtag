@@ -6,6 +6,7 @@ import { LogBuffer } from "../../src/tui/log-buffer.js";
 import { PathMoves } from "../../src/tui/path-moves.js";
 import { TaggingQueue } from "../../src/tui/tagging-queue.js";
 import { SubfolderSetting } from "../../src/tui/subfolder-setting.js";
+import { RedoneFiles } from "../../src/tui/redone-files.js";
 import { TrackStatusStore } from "../../src/tui/track-status-store.js";
 import type { TuiServices } from "../../src/tui/tui-services.js";
 import type { TagTarget } from "../../src/tui/types.js";
@@ -35,6 +36,7 @@ export function createControlledServices(): {
             queue,
             logBuffer,
             statusStore: new TrackStatusStore(),
+            redoneFiles: new RedoneFiles(),
             pathMoves,
             subfolders: new SubfolderSetting(true),
             detailsCache: createDetailsCache(),
