@@ -8,7 +8,11 @@ import { createRecordingLogger } from "../../helpers/logger.js";
 import { createFakeClock, instantClock } from "../../helpers/clock.js";
 import type { Clock } from "../../../src/shared/rate-limiter.js";
 import type { Logger } from "../../../src/shared/logger.js";
-import { createProviderServices } from "../../helpers/metadata-chain.js";
+import {
+    createProviderServices,
+    coverNeeds,
+    detailNeeds,
+} from "../../helpers/metadata-chain.js";
 
 restoreFetchAfterEach();
 const output = captureConsole();
@@ -57,7 +61,7 @@ test("LastFmProvider skips the cover download when no cover is needed", async ()
     const requestedHosts: string[] = [];
     mockLastFmMatchWithCover(requestedHosts);
 
-    const metadata = await createLastFm().findMetadata(search, false);
+    const metadata = await createLastFm().findMetadata(search, detailNeeds);
 
     assert.equal(metadata?.info.album, "Album");
     assert.equal(metadata?.coverData, null);
@@ -69,7 +73,10 @@ test("LastFmProvider spaces its API requests but not its cover download", async 
     mockLastFmMatchWithCover(requestedHosts);
     const clock = createFakeClock();
 
-    await createLastFm({ clock }).findMetadata({ ...search, artist: "" }, true);
+    await createLastFm({ clock }).findMetadata(
+        { ...search, artist: "" },
+        coverNeeds
+    );
 
     assert.ok(requestedHosts.includes("images.test"));
     assert.deepEqual(clock.sleeps, [2000]);
@@ -79,7 +86,7 @@ test("LastFmProvider logs empty album details when nothing matches", async () =>
     globalThis.fetch = async () =>
         Response.json({ results: { trackmatches: { track: [] } } });
 
-    assert.equal(await createLastFm().findMetadata(search, true), null);
+    assert.equal(await createLastFm().findMetadata(search, coverNeeds), null);
     assert.deepEqual(output.logs, ["Album: ", "Year: "]);
 });
 
@@ -112,7 +119,7 @@ test("LastFmProvider reads the first match from a result list with a plain artis
 
     const metadata = await createLastFm().findMetadata(
         { title: "Song", artist: "", album: "" },
-        false
+        detailNeeds
     );
 
     assert.deepEqual(metadata?.info, {
@@ -146,7 +153,7 @@ test("LastFmProvider keeps titles that only start like the artist name", async (
 
     const metadata = await createLastFm().findMetadata(
         { title: "Abbaesque", artist: "Abba", album: "" },
-        false
+        detailNeeds
     );
 
     assert.equal(metadata?.info.title, "Abbaesque");
@@ -171,7 +178,7 @@ test("LastFmProvider removes a repeated artist prefix regardless of case", async
 
     const metadata = await createLastFm().findMetadata(
         { title: "Waterloo", artist: "Abba", album: "" },
-        false
+        detailNeeds
     );
 
     assert.equal(metadata?.info.title, "Waterloo");
@@ -181,7 +188,10 @@ test("LastFmProvider logs to the injected logger", async () => {
     const logger = createRecordingLogger();
     globalThis.fetch = async () => new Response(null, { status: 500 });
 
-    await createLastFm({ verbose: true, logger }).findMetadata(search, true);
+    await createLastFm({ verbose: true, logger }).findMetadata(
+        search,
+        coverNeeds
+    );
 
     assert.deepEqual(logger.errors, [
         "Last.fm search failed: Last.fm request failed: HTTP 500",
@@ -220,7 +230,7 @@ test("LastFmProvider asks track.getInfo directly when the artist is known", asyn
         album: { title: "Album", year: "2001" },
     });
 
-    const metadata = await createLastFm().findMetadata(search, false);
+    const metadata = await createLastFm().findMetadata(search, detailNeeds);
 
     assert.deepEqual(metadata?.info, {
         title: "Corrected Title",
@@ -240,7 +250,7 @@ test("LastFmProvider falls back to track.search when the direct lookup finds no 
     const requests: URL[] = [];
     mockTrackInfo(requests, { album: { title: "Album" } });
 
-    const metadata = await createLastFm().findMetadata(search, false);
+    const metadata = await createLastFm().findMetadata(search, detailNeeds);
 
     assert.deepEqual(metadata?.info, {
         title: "Found",
@@ -260,7 +270,7 @@ test("LastFmProvider strips a repeated artist from the title it asks directly", 
 
     await createLastFm().findMetadata(
         { ...search, title: "Artist - Title" },
-        false
+        detailNeeds
     );
 
     assert.equal(requests[0].searchParams.get("track"), "Title");
@@ -270,7 +280,7 @@ test("LastFmProvider falls back to track.search when the direct hit has no album
     const requests: URL[] = [];
     mockTrackInfo(requests, { name: "Title", artist: { name: "Artist" } });
 
-    await createLastFm().findMetadata(search, false);
+    await createLastFm().findMetadata(search, detailNeeds);
 
     assert.deepEqual(
         requests.map((url) => url.searchParams.get("method")),
@@ -294,7 +304,7 @@ test("LastFmProvider does not ask track.getInfo twice for the same track", async
             : Response.json({ track: { name: "Title" } });
     };
 
-    const metadata = await createLastFm().findMetadata(search, false);
+    const metadata = await createLastFm().findMetadata(search, detailNeeds);
 
     assert.equal(metadata?.info.title, "Title");
     assert.deepEqual(
@@ -326,7 +336,7 @@ test("LastFmProvider falls back silently and spaced when the direct lookup fails
 
     const metadata = await createLastFm({ clock, logger }).findMetadata(
         search,
-        false
+        detailNeeds
     );
 
     assert.equal(metadata?.info.album, "Album");

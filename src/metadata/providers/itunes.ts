@@ -12,8 +12,10 @@ import {
     removeUnknownValues,
     valueOrEmpty,
 } from "../track-metadata.js";
+import { isSameRelease, isSameTrack } from "../track-matching.js";
 import type {
     MetadataProvider,
+    ProviderNeeds,
     ProviderServices,
     TrackExtras,
     TrackInfo,
@@ -67,40 +69,6 @@ function getItunesTrackInfo(track: ItunesTrack): TrackInfo {
     };
 }
 
-function normalizeAlbum(album: string | undefined): string {
-    return valueOrEmpty(album).trim().toLowerCase();
-}
-
-// Track and disc numbers from another release (compilation, single) would be wrong.
-function isSameRelease(track: ItunesTrack, album: string): boolean {
-    return (
-        !album || normalizeAlbum(track.collectionName) === normalizeAlbum(album)
-    );
-}
-
-// Brackets that name another version (live, karaoke, remix) must still differ.
-const NOISE_BRACKET =
-    /[([][^)\]]*\b(?:remaster|feat|ft\b|explicit|mono|stereo)[^)\]]*[)\]]/g;
-
-function normalizeName(name: string | undefined): string {
-    return valueOrEmpty(name)
-        .toLowerCase()
-        .normalize("NFD")
-        .replaceAll(/\p{M}/gu, "")
-        .replaceAll(NOISE_BRACKET, "")
-        .replaceAll(/[^\p{L}\p{N}]/gu, "");
-}
-
-function isSameName(found: string | undefined, searched: string): boolean {
-    return normalizeName(found) === normalizeName(searched);
-}
-
-// limit=1 can return a karaoke or cover version, whose extras would stick.
-function isSameTrack(track: ItunesTrack, { title, artist }: TrackSearch) {
-    const isSameArtist = !artist || isSameName(track.artistName, artist);
-    return isSameArtist && isSameName(track.trackName, title);
-}
-
 function getReleaseExtras(track: ItunesTrack): TrackExtras {
     return {
         albumArtist: optionalText(track.collectionArtistName),
@@ -111,17 +79,30 @@ function getReleaseExtras(track: ItunesTrack): TrackExtras {
     };
 }
 
+function isSearchedTrack(track: ItunesTrack, search: TrackSearch): boolean {
+    const found = { title: track.trackName, artist: track.artistName };
+    return isSameTrack(found, search);
+}
+
+// Artwork of a karaoke version or a compilation would be wrong.
+function isSearchedRelease(track: ItunesTrack, search: TrackSearch): boolean {
+    return (
+        isSearchedTrack(track, search) &&
+        isSameRelease(track.collectionName, search.album)
+    );
+}
+
 function getMatchedExtras(
     track: ItunesTrack,
     search: TrackSearch
 ): TrackExtras {
-    return isSameTrack(track, search)
+    return isSearchedTrack(track, search)
         ? getItunesExtras(track, search.album)
         : {};
 }
 
 function getItunesExtras(track: ItunesTrack, album: string): TrackExtras {
-    const releaseExtras = isSameRelease(track, album)
+    const releaseExtras = isSameRelease(track.collectionName, album)
         ? getReleaseExtras(track)
         : {};
     return removeUnknownValues({
@@ -150,7 +131,7 @@ export class ItunesProvider implements MetadataProvider {
 
     async findMetadata(
         search: TrackSearch,
-        needsCover: boolean
+        { cover: needsCover }: ProviderNeeds
     ): Promise<TrackMetadata | null> {
         const track = await this.searchTrack(search);
 
@@ -161,13 +142,18 @@ export class ItunesProvider implements MetadataProvider {
         return {
             info: getItunesTrackInfo(track),
             extras: getMatchedExtras(track, search),
-            coverData: needsCover
-                ? await downloadArtwork(
-                      this.services.images,
-                      track.artworkUrl100
-                  )
-                : null,
+            coverData: await this.findArtwork(track, search, needsCover),
         };
+    }
+
+    private findArtwork(
+        track: ItunesTrack,
+        search: TrackSearch,
+        needsCover: boolean
+    ): Promise<Buffer | null> {
+        return needsCover && isSearchedRelease(track, search)
+            ? downloadArtwork(this.services.images, track.artworkUrl100)
+            : Promise.resolve(null);
     }
 
     private async searchTrack(

@@ -12,6 +12,7 @@ import {
 import { extractYear, valueOrEmpty } from "../track-metadata.js";
 import type {
     MetadataProvider,
+    ProviderNeeds,
     ProviderServices,
     TrackInfo,
     TrackMetadata,
@@ -136,7 +137,7 @@ export class MusicBrainzProvider implements MetadataProvider {
 
     async findMetadata(
         search: TrackSearch,
-        needsCover: boolean
+        { cover: needsCover }: ProviderNeeds
     ): Promise<TrackMetadata | null> {
         const recording = await this.searchRecording(search);
 

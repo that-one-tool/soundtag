@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { withoutDeezerMatches } from "../helpers/deezer.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import {
     createTestChain,
@@ -18,7 +19,7 @@ test("findTrackMetadata gets track info and downloads medium cover art", async (
         output.push(args.map(String).join(" "));
     };
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
         requests.push(url);
 
@@ -56,10 +57,13 @@ test("findTrackMetadata gets track info and downloads medium cover art", async (
             });
         }
 
+        if (url.hostname === "api.deezer.com") {
+            return Response.json({ data: [] });
+        }
         return new Response(image, {
             headers: { "content-type": "image/jpeg" },
         });
-    };
+    });
 
     let metadata;
     try {
@@ -123,7 +127,7 @@ test("findTrackMetadata does not log the track info URL unless verbose is enable
     console.log = (...args: Parameters<typeof console.log>) => {
         output.push(args.map(String).join(" "));
     };
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
 
         if (url.searchParams.get("method") === "track.search") {
@@ -137,7 +141,7 @@ test("findTrackMetadata does not log the track info URL unless verbose is enable
         }
 
         return Response.json({ track: {} });
-    };
+    });
 
     try {
         await findTrackMetadata({ title: "Title" });
@@ -154,7 +158,7 @@ test("findTrackMetadata does not log the track info URL unless verbose is enable
 test("findTrackMetadata constrains the search by artist and removes a repeated artist prefix", async () => {
     const requests: URL[] = [];
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
         requests.push(url);
 
@@ -172,7 +176,7 @@ test("findTrackMetadata constrains the search by artist and removes a repeated a
         }
 
         return Response.json({ track: {} });
-    };
+    });
 
     await findTrackMetadata({ title: "Tubthumping", artist: "Chumbawamba" });
 
@@ -194,7 +198,7 @@ test("findTrackMetadata uses MusicBrainz and Cover Art Archive when Last.fm miss
     const image = Buffer.from("cover-art");
     const requests: { url: URL; userAgent?: string }[] = [];
 
-    globalThis.fetch = async (input, init) => {
+    globalThis.fetch = withoutDeezerMatches(async (input, init) => {
         const url = new URL(input.toString());
         requests.push({
             url,
@@ -240,7 +244,7 @@ test("findTrackMetadata uses MusicBrainz and Cover Art Archive when Last.fm miss
         return new Response(image, {
             headers: { "content-type": "image/jpeg" },
         });
-    };
+    });
 
     const metadata = await findTrackMetadata(
         { title: "Tubthumping", artist: "Chumbawamba" },
@@ -280,7 +284,7 @@ test("findTrackMetadata falls back to MusicBrainz when Last.fm has no track", as
     const image = Buffer.from("cover-art");
     let musicBrainzUserAgent = "";
 
-    globalThis.fetch = async (input, init) => {
+    globalThis.fetch = withoutDeezerMatches(async (input, init) => {
         const url = new URL(input.toString());
 
         if (url.hostname === "ws.audioscrobbler.com") {
@@ -313,7 +317,7 @@ test("findTrackMetadata falls back to MusicBrainz when Last.fm has no track", as
         return new Response(image, {
             headers: { "content-type": "image/jpeg" },
         });
-    };
+    });
 
     assert.deepEqual(
         await findTrackMetadata(
@@ -335,7 +339,7 @@ test("findTrackMetadata falls back to MusicBrainz when Last.fm has no track", as
 });
 
 test("findTrackMetadata replaces a whitespace-only existing year with a fallback year", async () => {
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
 
         if (url.hostname === "ws.audioscrobbler.com") {
@@ -356,7 +360,7 @@ test("findTrackMetadata replaces a whitespace-only existing year with a fallback
         }
 
         return new Response(null, { status: 404 });
-    };
+    });
 
     const metadata = await findTrackMetadata(
         { title: "Title", artist: "Artist" },
@@ -384,7 +388,7 @@ test("MusicBrainz rate limiting does not delay Last.fm requests", async () => {
     const musicBrainzRequests: string[] = [];
     const lastFmInfoRequests: string[] = [];
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
 
         if (url.hostname === "musicbrainz.org") {
@@ -430,7 +434,7 @@ test("MusicBrainz rate limiting does not delay Last.fm requests", async () => {
         }
 
         throw new Error(`Unexpected request: ${url}`);
-    };
+    });
 
     const chain = createTestChain({
         musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
@@ -456,7 +460,7 @@ test("MusicBrainz rate limiting does not delay Last.fm requests", async () => {
 });
 
 test("findTrackMetadata leaves Last.fm data intact when MusicBrainz has no result", async () => {
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
 
         if (url.hostname === "ws.audioscrobbler.com") {
@@ -476,7 +480,7 @@ test("findTrackMetadata leaves Last.fm data intact when MusicBrainz has no resul
         }
 
         return Response.json({ recordings: [] });
-    };
+    });
 
     assert.deepEqual(
         await findTrackMetadata(
@@ -502,7 +506,7 @@ test("findTrackMetadata preserves partial Last.fm metadata when MusicBrainz fail
     console.error = (...args: Parameters<typeof console.error>) => {
         errors.push(args.map(String).join(" "));
     };
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
 
         if (url.hostname === "ws.audioscrobbler.com") {
@@ -524,7 +528,7 @@ test("findTrackMetadata preserves partial Last.fm metadata when MusicBrainz fail
         }
 
         return new Response("Unavailable", { status: 503 });
-    };
+    });
 
     let metadata;
     try {
@@ -550,7 +554,7 @@ test("findTrackMetadata uses large cover art when it is below 500 KB", async () 
     const image = Buffer.from("large-image");
     const imageRequests: string[] = [];
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
 
         if (url.hostname === "ws.audioscrobbler.com") {
@@ -590,7 +594,7 @@ test("findTrackMetadata uses large cover art when it is below 500 KB", async () 
         return new Response(image, {
             headers: { "content-type": "image/jpeg" },
         });
-    };
+    });
 
     const metadata = await findTrackMetadata({ title: "Title" });
 
@@ -602,7 +606,7 @@ test("findTrackMetadata falls back to medium when large cover is not under 500 K
     const mediumImage = Buffer.from("medium-image");
     const imageRequests: string[] = [];
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
 
         if (url.hostname === "ws.audioscrobbler.com") {
@@ -652,7 +656,7 @@ test("findTrackMetadata falls back to medium when large cover is not under 500 K
         return new Response(mediumImage, {
             headers: { "content-type": "image/jpeg" },
         });
-    };
+    });
 
     const metadata = await findTrackMetadata({ title: "Title" });
 
@@ -667,7 +671,7 @@ test("findTrackMetadata uses small cover art when medium is unavailable", async 
     const image = Buffer.from("small-image");
     const imageRequests: string[] = [];
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
 
         if (url.hostname === "ws.audioscrobbler.com") {
@@ -704,7 +708,7 @@ test("findTrackMetadata uses small cover art when medium is unavailable", async 
         return new Response(image, {
             headers: { "content-type": "image/jpeg" },
         });
-    };
+    });
 
     const metadata = await findTrackMetadata({ title: "Title" });
 
@@ -716,7 +720,7 @@ test("findTrackMetadata falls back to small cover when medium cannot be download
     const image = Buffer.from("small-image");
     const imageRequests: string[] = [];
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
 
         if (url.hostname === "ws.audioscrobbler.com") {
@@ -760,7 +764,7 @@ test("findTrackMetadata falls back to small cover when medium cannot be download
         return new Response(image, {
             headers: { "content-type": "image/jpeg" },
         });
-    };
+    });
 
     const metadata = await findTrackMetadata({ title: "Title" });
 
@@ -773,14 +777,14 @@ test("findTrackMetadata falls back to small cover when medium cannot be download
 
 test("findTrackMetadata returns null when neither service has a match and fallback is unconfigured", async () => {
     let requestCount = 0;
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         requestCount++;
         const url = new URL(input.toString());
         if (url.hostname === "itunes.apple.com") {
             return Response.json({ results: [] });
         }
         return Response.json({ results: { trackmatches: { track: [] } } });
-    };
+    });
 
     assert.equal(await findTrackMetadata({ title: "missing track" }), null);
     assert.equal(requestCount, 2);
@@ -790,7 +794,7 @@ test("findTrackMetadata uses iTunes to fill missing metadata and artwork", async
     const cover = Buffer.from("itunes-cover");
     const requests: URL[] = [];
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
         requests.push(url);
 
@@ -807,8 +811,8 @@ test("findTrackMetadata uses iTunes to fill missing metadata and artwork", async
                 resultCount: 1,
                 results: [
                     {
-                        trackName: "iTunes title",
-                        artistName: "iTunes artist",
+                        trackName: "Search Title",
+                        artistName: "Search Artist",
                         collectionName: "iTunes album",
                         releaseDate: "2023-05-12T07:00:00Z",
                         artworkUrl100: "https://images.example/itunes.jpg",
@@ -820,7 +824,7 @@ test("findTrackMetadata uses iTunes to fill missing metadata and artwork", async
         return new Response(cover, {
             headers: { "content-type": "image/jpeg" },
         });
-    };
+    });
 
     const metadata = await findTrackMetadata(
         { title: "search title", artist: "search artist" },
@@ -829,8 +833,8 @@ test("findTrackMetadata uses iTunes to fill missing metadata and artwork", async
 
     assert.deepEqual(metadata, {
         info: {
-            title: "iTunes title",
-            artist: "iTunes artist",
+            title: "Search Title",
+            artist: "Search Artist",
             album: "iTunes album",
             year: "2023",
         },
@@ -858,7 +862,7 @@ test("findTrackMetadata uses iTunes to fill missing metadata and artwork", async
 
 test("findTrackMetadata includes album context in fallback provider searches", async () => {
     const requests: URL[] = [];
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
         requests.push(url);
 
@@ -875,7 +879,7 @@ test("findTrackMetadata includes album context in fallback provider searches", a
         }
 
         throw new Error(`Unexpected request: ${url}`);
-    };
+    });
 
     assert.equal(
         await findTrackMetadata(
@@ -909,7 +913,7 @@ test("findTrackMetadata includes album context in fallback provider searches", a
 
 test("iTunes fallback does not replace metadata already found by Last.fm", async () => {
     const requests: URL[] = [];
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
         requests.push(url);
 
@@ -955,7 +959,7 @@ test("iTunes fallback does not replace metadata already found by Last.fm", async
         }
 
         throw new Error(`Unexpected request: ${url}`);
-    };
+    });
 
     const metadata = await findTrackMetadata(
         { title: "search title" },
@@ -983,7 +987,7 @@ test("findTrackMetadata uses a YouTube thumbnail only after provider artwork is 
     const thumbnail = Buffer.from("youtube-thumbnail");
     const requests: URL[] = [];
 
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
         requests.push(url);
 
@@ -1044,7 +1048,7 @@ test("findTrackMetadata uses a YouTube thumbnail only after provider artwork is 
         return new Response(thumbnail, {
             headers: { "content-type": "image/jpeg" },
         });
-    };
+    });
 
     const metadata = await findTrackMetadata(
         { title: "search title", artist: "search artist" },
@@ -1086,7 +1090,7 @@ test("findTrackMetadata uses a YouTube thumbnail only after provider artwork is 
 });
 
 function mockLastFmAlbumCover(imageRequests: string[]): void {
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
 
         if (url.hostname === "images.example") {
@@ -1110,7 +1114,7 @@ function mockLastFmAlbumCover(imageRequests: string[]): void {
                 },
             },
         });
-    };
+    });
 }
 
 test("the chain downloads a shared album cover once until its cache is cleared", async () => {
@@ -1126,4 +1130,121 @@ test("the chain downloads a shared album cover once until its cache is cleared",
 
     assert.deepEqual(metadata?.coverData, Buffer.from("image"));
     assert.equal(imageRequests.length, 2);
+});
+
+function mockLastFmThenDeezer(requests: URL[]): void {
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+        requests.push(url);
+
+        if (url.hostname === "ws.audioscrobbler.com") {
+            return Response.json(getLastFmDiscoveryResponse(url));
+        }
+
+        if (url.hostname === "api.deezer.com") {
+            return Response.json(deezerDiscovery[url.pathname] ?? {});
+        }
+
+        if (url.hostname === "musicbrainz.org") {
+            return Response.json({ recordings: [] });
+        }
+
+        if (url.hostname === "itunes.apple.com") {
+            return Response.json({ results: [] });
+        }
+
+        return new Response("deezer-cover", {
+            headers: { "content-type": "image/jpeg" },
+        });
+    };
+}
+
+function getLastFmDiscoveryResponse(url: URL): object {
+    return url.searchParams.get("method") === "track.search"
+        ? {
+              results: {
+                  trackmatches: {
+                      track: { name: "One More Time", artist: "Daft Punk" },
+                  },
+              },
+          }
+        : { track: { album: { title: "Discovery" } } };
+}
+
+const deezerDiscovery: Record<string, object> = {
+    "/search": {
+        data: [
+            {
+                id: 11,
+                title: "One More Time",
+                artist: { name: "Daft Punk" },
+                album: {
+                    id: 7,
+                    title: "Discovery",
+                    cover_xl: "https://cdn.deezer.test/xl.jpg",
+                },
+            },
+        ],
+    },
+    "/album/7": {
+        title: "Discovery",
+        release_date: "2001-03-07",
+        artist: { name: "Daft Punk" },
+        genres: { data: [{ name: "Electro" }] },
+    },
+    "/album/7/tracks": {
+        data: [{ id: 11, track_position: 1, disk_number: 1 }],
+    },
+};
+
+test("findTrackMetadata completes a Last.fm match with Deezer and skips iTunes", async () => {
+    const requests: URL[] = [];
+    mockLastFmThenDeezer(requests);
+
+    const metadata = await findTrackMetadata({ title: "One More Time" });
+
+    assert.deepEqual(metadata, {
+        info: {
+            title: "One More Time",
+            artist: "Daft Punk",
+            album: "Discovery",
+            year: "2001",
+        },
+        extras: {
+            genre: "Electro",
+            albumArtist: "Daft Punk",
+            trackNumber: 1,
+            trackCount: 1,
+            discNumber: 1,
+            discCount: 1,
+        },
+        coverData: Buffer.from("deezer-cover"),
+    });
+    assert.deepEqual(
+        requests.map(({ hostname, pathname }) => `${hostname}${pathname}`),
+        [
+            "ws.audioscrobbler.com/2.0/",
+            "ws.audioscrobbler.com/2.0/",
+            "api.deezer.com/search",
+            "api.deezer.com/album/7",
+            "api.deezer.com/album/7/tracks",
+            "cdn.deezer.test/xl.jpg",
+        ]
+    );
+});
+
+test("findTrackMetadata takes the Deezer year when MusicBrainz finds none", async () => {
+    const requests: URL[] = [];
+    mockLastFmThenDeezer(requests);
+
+    const metadata = await findTrackMetadata(
+        { title: "One More Time" },
+        { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
+    );
+
+    assert.equal(metadata?.info.year, "2001");
+    assert.ok(requests.some(({ hostname }) => hostname === "musicbrainz.org"));
+    assert.ok(
+        requests.every(({ hostname }) => hostname !== "itunes.apple.com")
+    );
 });

@@ -168,7 +168,7 @@ test("processBatch stops before the next file once a stop is requested", async (
                 },
             },
         ],
-        undefined,
+        [],
         createProviderServices()
     );
     const report = createReport(files, directory);
@@ -249,7 +249,7 @@ test("processBatch renames newly tagged files but not tracks that were not found
                         : null,
             },
         ],
-        undefined,
+        [],
         createProviderServices()
     );
     const files = [found, notFound];
@@ -299,7 +299,7 @@ test("processBatch renames only the first of two files with the same tags", asyn
             sourceRoot: directory,
             metadataChain: new MetadataChain(
                 [{ name: "Fake", findMetadata: async () => null }],
-                undefined,
+                [],
                 createProviderServices()
             ),
             logger: consoleLogger,
@@ -399,7 +399,7 @@ function createChainWithCoverFor(title: string): MetadataChain {
                         : null,
             },
         ],
-        undefined,
+        [],
         createProviderServices()
     );
 }
@@ -481,7 +481,7 @@ test("processBatch keeps a borrowed cover on a tagged track without announcing i
                 }),
             },
         ],
-        undefined,
+        [],
         createProviderServices()
     );
     const report = createReport([tagged], directory);
@@ -529,7 +529,7 @@ test("processBatch does not share covers once a stop is requested", async () => 
                 },
             },
         ],
-        undefined,
+        [],
         createProviderServices()
     );
     const report = createReport([notFound], directory);
@@ -708,6 +708,23 @@ test("processBatch shares a renamed holder's cover without reading it again", as
     );
 });
 
+function createAlbumChain(): MetadataChain {
+    return new MetadataChain(
+        [
+            {
+                name: "Fake",
+                findMetadata: async (search) => ({
+                    info: { ...albumInfo, title: search.title },
+                    extras: { genre: "Rock", trackNumber: 1 },
+                    coverData: Buffer.from("cover"),
+                }),
+            },
+        ],
+        [],
+        createProviderServices()
+    );
+}
+
 async function writeTrack(file: string, info: typeof albumInfo) {
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, `audio ${file}`);
@@ -744,7 +761,7 @@ async function processAlbumBatch(
     const controller = stop ?? new AbortController();
 
     await processBatch(files, {
-        context: { sourceRoot, metadataChain: createTestChain(), logger },
+        context: { sourceRoot, metadataChain: createAlbumChain(), logger },
         report,
         stopSignal: controller.signal,
         renameFiles,
@@ -850,7 +867,7 @@ test("processBatch renames the folder of tracks renamed after borrowing a cover"
     }
     const notFoundChain = new MetadataChain(
         [{ name: "Fake", findMetadata: async () => null }],
-        undefined,
+        [],
         createProviderServices()
     );
 
@@ -871,7 +888,7 @@ test("processBatch renames the folder of tracks renamed after borrowing a cover"
 function createNotFoundChain(): MetadataChain {
     return new MetadataChain(
         [{ name: "Fake", findMetadata: async () => null }],
-        undefined,
+        [],
         createProviderServices()
     );
 }

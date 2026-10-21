@@ -87,6 +87,13 @@ export function getNewExtras(
     return combineGroups(newGroups.map((group) => pickGroup(merged, group)));
 }
 
+export function hasAllDetails({ info, extras }: TrackMetadata): boolean {
+    const hasAllExtras = EXTRA_GROUPS.every((group) =>
+        hasLeadField(extras, group)
+    );
+    return hasAllExtras && Boolean(info.year.trim());
+}
+
 export function optionalText(value: string | undefined): string | undefined {
     return value?.trim() || undefined;
 }

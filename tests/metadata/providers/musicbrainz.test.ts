@@ -6,7 +6,10 @@ import { createFakeClock } from "../../helpers/clock.js";
 import { captureConsole } from "../../helpers/console.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
 import { createRecordingLogger } from "../../helpers/logger.js";
-import { createProviderServices } from "../../helpers/metadata-chain.js";
+import {
+    createProviderServices,
+    detailNeeds,
+} from "../../helpers/metadata-chain.js";
 
 restoreFetchAfterEach();
 captureConsole();
@@ -41,7 +44,7 @@ test("MusicBrainzProvider retries once after the Retry-After delay", async () =>
     const metadata = await new MusicBrainzProvider(
         userAgent,
         createProviderServices({ clock, logger: consoleLogger })
-    ).findMetadata(search, false);
+    ).findMetadata(search, detailNeeds);
 
     assert.equal(metadata?.info.title, "Retried title");
     assert.equal(sent.length, 2);
@@ -59,7 +62,7 @@ test("MusicBrainzProvider waits three seconds without a Retry-After header", asy
     await new MusicBrainzProvider(
         userAgent,
         createProviderServices({ clock, logger: consoleLogger })
-    ).findMetadata(search, false);
+    ).findMetadata(search, detailNeeds);
 
     assert.deepEqual(clock.sleeps, [3000]);
 });
@@ -71,7 +74,7 @@ test("MusicBrainzProvider rate-limits the retry", async () => {
     await new MusicBrainzProvider(
         userAgent,
         createProviderServices({ clock, logger: consoleLogger })
-    ).findMetadata(search, false);
+    ).findMetadata(search, detailNeeds);
 
     assert.deepEqual(clock.sleeps, [0, 3000]);
 });
@@ -90,7 +93,7 @@ test("MusicBrainzProvider gives up after a second unavailable response", async (
                 clock: createFakeClock(),
                 logger: consoleLogger,
             })
-        ).findMetadata(search, false),
+        ).findMetadata(search, detailNeeds),
         null
     );
     assert.equal(sent.length, 2);
@@ -109,7 +112,7 @@ test("MusicBrainzProvider does not retry other HTTP errors", async () => {
                 clock: createFakeClock(),
                 logger: consoleLogger,
             })
-        ).findMetadata(search, false),
+        ).findMetadata(search, detailNeeds),
         null
     );
     assert.equal(sent.length, 1);
@@ -129,7 +132,7 @@ test("MusicBrainzProvider skips the cover download when no cover is needed", asy
             clock: createFakeClock(),
             logger: consoleLogger,
         })
-    ).findMetadata(search, false);
+    ).findMetadata(search, detailNeeds);
 
     assert.equal(metadata?.coverData, null);
     assert.equal(sent.length, 1);
@@ -142,7 +145,7 @@ test("MusicBrainzProvider logs failures to the injected logger", async () => {
     await new MusicBrainzProvider(
         userAgent,
         createProviderServices({ clock: createFakeClock(), logger })
-    ).findMetadata(search, false);
+    ).findMetadata(search, detailNeeds);
 
     assert.deepEqual(logger.errors, [
         "MusicBrainz search failed: MusicBrainz request failed: HTTP 500",

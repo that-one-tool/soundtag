@@ -1,9 +1,10 @@
 # AGENTS.md
 
-SoundTag is a Node.js CLI and terminal UI that scans a music folder, looks up missing track
-metadata (Last.fm, then MusicBrainz, then iTunes, with YouTube as a cover-only
-fallback), and rewrites tags and cover art in place. User-facing behaviour is
-documented in [README.md](README.md).
+SoundTag is a Node.js CLI and terminal UI that scans a music folder, looks up
+missing track metadata (Last.fm, then MusicBrainz, then Deezer, then iTunes,
+with Deezer album search and YouTube as cover-only fallbacks), and rewrites
+tags and cover art in place. User-facing behaviour is documented in
+[README.md](README.md).
 
 ## Commands
 
@@ -33,7 +34,7 @@ npm run build      # compile to dist/
 | `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                                                                                                      |
 | `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `create-metadata-chain.ts` is the composition root; pure merge helpers.                                                                                                  |
 | `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                                                                                                             |
-| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, per-batch `ImageCache`, rate limiter with an injectable `Clock`, errors, `Logger`.                                                                                                  |
+| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, per-batch `ImageCache` and `BatchCache`, rate limiter with an injectable `Clock`, errors, `Logger`.                                                                                 |
 
 Each domain owns its contracts in its own `types.ts`. Imports only point toward
 lower layers, and a layer may skip levels: `cli` → `tui` → `processing` → `tags` /
@@ -62,7 +63,10 @@ graph free of cycles.
   implements `MetadataProvider` and takes the shared `ProviderServices`, then
   register it in `create-metadata-chain.ts`. Do not change `MetadataChain`.
   Download images through `services.images` so repeated cover URLs hit the
-  per-batch cache.
+  per-batch cache, and cache repeated lookups (e.g. per album) in
+  `services.cache`. Skip requests that `needs` says are not wanted: `cover`
+  for artwork, `details` while the year and every extra are already known.
+  Cover-only fallbacks implement `CoverProvider` and are tried in order.
 - **New audio format:** add it to `AUDIO_FORMATS` in `src/library/file.ts`, then
   map it to a `TagStore` in `src/tags/audio-tags.ts`. The compiler enforces that
   every format has a store.
@@ -144,7 +148,9 @@ Not enforced by tooling, but expected:
   The scan skips hidden files and folders so leftovers are never tagged.
 - MusicBrainz needs `MUSICBRAINZ_USER_AGENT` and allows 1 request/s; SoundTag
   spaces requests 3 s apart (2 s and 2.5 s still drew 503s). Last.fm API calls are
-  spaced 2 s apart and iTunes 4 s apart.
+  spaced 2 s apart, Deezer 500 ms apart (no key or OAuth needed for its public
+  read endpoints; it allows 50 requests per 5 s) and iTunes 4 s apart.
+  Deezer reports errors as HTTP 200 with an `error` object.
   Cover image downloads are not rate-limited.
 - With piped stdin, readline drops lines that arrive before `question()` is
   called. The CLI test helper answers each prompt only once it appears.

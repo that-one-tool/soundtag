@@ -13,6 +13,7 @@ import {
 import { extractYear, valueOrEmpty } from "../track-metadata.js";
 import type {
     MetadataProvider,
+    ProviderNeeds,
     ProviderServices,
     TrackInfo,
     TrackMetadata,
@@ -276,7 +277,7 @@ export class LastFmProvider implements MetadataProvider {
 
     async findMetadata(
         search: TrackSearch,
-        needsCover: boolean
+        { cover: needsCover }: ProviderNeeds
     ): Promise<TrackMetadata | null> {
         const match = await this.findMatch(search);
 

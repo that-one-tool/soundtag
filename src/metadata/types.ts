@@ -1,3 +1,4 @@
+import type { BatchCache } from "../shared/batch-cache.js";
 import type { ImageCache } from "../shared/image-cache.js";
 import type { Logger } from "../shared/logger.js";
 import type { Clock } from "../shared/rate-limiter.js";
@@ -36,11 +37,17 @@ export interface TrackSearch {
     album: string;
 }
 
+// details: the year or an extra is still missing.
+export interface ProviderNeeds {
+    cover: boolean;
+    details: boolean;
+}
+
 export interface MetadataProvider {
     readonly name: string;
     findMetadata(
         search: TrackSearch,
-        needsCover: boolean
+        needs: ProviderNeeds
     ): Promise<TrackMetadata | null>;
 }
 
@@ -53,4 +60,5 @@ export interface ProviderServices {
     clock: Clock;
     logger: Logger;
     images: ImageCache;
+    cache: BatchCache;
 }

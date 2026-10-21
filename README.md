@@ -50,17 +50,26 @@ seconds apart. Set `MUSICBRAINZ_USER_AGENT` to
 identify your SoundTag installation and provide contact information. The
 MusicBrainz fallback is used when Last.fm misses track metadata or cover
 art; cover images are retrieved from the Cover Art Archive. If metadata is
-still incomplete, SoundTag also searches the iTunes Store using
-[Apple's Search API](https://performance-partners.apple.com/search-api) and
-uses its song details and artwork as a final fallback. iTunes also provides
+still incomplete, SoundTag searches Deezer through its public API, which needs
+no key or account. A Deezer result is only used when it has the same title and
+artist, preferring the one on the track's album. It provides the song details,
 the genre and, when its release matches the track's album (or no album is
-known), the track number, disc number and album artist. These are only taken
-when the iTunes song has the same title and artist. Since only iTunes provides
-them, a track missing its genre or track number is looked up on every
-service. iTunes searches are spaced at least four seconds apart to stay within
-the 20-requests-per-minute limit.
+known), the year, the track and disc numbers and counts, the album artist and
+the 1000×1000 album artwork. The year may be that of a reissue. The
+details come from album requests made once per album in each batch, and only
+while the year or one of these details is still missing. Deezer requests are
+spaced half a second apart.
+SoundTag then searches the iTunes Store using
+[Apple's Search API](https://performance-partners.apple.com/search-api) and
+uses its song details and artwork as a final fallback. iTunes provides the
+same extras and artwork under the same conditions, but its year is taken from
+its first result even when that is another song. Since only Deezer and iTunes
+provide the genre and track number, a track missing them is looked up on every
+service until one of them does. iTunes searches are spaced at least four
+seconds apart to stay within the 20-requests-per-minute limit.
 If no provider returns artwork for a track matched by the metadata services,
-SoundTag can use a YouTube video thumbnail as a last resort. This requires a
+SoundTag searches Deezer for the album's cover when the album is known. As a
+last resort, it can use a YouTube video thumbnail. This requires a
 YouTube Data API key with access to `search.list`; set `YOUTUBE_API_KEY` to
 enable it. The thumbnail may be a video still rather than the track's album
 art, and YouTube API quota limits apply.
@@ -232,7 +241,8 @@ that gets a cover this way is reported as tagged, and is renamed only when it
 also has a title, artist and year.
 Because the file is not considered fully tagged until year, genre and cover
 art are present, later runs can retry to fill those gaps. SoundTag gets the year from
-Last.fm or, when needed, from the MusicBrainz recording or release date. Each
+Last.fm or, when needed, from the MusicBrainz recording or release date, or the
+Deezer album release date. Each
 file is processed sequentially using a temporary copy before replacement;
 large lossless files therefore need temporary free space comparable to the
 file size and can require substantial additional disk or NAS I/O.

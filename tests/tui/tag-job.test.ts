@@ -32,7 +32,7 @@ const foundChain = new MetadataChain(
             }),
         },
     ],
-    undefined,
+    [],
     createProviderServices({ logger: createRecordingLogger() })
 );
 

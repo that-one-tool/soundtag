@@ -1,3 +1,4 @@
+import { BatchCache } from "../../src/shared/batch-cache.js";
 import { ImageCache } from "../../src/shared/image-cache.js";
 import { consoleLogger } from "../../src/shared/logger.js";
 import {
@@ -7,6 +8,7 @@ import {
 import type { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import type {
     ExistingTags,
+    ProviderNeeds,
     ProviderServices,
     TrackInfo,
     TrackMetadata,
@@ -20,6 +22,9 @@ export const emptyInfo: TrackInfo = {
     album: "",
     year: "",
 };
+
+export const coverNeeds: ProviderNeeds = { cover: true, details: true };
+export const detailNeeds: ProviderNeeds = { cover: false, details: true };
 
 export const emptyTags: ExistingTags = {
     info: emptyInfo,
@@ -55,6 +60,7 @@ export function createProviderServices(
         clock: instantClock,
         logger: consoleLogger,
         images: new ImageCache(),
+        cache: new BatchCache(),
         ...overrides,
     };
 }

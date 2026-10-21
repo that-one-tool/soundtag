@@ -6,7 +6,11 @@ import { instantClock } from "../../helpers/clock.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
 import { createRecordingLogger } from "../../helpers/logger.js";
 import type { Clock } from "../../../src/shared/rate-limiter.js";
-import { createProviderServices } from "../../helpers/metadata-chain.js";
+import {
+    createProviderServices,
+    coverNeeds,
+    detailNeeds,
+} from "../../helpers/metadata-chain.js";
 
 restoreFetchAfterEach();
 
@@ -26,7 +30,7 @@ test("ItunesProvider skips the artwork download when no cover is needed", async 
 
     const metadata = await new ItunesProvider(
         createProviderServices()
-    ).findMetadata({ title: "Title", artist: "", album: "" }, false);
+    ).findMetadata({ title: "Title", artist: "", album: "" }, detailNeeds);
 
     assert.equal(metadata?.info.title, "Title");
     assert.equal(metadata?.coverData, null);
@@ -51,8 +55,8 @@ test("iTunes searches are rate-limited when requests run concurrently", async ()
     const search = { title: "title", artist: "artist", album: "" };
 
     await Promise.all([
-        provider.findMetadata(search, true),
-        provider.findMetadata(search, true),
+        provider.findMetadata(search, coverNeeds),
+        provider.findMetadata(search, coverNeeds),
     ]);
 
     assert.equal(requestCount, 2);
@@ -65,7 +69,7 @@ test("ItunesProvider logs failures to the injected logger", async () => {
 
     await new ItunesProvider(
         createProviderServices({ clock: instantClock, logger })
-    ).findMetadata({ title: "Title", artist: "", album: "" }, false);
+    ).findMetadata({ title: "Title", artist: "", album: "" }, detailNeeds);
 
     assert.deepEqual(logger.errors, [
         "iTunes Search failed: iTunes Search request failed: HTTP 500",
@@ -90,7 +94,7 @@ function findItunesExtras(
 ) {
     globalThis.fetch = async () => Response.json({ results: [track] });
     return new ItunesProvider(createProviderServices())
-        .findMetadata({ title: "Title", artist, album }, false)
+        .findMetadata({ title: "Title", artist, album }, detailNeeds)
         .then((metadata) => metadata?.extras);
 }
 
@@ -171,4 +175,50 @@ test("ItunesProvider ignores accents and featured artists in names", async () =>
     const extras = await findItunesExtras("", featured, "Beyonce");
 
     assert.equal(extras?.genre, "Hard Rock");
+});
+
+function findItunesCover(album: string, track: object = itunesRelease) {
+    const requestedHosts: string[] = [];
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+        requestedHosts.push(url.hostname);
+        return url.hostname === "itunes.apple.com"
+            ? Response.json({ results: [track] })
+            : new Response("artwork", {
+                  headers: { "content-type": "image/jpeg" },
+              });
+    };
+    const cover = new ItunesProvider(createProviderServices())
+        .findMetadata({ title: "Title", artist: "", album }, coverNeeds)
+        .then((metadata) => metadata?.coverData);
+    return { cover, requestedHosts };
+}
+
+const releaseWithArtwork = {
+    ...itunesRelease,
+    artworkUrl100: "https://artwork.test/cover.jpg",
+};
+
+test("ItunesProvider downloads the artwork of the searched song and release", async () => {
+    const { cover } = findItunesCover("Back in Black", releaseWithArtwork);
+
+    assert.deepEqual(await cover, Buffer.from("artwork"));
+});
+
+test("ItunesProvider skips the artwork of a different song", async () => {
+    const karaoke = { ...releaseWithArtwork, trackName: "Title (Karaoke)" };
+    const { cover, requestedHosts } = findItunesCover("", karaoke);
+
+    assert.equal(await cover, null);
+    assert.deepEqual(requestedHosts, ["itunes.apple.com"]);
+});
+
+test("ItunesProvider skips the artwork of another release", async () => {
+    const { cover, requestedHosts } = findItunesCover(
+        "Greatest Hits",
+        releaseWithArtwork
+    );
+
+    assert.equal(await cover, null);
+    assert.deepEqual(requestedHosts, ["itunes.apple.com"]);
 });

@@ -1,5 +1,6 @@
 import {
     buildProviderSearch,
+    hasAllDetails,
     isComplete,
     mergeMetadata,
 } from "./track-metadata.js";
@@ -7,6 +8,7 @@ import type {
     CoverProvider,
     ExistingTags,
     MetadataProvider,
+    ProviderNeeds,
     ProviderServices,
     TrackMetadata,
     TrackSearch,
@@ -30,6 +32,13 @@ function needsCover({ metadata, hasExistingCover }: ChainState): boolean {
     return !hasExistingCover && !metadata.coverData;
 }
 
+function getNeeds(state: ChainState): ProviderNeeds {
+    return {
+        cover: needsCover(state),
+        details: !hasAllDetails(state.metadata),
+    };
+}
+
 function createInitialState({
     info,
     extras,
@@ -45,12 +54,13 @@ function createInitialState({
 export class MetadataChain {
     constructor(
         readonly providers: MetadataProvider[],
-        readonly coverProvider: CoverProvider | undefined,
+        readonly coverProviders: CoverProvider[],
         private readonly services: ProviderServices
     ) {}
 
     clearCache(): void {
         this.services.images.clear();
+        this.services.cache.clear();
     }
 
     async find(
@@ -93,7 +103,7 @@ export class MetadataChain {
         this.services.logger.info(`Querying ${provider.name}...`);
         const candidate = await provider.findMetadata(
             buildProviderSearch(search, state.metadata.info),
-            needsCover(state)
+            getNeeds(state)
         );
         return mergeCandidate(state, candidate);
     }
@@ -102,14 +112,26 @@ export class MetadataChain {
         search: TrackSearch,
         state: ChainState
     ): Promise<ChainState> {
-        if (!needsCover(state) || !this.coverProvider) {
+        for (const coverProvider of this.coverProviders) {
+            state = await this.applyCoverProvider(coverProvider, search, state);
+        }
+
+        return state;
+    }
+
+    private async applyCoverProvider(
+        coverProvider: CoverProvider,
+        search: TrackSearch,
+        state: ChainState
+    ): Promise<ChainState> {
+        if (!needsCover(state)) {
             return state;
         }
 
         this.services.logger.info(
-            `Searching ${this.coverProvider.name} for a cover...`
+            `Searching ${coverProvider.name} for a cover...`
         );
-        const coverData = await this.coverProvider.findCover(
+        const coverData = await coverProvider.findCover(
             buildProviderSearch(search, state.metadata.info)
         );
         return { ...state, metadata: { ...state.metadata, coverData } };
