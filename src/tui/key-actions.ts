@@ -12,6 +12,8 @@ export type KeyAction =
     | "stop"
     | "toggleSubfolders"
     | "rename"
+    | "clearTags"
+    | "confirmClear"
     | "toggleFocus"
     | "quit";
 
@@ -29,6 +31,8 @@ const KEY_BINDINGS: [KeyMatcher, KeyAction][] = [
     [(input) => input === "s", "stop"],
     [(input) => input === "r", "toggleSubfolders"],
     [(input) => input === "e", "rename"],
+    [(input) => input === "D", "clearTags"],
+    [(input) => input.toLowerCase() === "y", "confirmClear"],
     [(_input, key) => key.tab, "toggleFocus"],
     [(input) => input === "q", "quit"],
     [(input, key) => key.ctrl && input === "c", "quit"],

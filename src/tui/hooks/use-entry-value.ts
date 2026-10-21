@@ -7,6 +7,7 @@ import type { VersionedCache } from "../versioned-cache.js";
 export interface EntryRequest {
     entry: BrowserEntry | undefined;
     status: TrackStatus | undefined;
+    revision: number;
 }
 
 interface ShownValue<Value> {
@@ -94,17 +95,18 @@ function getEntryValueView<Value>(
 }
 
 // Keeps showing the previous value until the hovered entry's is read.
-// The status is part of the request so a processed file is read again.
+// The status and revision are part of the request so a processed or cleared
+// file is read again.
 export function useEntryValue<Value>(
-    { entry, status }: EntryRequest,
+    { entry, status, revision }: EntryRequest,
     cache: VersionedCache<Value>
 ): EntryValueView<Value> {
     const [shown, show] = useState<ShownValue<Value>>(NOTHING_SHOWN);
     const [pacer] = useState(() => new ReadPacer());
 
     useEffect(
-        () => requestValue({ entry, status }, { cache, pacer, show }),
-        [entry, status, cache, pacer]
+        () => requestValue({ entry, status, revision }, { cache, pacer, show }),
+        [entry, status, revision, cache, pacer]
     );
 
     return getEntryValueView(entry, cache, shown);

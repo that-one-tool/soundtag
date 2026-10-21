@@ -13,6 +13,7 @@ import { PathMoves } from "./path-moves.js";
 import { RedoneFiles } from "./redone-files.js";
 import { SubfolderSetting } from "./subfolder-setting.js";
 import { createTagJobRunner } from "./tag-job.js";
+import { TagClearer } from "./tag-clearer.js";
 import { TaggingQueue } from "./tagging-queue.js";
 import { TrackStatusStore } from "./track-status-store.js";
 import type { CoverLookup, EntryDetails, TagJobRunner } from "./types.js";
@@ -35,6 +36,7 @@ export interface TuiServices {
     detailsCache: VersionedCache<EntryDetails>;
     coverCache: VersionedCache<CoverLookup>;
     renamer: EntryRenamer;
+    tagClearer: TagClearer;
     coverOverlay: CoverPlacer;
 }
 
@@ -106,6 +108,10 @@ function createRenamer({ queue, pathMoves, logBuffer }: JobServices) {
     return new EntryRenamer({ queue, pathMoves, logger: logBuffer });
 }
 
+function createTagClearer({ queue, logBuffer, statusStore }: JobServices) {
+    return new TagClearer({ queue, logger: logBuffer, statusStore });
+}
+
 export function createTuiServices(
     options: TaggingOptions,
     display: CoverDisplay = NO_COVER_DISPLAY
@@ -114,6 +120,7 @@ export function createTuiServices(
     return {
         ...jobServices,
         renamer: createRenamer(jobServices),
+        tagClearer: createTagClearer(jobServices),
         subfolders: new SubfolderSetting(options.recursive),
         detailsCache: createDetailsCache(),
         coverCache: createCoverCache(display.mode),

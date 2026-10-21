@@ -3,6 +3,7 @@ import type { Dispatch } from "react";
 import type { BrowserAction } from "../browser-state.js";
 import { getKeyAction, type KeyAction } from "../key-actions.js";
 import type { KeyPress } from "../name-field.js";
+import type { TagClearer } from "../tag-clearer.js";
 import type { SubfolderSetting } from "../subfolder-setting.js";
 import type { TaggingQueue } from "../tagging-queue.js";
 import type {
@@ -26,6 +27,7 @@ export interface KeyboardControls {
     logView: LogView;
     logPageSize: number;
     rename: RenameControls;
+    tagClearer: TagClearer;
 }
 
 type NavigationAction =
@@ -58,9 +60,10 @@ function getTagTarget(
 }
 
 // Nothing new may start once the user asked to quit, nor while a rename may
-// still pull files away from a job.
-function canStartWork({ quitting, rename }: KeyboardControls): boolean {
-    return !quitting && !rename.isSaving();
+// still pull files away from a job, nor while a clear rewrites a file.
+function canStartWork(controls: KeyboardControls): boolean {
+    const { quitting, rename, tagClearer } = controls;
+    return !quitting && !rename.isSaving() && !tagClearer.isClearing();
 }
 
 function enqueue(target: TagTarget | null, controls: KeyboardControls): void {
@@ -72,6 +75,18 @@ function enqueue(target: TagTarget | null, controls: KeyboardControls): void {
 function startRename(controls: KeyboardControls): void {
     if (canStartWork(controls)) {
         controls.rename.startRename(controls.hovered);
+    }
+}
+
+function requestClear(controls: KeyboardControls): void {
+    if (canStartWork(controls)) {
+        controls.tagClearer.request(controls.hovered);
+    }
+}
+
+function confirmClear(controls: KeyboardControls): void {
+    if (canStartWork(controls)) {
+        void controls.tagClearer.confirm(controls.hovered);
     }
 }
 
@@ -122,16 +137,27 @@ function createKeyHandlers(controls: KeyboardControls): KeyHandlers<KeyAction> {
         stop: () => controls.queue.stop(),
         toggleSubfolders: () => controls.subfolders.toggle(),
         rename: () => startRename(controls),
+        clearTags: () => requestClear(controls),
+        confirmClear: () => confirmClear(controls),
         toggleFocus: () => controls.logView.toggleFocus(),
         quit: () => controls.requestQuit(),
     };
 }
+
+// Any other key cancels a pending clear.
+const CLEAR_ACTIONS: ReadonlySet<KeyAction | undefined> = new Set([
+    "clearTags",
+    "confirmClear",
+]);
 
 function handleBrowserKey(
     controls: KeyboardControls,
     { input, key }: KeyPress
 ) {
     const action = getKeyAction(input, key);
+    if (!CLEAR_ACTIONS.has(action)) {
+        controls.tagClearer.disarm();
+    }
 
     if (action) {
         createKeyHandlers(controls)[action]();

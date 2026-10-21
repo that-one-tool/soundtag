@@ -25,6 +25,9 @@ test("getKeyAction maps command keys", () => {
     assert.equal(getKeyAction("s", key()), "stop");
     assert.equal(getKeyAction("r", key()), "toggleSubfolders");
     assert.equal(getKeyAction("e", key()), "rename");
+    assert.equal(getKeyAction("D", key({ shift: true })), "clearTags");
+    assert.equal(getKeyAction("y", key()), "confirmClear");
+    assert.equal(getKeyAction("Y", key({ shift: true })), "confirmClear");
     assert.equal(getKeyAction("q", key()), "quit");
     assert.equal(getKeyAction("c", key({ ctrl: true })), "quit");
     assert.equal(getKeyAction("", key({ tab: true })), "toggleFocus");

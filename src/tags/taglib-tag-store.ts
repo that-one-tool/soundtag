@@ -4,6 +4,7 @@ import {
     PictureType,
     ReadStyle,
     File as TagLibFile,
+    TagTypes,
     type Tag,
 } from "node-taglib-sharp";
 import { writeTemporaryCopy } from "../library/file.js";
@@ -136,6 +137,11 @@ function readFirstPicture(tag: Tag): Buffer | null {
     return picture ? Buffer.from(picture.data.toByteArray()) : null;
 }
 
+function removeAllTags(file: TagLibFile): void {
+    file.removeTags(TagTypes.AllTags);
+    file.save();
+}
+
 function writeTagLibMetadata(
     file: TagLibFile,
     { info, extras, coverData }: TrackMetadata
@@ -178,4 +184,12 @@ export class TagLibTagStore implements TagStore {
             )
         );
     }
+}
+
+// TagLib also strips ID3v1, APE and repeated ID3v2 tags, which node-id3
+// leaves behind, so every format is cleared through it.
+export async function clearAllTags(source: string): Promise<void> {
+    await writeTemporaryCopy(source, source, async (temporary) =>
+        useTagLibFile(temporary, removeAllTags, ReadStyle.None)
+    );
 }

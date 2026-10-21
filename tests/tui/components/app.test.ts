@@ -19,9 +19,11 @@ import type {
 } from "../../../src/tui/types.js";
 import { VersionedCache } from "../../../src/tui/versioned-cache.js";
 import type { EntryRenamer } from "../../../src/tui/entry-renamer.js";
+import type { TagClearer } from "../../../src/tui/tag-clearer.js";
 import { startRenameDraft } from "../../../src/tui/rename-draft.js";
 import { CoverOverlay } from "../../../src/tui/cover-overlay.js";
 import { renderTui } from "../../../src/tui/run-tui.js";
+import type { TuiServices } from "../../../src/tui/tui-services.js";
 import {
     createFakeTerminal,
     findFrameLine,
@@ -368,6 +370,101 @@ test("App queues nothing while a rename is in flight", async () => {
     stdin.write("t");
 
     await waitFor(() => jobs.length === 1);
+});
+
+async function hoverSong(directory: string) {
+    const app = await renderApp(directory);
+    app.stdin.write(KEYS.down);
+    app.stdin.write(KEYS.down);
+    await waitForFrame(app.lastFrame, "Black Sabbath");
+    return app;
+}
+
+test("App clears the hovered file's tags with D then y", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin } = await hoverSong(directory);
+
+    stdin.write("D");
+    await waitForFrame(lastFrame, "Press y to clear all tags of song.mp3.");
+    stdin.write("y");
+
+    await waitForFrame(lastFrame, "Cleared all tags of song.mp3.");
+    await waitFor(() => !(lastFrame() ?? "").includes("Black Sabbath"));
+});
+
+function countLines(services: TuiServices, prefix: string): number {
+    return services.logBuffer
+        .getSnapshot()
+        .filter(({ text }) => text.startsWith(prefix)).length;
+}
+
+test("App cancels a tag clear on any other key", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, services } = await hoverSong(directory);
+    const song = path.join(directory, "song.mp3");
+
+    stdin.write("D");
+    await waitForFrame(lastFrame, "Press y");
+    stdin.write("x");
+    stdin.write("y");
+    stdin.write("D");
+    await waitFor(() => countLines(services, "Press y") === 2);
+    await waitFor(() => !services.tagClearer.isClearing());
+
+    const tags = await getTagStore(song).read(song);
+    assert.equal(tags.info.artist, "Black Sabbath");
+    assert.equal(countLines(services, "Cleared"), 0);
+});
+
+test("App queues nothing while tags are being cleared", async () => {
+    const directory = await createLibrary();
+    const { services, jobs } = createControlledServices();
+    let clearing = true;
+    services.tagClearer = {
+        subscribe: () => () => {},
+        getSnapshot: () => 0,
+        isClearing: () => clearing,
+        disarm: () => {},
+        request: () => {},
+        confirm: async () => {},
+    } as unknown as TagClearer;
+    const { lastFrame, stdin } = render(
+        createElement(App, { startDirectory: directory, services })
+    );
+    await waitForFrame(lastFrame, "song.mp3");
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Audio files");
+
+    stdin.write("t");
+    await delay(50);
+    assert.equal(jobs.length, 0);
+    clearing = false;
+    stdin.write("t");
+
+    await waitFor(() => jobs.length === 1);
+});
+
+test("App starts no clear while a rename is in flight", async () => {
+    const directory = await createLibrary();
+    const { services } = createControlledServices();
+    services.renamer = {
+        startDraft: startRenameDraft,
+        rename: () => new Promise<void>(() => {}),
+    } as unknown as EntryRenamer;
+    const { lastFrame, stdin } = render(
+        createElement(App, { startDirectory: directory, services })
+    );
+    await waitForFrame(lastFrame, "song.mp3");
+    stdin.write(KEYS.down);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Black Sabbath");
+
+    stdin.write("e");
+    stdin.write(KEYS.enter);
+    stdin.write("D");
+    await delay(50);
+
+    assert.ok(!(lastFrame() ?? "").includes("Press y"));
 });
 
 test("App keeps the caret and extension of a long name in view", async () => {

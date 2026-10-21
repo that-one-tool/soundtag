@@ -12,6 +12,7 @@ const KEY_HINTS: Hint[] = [
     ["t", "tag"],
     ["a", "all"],
     ["e", "name"],
+    ["D", "clear"],
     ["r", "subs"],
     ["s", "stop"],
     ["q", "quit"],

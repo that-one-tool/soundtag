@@ -18,6 +18,13 @@ export class TrackStatusStore {
         this.listeners.notify();
     }
 
+    forget(file: string): void {
+        const statuses = new Map(this.statuses);
+        statuses.delete(file);
+        this.statuses = statuses;
+        this.listeners.notify();
+    }
+
     recordMove(move: PathMove): void {
         this.statuses = moveStatuses(this.statuses, move);
         this.listeners.notify();

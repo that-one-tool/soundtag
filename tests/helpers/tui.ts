@@ -5,6 +5,7 @@ import { EntryRenamer } from "../../src/tui/entry-renamer.js";
 import { LogBuffer } from "../../src/tui/log-buffer.js";
 import { PathMoves } from "../../src/tui/path-moves.js";
 import { TaggingQueue } from "../../src/tui/tagging-queue.js";
+import { TagClearer } from "../../src/tui/tag-clearer.js";
 import { SubfolderSetting } from "../../src/tui/subfolder-setting.js";
 import { RedoneFiles } from "../../src/tui/redone-files.js";
 import { TrackStatusStore } from "../../src/tui/track-status-store.js";
@@ -31,11 +32,12 @@ export function createControlledServices(): {
         logBuffer
     );
     const pathMoves = new PathMoves();
+    const statusStore = new TrackStatusStore();
     return {
         services: {
             queue,
             logBuffer,
-            statusStore: new TrackStatusStore(),
+            statusStore,
             redoneFiles: new RedoneFiles(),
             pathMoves,
             subfolders: new SubfolderSetting(true),
@@ -43,6 +45,11 @@ export function createControlledServices(): {
             coverCache: createCoverCache("blocks"),
             coverOverlay: new CoverOverlay(() => {}),
             renamer: new EntryRenamer({ queue, pathMoves, logger: logBuffer }),
+            tagClearer: new TagClearer({
+                queue,
+                logger: logBuffer,
+                statusStore,
+            }),
         },
         jobs,
     };

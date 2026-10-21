@@ -92,24 +92,29 @@ to). Inside tmux, screen or Zellij the kitty protocol is not detected. Set
 `SOUNDTAG_COVER` to `kitty`, `blocks` or `none` to choose instead, for example
 `kitty` in WezTerm with its kitty graphics enabled. Processing messages appear in the log pane below.
 
-| Key                    | Action                                          |
-| ---------------------- | ----------------------------------------------- |
-| `↑` `↓`, PgUp, PgDn    | Move the cursor                                 |
-| Enter, `→`             | Open the folder under the cursor                |
-| `←`, Backspace, Delete | Go up one folder                                |
-| `t`                    | Tag the file or folder under the cursor         |
-| `a`                    | Tag the folder being browsed                    |
-| `e`                    | Rename the file or folder under the cursor      |
-| `r`                    | Include or exclude subfolders in folder runs    |
-| `s`                    | Stop the current run after the file in progress |
-| `q`, Ctrl+C            | Quit (press again during a run to quit at once) |
-| Tab                    | Switch between the browser and the log pane     |
+| Key                    | Action                                                     |
+| ---------------------- | ---------------------------------------------------------- |
+| `↑` `↓`, PgUp, PgDn    | Move the cursor                                            |
+| Enter, `→`             | Open the folder under the cursor                           |
+| `←`, Backspace, Delete | Go up one folder                                           |
+| `t`                    | Tag the file or folder under the cursor                    |
+| `a`                    | Tag the folder being browsed                               |
+| `e`                    | Rename the file or folder under the cursor                 |
+| `D` (Shift+d)          | Remove all tags and the cover of the file under the cursor |
+| `r`                    | Include or exclude subfolders in folder runs               |
+| `s`                    | Stop the current run after the file in progress            |
+| `q`, Ctrl+C            | Quit (press again during a run to quit at once)            |
+| Tab                    | Switch between the browser and the log pane                |
 
 `e` edits the name in place: Enter saves it, Esc or Ctrl+C cancels. A file
 keeps its extension. A name already used in the folder (ignoring case) is
 refused, and so is renaming a file or folder that a queued or running tag job
 works on, including the other entries in the folder of a queued file (its job
 may rename that folder).
+
+`D` asks for confirmation in the log pane: press `y` to remove every tag and
+the embedded cover (on MP3, ID3v1 and APE tags too); any other key cancels. Like a rename, it is refused for a file that a queued or running tag
+job works on, including the other files in the folder of a queued file.
 
 While the log pane has focus, `↑` `↓`, PgUp and PgDn scroll it; it stays in
 place as new messages arrive until you scroll back to the bottom.

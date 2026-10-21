@@ -35,6 +35,7 @@ function useLayout() {
 function useBrowsing(startDirectory: string, services: TuiServices) {
     const statuses = useStore(services.statusStore);
     const redoneFiles = useStore(services.redoneFiles);
+    const revision = useStore(services.tagClearer);
     const [browser, dispatch] = useBrowser(startDirectory, {
         changes: services.statusStore,
         moves: services.pathMoves,
@@ -43,6 +44,7 @@ function useBrowsing(startDirectory: string, services: TuiServices) {
     const request = {
         entry: hovered,
         status: hovered && getEntryStatus(statuses, hovered),
+        revision,
     };
     const view = useEntryValue(request, services.detailsCache);
     const coverView = useEntryValue(request, services.coverCache);
@@ -68,13 +70,12 @@ function useAppState({ startDirectory, services }: AppProps) {
     const logView = useLogView(services.logBuffer, layout.logLines);
     const rename = useRename(services.renamer);
     useKeyboard({
+        ...services,
         ...browsing,
         directory: browsing.browser.directory,
-        queue: services.queue,
         quitting: status.quitting,
         requestQuit,
         pageSize: layout.listHeight,
-        subfolders: services.subfolders,
         logView,
         logPageSize: layout.logLines,
         rename,

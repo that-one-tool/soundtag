@@ -5,6 +5,7 @@ import NodeID3 from "node-id3";
 import { File as TagLibFile } from "node-taglib-sharp";
 import { test } from "node:test";
 import {
+    clearAllTags,
     getTagStore,
     hasCoreTags,
     isProperlyTagged,
@@ -135,6 +136,55 @@ test("tag stores report whether cover art is embedded", async () => {
         await writeTags(source, completeInfo, Buffer.from("cover"));
         assert.equal((await getTagStore(source).read(source)).hasCover, true);
     }
+});
+
+test("clearAllTags removes every tag and the cover", async () => {
+    const sources = [
+        await createMp3(),
+        await copyFixture("flac"),
+        await copyFixture("ogg"),
+        await copyFixture("wav"),
+    ];
+
+    for (const source of sources) {
+        await getTagStore(source).write(source, {
+            info: completeInfo,
+            extras: { genre: "Rock", trackNumber: 3 },
+            coverData: Buffer.from("cover"),
+        });
+
+        await clearAllTags(source);
+
+        assert.deepEqual(await getTagStore(source).read(source), {
+            info: { title: "", artist: "", album: "", year: "" },
+            extras: {},
+            hasCover: false,
+        });
+    }
+});
+
+function createId3v1Tag(title: string): Buffer {
+    const tag = Buffer.alloc(128);
+    tag.write("TAG");
+    tag.write(title, 3);
+    return tag;
+}
+
+test("clearAllTags removes repeated ID3v2 tags and ID3v1 from an MP3", async () => {
+    const source = await createMp3();
+    await fs.writeFile(
+        source,
+        Buffer.concat([
+            NodeID3.create({ title: "First" }),
+            NodeID3.create({ title: "Second" }),
+            Buffer.from("audio bytes"),
+            createId3v1Tag("Old"),
+        ])
+    );
+
+    await clearAllTags(source);
+
+    assert.deepEqual(await fs.readFile(source), Buffer.from("audio bytes"));
 });
 
 test("tag stores read the tags of a FLAC whose audio is truncated", async () => {

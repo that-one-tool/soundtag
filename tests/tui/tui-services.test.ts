@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { getTagStore } from "../../src/tags/audio-tags.js";
 import { createTuiServices } from "../../src/tui/tui-services.js";
 import type { PathMove } from "../../src/shared/paths.js";
+import type { BrowserEntry } from "../../src/tui/types.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
@@ -103,6 +104,29 @@ test("createTuiServices starts the subfolder choice from the options", () => {
     });
 
     assert.equal(services.subfolders.getSnapshot(), false);
+});
+
+test("createTuiServices logs tag clears and checks them against the queue", async () => {
+    const services = createTuiServices({
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: false,
+        renameFiles: false,
+        startDirectory: process.cwd(),
+    });
+    const folder = path.join(await createTemporaryDirectory(), "missing");
+    const song: BrowserEntry = {
+        name: "song.mp3",
+        path: path.join(folder, "song.mp3"),
+        kind: "file",
+    };
+    services.queue.enqueue({ kind: "folder", path: folder, recursive: false });
+
+    await services.tagClearer.request(song);
+    await services.queue.whenIdle();
+
+    const lines = services.logBuffer.getSnapshot().map(({ text }) => text);
+    assert.ok(lines.includes("Not cleared: song.mp3 is queued for tagging."));
 });
 
 test("createTuiServices moves statuses and queued targets of a renamed album folder", async () => {
