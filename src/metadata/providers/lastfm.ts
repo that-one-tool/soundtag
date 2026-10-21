@@ -10,6 +10,7 @@ import {
     createRateLimiter,
     type RateLimiter,
 } from "../../shared/rate-limiter.js";
+import { isSameTrack } from "../track-matching.js";
 import { extractYear, valueOrEmpty } from "../track-metadata.js";
 import type {
     MetadataProvider,
@@ -197,18 +198,39 @@ function isAlbumTrack(track: LastFmTrack): boolean {
     return Boolean(track.name && track.album?.title);
 }
 
-function getAlbumTrackMatch(
-    { track }: DirectLookup,
+function getAlbumTrack({ track }: DirectLookup): LastFmTrack | null {
+    return track && isAlbumTrack(track) ? track : null;
+}
+
+function isSearchedSong(matched: MatchedTrack, search: TrackSearch): boolean {
+    const prefix = search.artist || matched.artist;
+    const title = removeArtistPrefix(search.title, prefix);
+    return isSameTrack(matched, { ...search, title });
+}
+
+function getSearchedSong(
+    track: LastFmTrack | null,
     search: TrackSearch
 ): LastFmMatch | null {
-    if (!track || !isAlbumTrack(track)) {
+    if (!track) {
         return null;
     }
 
-    return { matched: getMatchedTrack(track, search), album: track.album };
+    const matched = getMatchedTrack(track, search);
+    return isSearchedSong(matched, search)
+        ? { matched, album: track.album }
+        : null;
 }
 
-function isSameTrack(asked: MatchedTrack | null, matched: MatchedTrack) {
+// Asking track.getInfo again would return the same other song.
+function getSongTrack(
+    track: LastFmTrack | null,
+    search: TrackSearch
+): LastFmTrack | null {
+    return getSearchedSong(track, search) ? track : null;
+}
+
+function isAskedTrack(asked: MatchedTrack | null, matched: MatchedTrack) {
     return asked?.title === matched.title && asked.artist === matched.artist;
 }
 
@@ -263,7 +285,7 @@ export class LastFmProvider implements MetadataProvider {
     private async findMatch(search: TrackSearch): Promise<LastFmMatch | null> {
         const direct = await this.lookUpDirectly(search);
         return (
-            getAlbumTrackMatch(direct, search) ??
+            getSearchedSong(getAlbumTrack(direct), search) ??
             this.searchThenGetInfo(search, direct)
         );
     }
@@ -281,29 +303,28 @@ export class LastFmProvider implements MetadataProvider {
         // A miss falls back to track.search, so it needs no note.
         const track =
             await this.requestTrackInfo(asked).catch(ignoreServiceError);
-        return { asked, track };
+        return { asked, track: getSongTrack(track, search) };
     }
 
     private async searchThenGetInfo(
         search: TrackSearch,
         direct: DirectLookup
     ): Promise<LastFmMatch | null> {
-        const match = await this.searchTrack(search);
+        const found = getSearchedSong(await this.searchTrack(search), search);
 
-        if (!match) {
+        if (!found) {
             return null;
         }
 
-        const matched = getMatchedTrack(match, search);
-        const track = await this.getTrackInfoOnce(matched, direct);
-        return { matched, album: track?.album };
+        const track = await this.getTrackInfoOnce(found.matched, direct);
+        return { matched: found.matched, album: track?.album };
     }
 
     private getTrackInfoOnce(
         matched: MatchedTrack,
         direct: DirectLookup
     ): Promise<LastFmTrack | null> {
-        return isSameTrack(direct.asked, matched)
+        return isAskedTrack(direct.asked, matched)
             ? Promise.resolve(direct.track)
             : this.getTrackInfo(matched);
     }

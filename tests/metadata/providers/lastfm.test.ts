@@ -213,7 +213,9 @@ function mockTrackInfo(requests: URL[], track: object): void {
         if (url.searchParams.get("method") === "track.search") {
             return Response.json({
                 results: {
-                    trackmatches: { track: { name: "Found", artist: "Band" } },
+                    trackmatches: {
+                        track: { name: "Title", artist: "The Artist" },
+                    },
                 },
             });
         }
@@ -225,16 +227,16 @@ function mockTrackInfo(requests: URL[], track: object): void {
 test("LastFmProvider asks track.getInfo directly when the artist is known", async () => {
     const requests: URL[] = [];
     mockTrackInfo(requests, {
-        name: "Corrected Title",
-        artist: { name: "Corrected Artist" },
+        name: "Title (Remastered)",
+        artist: { name: "The Artist" },
         album: { title: "Album", year: "2001" },
     });
 
     const metadata = await createLastFm().findMetadata(search, detailNeeds);
 
     assert.deepEqual(metadata?.info, {
-        title: "Corrected Title",
-        artist: "Corrected Artist",
+        title: "Title (Remastered)",
+        artist: "The Artist",
         album: "Album",
         year: "2001",
     });
@@ -253,8 +255,8 @@ test("LastFmProvider falls back to track.search when the direct lookup finds no 
     const metadata = await createLastFm().findMetadata(search, detailNeeds);
 
     assert.deepEqual(metadata?.info, {
-        title: "Found",
-        artist: "Band",
+        title: "Title",
+        artist: "The Artist",
         album: "Album",
         year: "",
     });
@@ -323,7 +325,9 @@ test("LastFmProvider falls back silently and spaced when the direct lookup fails
         if (url.searchParams.get("method") === "track.search") {
             return Response.json({
                 results: {
-                    trackmatches: { track: { name: "Found", artist: "Band" } },
+                    trackmatches: {
+                        track: { name: "Title", artist: "The Artist" },
+                    },
                 },
             });
         }
@@ -342,4 +346,66 @@ test("LastFmProvider falls back silently and spaced when the direct lookup fails
     assert.equal(metadata?.info.album, "Album");
     assert.deepEqual(logger.errors, []);
     assert.deepEqual(clock.sleeps, [2000, 2000]);
+});
+
+test("LastFmProvider falls back to track.search when the direct hit is another song", async () => {
+    const requests: URL[] = [];
+    mockTrackInfo(requests, {
+        name: "Other Song",
+        artist: { name: "Artist" },
+        album: { title: "Other Album" },
+    });
+
+    const metadata = await createLastFm().findMetadata(search, detailNeeds);
+
+    assert.equal(metadata?.info.title, "Title");
+    assert.deepEqual(
+        requests.map((url) => url.searchParams.get("method")),
+        ["track.getInfo", "track.search", "track.getInfo"]
+    );
+});
+
+test("LastFmProvider returns null without track details when the search finds another song", async () => {
+    const requests: URL[] = [];
+    globalThis.fetch = async (input) => {
+        requests.push(new URL(input.toString()));
+        return Response.json({
+            results: {
+                trackmatches: { track: { name: "Other Song", artist: "Band" } },
+            },
+        });
+    };
+
+    const metadata = await createLastFm().findMetadata(
+        { ...search, artist: "" },
+        detailNeeds
+    );
+
+    assert.equal(metadata, null);
+    assert.equal(requests.length, 1);
+});
+
+test("LastFmProvider keeps no album from a direct hit that is another song", async () => {
+    const requests: URL[] = [];
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+        requests.push(url);
+        return url.searchParams.get("method") === "track.search"
+            ? Response.json({
+                  results: {
+                      trackmatches: {
+                          track: { name: "Title", artist: "Artist" },
+                      },
+                  },
+              })
+            : Response.json({
+                  track: { name: "Other Song", album: { title: "Other" } },
+              });
+    };
+
+    const metadata = await createLastFm().findMetadata(search, detailNeeds);
+
+    assert.equal(metadata?.info.title, "Title");
+    assert.equal(metadata?.info.album, "");
+    assert.equal(requests.length, 2);
 });

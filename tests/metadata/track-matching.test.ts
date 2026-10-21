@@ -118,6 +118,9 @@ test("isSameTrack matches an artist shared by both credits", () => {
         isSameTrack(findGetLucky("Pharrell Williams & Daft Punk"), search)
     );
     assert.ok(
+        isSameTrack(findGetLucky("Pharrell Williams and Daft Punk"), search)
+    );
+    assert.ok(
         isSameTrack(findGetLucky("Daft Punk"), {
             ...search,
             artist: "Daft Punk ft. Pharrell Williams",
@@ -258,6 +261,7 @@ test("isSameWording keeps notes that only isSameName ignores", () => {
 test("isSameCredit needs the same artists on both sides", () => {
     assert.ok(isSameCredit("Beyoncé feat. Shakira", "Beyonce ft Shakira"));
     assert.ok(isSameCredit("Shakira & Beyoncé", "Beyonce, Shakira"));
+    assert.ok(isSameCredit("Simon and Garfunkel", "Simon & Garfunkel"));
     assert.ok(isSameCredit("The Doors", "Doors"));
     assert.equal(isSameCredit("Beyoncé", "Beyonce ft Shakira"), false);
     assert.equal(isSameCredit("Beyoncé feat. Shakira", "Beyonce"), false);

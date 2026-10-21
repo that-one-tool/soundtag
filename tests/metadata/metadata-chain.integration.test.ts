@@ -71,7 +71,7 @@ test("findTrackMetadata gets track info and downloads medium cover art", async (
     let metadata;
     try {
         metadata = await findTrackMetadata(
-            { title: "search query" },
+            { title: "Matched title" },
             { verbose: true }
         );
     } finally {
@@ -91,7 +91,7 @@ test("findTrackMetadata gets track info and downloads medium cover art", async (
     const [itunesRequest, ...lastFmRequests] = requests;
     assert.equal(requests.length, 4);
     assert.equal(itunesRequest.hostname, "itunes.apple.com");
-    assert.equal(lastFmRequests[0].searchParams.get("track"), "search query");
+    assert.equal(lastFmRequests[0].searchParams.get("track"), "Matched title");
     assert.equal(lastFmRequests[0].searchParams.get("method"), "track.search");
     assert.equal(lastFmRequests[1].searchParams.get("method"), "track.getInfo");
     assert.equal(
@@ -102,11 +102,7 @@ test("findTrackMetadata gets track info and downloads medium cover art", async (
     assert.equal(lastFmRequests[1].searchParams.get("autocorrect"), "1");
     assert.equal(lastFmRequests[2].href, "https://images.example/medium.jpg");
     assert.ok(
-        output.some((line) =>
-            /Last\.fm ✓ "Matched title" by Matched artist: title, artist, album/.test(
-                line
-            )
-        )
+        output.some((line) => /Last\.fm ✓ title, artist, album/.test(line))
     );
     assert.equal(
         output.some((line) => line.includes("test-key")),
@@ -941,7 +937,7 @@ test("iTunes fallback does not replace metadata already found by Last.fm", async
     });
 
     const metadata = await findTrackMetadata(
-        { title: "search title" },
+        { title: "Last.fm title" },
         { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
     );
 
@@ -1030,7 +1026,7 @@ test("findTrackMetadata uses a YouTube thumbnail only after provider artwork is 
     });
 
     const metadata = await findTrackMetadata(
-        { title: "search title", artist: "search artist" },
+        { title: "Matched title", artist: "Matched artist" },
         {
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
             youtubeApiKey: "youtube-test-key",

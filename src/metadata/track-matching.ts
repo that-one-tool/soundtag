@@ -43,7 +43,8 @@ const ALBUM_NOTE_BRACKET = new RegExp(`[([]\\s*${ALBUM_NOTE}\\s*[)\\]]`, "gu");
 const ALBUM_NOTE_SUFFIX = new RegExp(`\\s[-–—]\\s${ALBUM_NOTE}\\s*$`, "u");
 const FEATURING_SUFFIX = /\s(?:feat\.?|ft\.|featuring)\s.*$/u;
 const WORD_SEPARATOR = /[^\p{L}\p{N}]+/u;
-const ARTIST_SEPARATOR = /\s+(?:feat\.?|ft\.?|featuring|&|x|with)\s+|\s*,\s*/iu;
+const ARTIST_SEPARATOR =
+    /\s+(?:feat\.?|ft\.?|featuring|&|and|x|with)\s+|\s*,\s*/iu;
 
 // Shorter names are too often different words one letter apart.
 const MIN_TYPO_LENGTH = 9;
