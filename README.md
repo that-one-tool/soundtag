@@ -241,6 +241,11 @@ Single ambiguous folders are treated as album context, not assumed to be an
 artist. Structural folders such as disc numbers, cover-art folders, and
 unknown placeholders are ignored.
 
+When the tags look wrong (no artist, or a title holding " - " or the artist's
+name) and lead to nothing, SoundTag searches again from the file and folder
+names alone. A song found this way replaces the suspect title; the file's other
+tags are kept and only its empty fields are filled.
+
 ## Output
 
 Files are updated in place; no tagged copies are created. A source file is

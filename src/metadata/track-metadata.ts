@@ -7,6 +7,13 @@ import type {
 
 const YEAR_PATTERN = /\b\d{4}\b/;
 
+export const EMPTY_TRACK_INFO: TrackInfo = {
+    title: "",
+    artist: "",
+    album: "",
+    year: "",
+};
+
 function pickFilled(value: string, fallback: string): string {
     return value.trim() ? value : fallback;
 }

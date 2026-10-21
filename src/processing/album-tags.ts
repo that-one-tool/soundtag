@@ -4,7 +4,7 @@ import type { StoredTags } from "../tags/types.js";
 
 export type KnownTags = ReadonlyMap<string, StoredTags>;
 
-function normalizeTagValue(value: string): string {
+export function normalizeTagValue(value: string): string {
     return value.normalize("NFC").trim().toLowerCase();
 }
 

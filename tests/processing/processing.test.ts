@@ -20,6 +20,7 @@ import {
     emptyInfo,
 } from "../helpers/metadata-chain.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
+import type { TrackSearch } from "../../src/metadata/types.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 restoreFetchAfterEach();
@@ -666,4 +667,122 @@ test("processTrack still reports a tagged track whose tags cannot be read back",
     assert.deepEqual(logger.errors, [
         "Could not read the written tags: unreadable",
     ]);
+});
+
+function createChainFindingTitle(title: string, searches: TrackSearch[]) {
+    return new MetadataChain(
+        [
+            {
+                name: "Fake",
+                findMetadata: async (search) => {
+                    searches.push(search);
+                    return search.title === title
+                        ? {
+                              info: {
+                                  title,
+                                  artist: "Alfa Rococo",
+                                  album: "Lever l'ancre",
+                                  year: "2007",
+                              },
+                              extras: {},
+                              coverData: null,
+                          }
+                        : null;
+                },
+            },
+        ],
+        [],
+        createProviderServices()
+    );
+}
+
+test("processTrack searches again from the file name and replaces a suspect title", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "Alfa Rococo - Lever l'ancre.mp3");
+    await fs.writeFile(source, "audio bytes");
+    NodeID3.write(
+        { title: "Alfa Rococo - Lever L'ancre", album: "Tagged album" },
+        source
+    );
+    const searches: TrackSearch[] = [];
+
+    const { status } = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Lever l'ancre", searches),
+    });
+
+    assert.equal(status, "TAGGED");
+    assert.deepEqual(
+        searches.map(({ title, artist }) => ({ title, artist })),
+        [
+            { title: "Alfa Rococo - Lever L'ancre", artist: "Alfa Rococo" },
+            { title: "Lever l'ancre", artist: "Alfa Rococo" },
+        ]
+    );
+    const tags = await NodeID3.Promise.read(source);
+    assert.deepEqual(
+        [tags.title, tags.artist, tags.album, tags.year],
+        ["Lever l'ancre", "Alfa Rococo", "Tagged album", "2007"]
+    );
+    assert.ok(
+        output.logs.includes(
+            "Not found with the existing tags; searching again from the file and folder names."
+        )
+    );
+});
+
+test("processTrack does not search again when the tags look right", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "01 - Intro.mp3");
+    await fs.writeFile(source, "audio bytes");
+    NodeID3.write({ title: "Real Title", artist: "Band" }, source);
+    const searches: TrackSearch[] = [];
+
+    const { status } = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Intro", searches),
+    });
+
+    assert.equal(status, "SKIPPED");
+    assert.equal(searches.length, 1);
+});
+
+test("processTrack reports a track found by neither search once", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "Band - Missing.mp3");
+    await fs.writeFile(source, "audio bytes");
+    NodeID3.write({ title: "Band - Missing (tagged)" }, source);
+    const searches: TrackSearch[] = [];
+
+    const { status } = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Lever l'ancre", searches),
+    });
+
+    assert.equal(status, "SKIPPED");
+    assert.equal(searches.length, 2);
+    assert.equal(
+        output.logs.filter((line) => line.startsWith("Track not found")).length,
+        1
+    );
+});
+
+test("processTrack searches once when the file name gives the same search", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "Alfa Rococo - Missing.mp3");
+    await fs.writeFile(source, "audio bytes");
+    NodeID3.write({ title: "missing" }, source);
+    const searches: TrackSearch[] = [];
+
+    const { status } = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Lever l'ancre", searches),
+    });
+
+    assert.equal(status, "SKIPPED");
+    assert.equal(searches.length, 1);
 });

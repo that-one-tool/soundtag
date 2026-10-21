@@ -5,6 +5,8 @@ import type { Logger } from "../shared/logger.js";
 import { inferFolderSearchTerms } from "../library/folder-context.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
 import {
+    EMPTY_TRACK_INFO,
+    fillMissingFields,
     getFirstFilled,
     getNewExtras,
     hasNewFields,
@@ -18,6 +20,8 @@ import type {
     TrackSearch,
 } from "../metadata/types.js";
 import type { StoredTags } from "../tags/types.js";
+import { normalizeTagValue } from "./album-tags.js";
+import { hasSuspectTags, hasSuspectTitle } from "./suspect-tags.js";
 import type { TrackResult, TrackStatus } from "./types.js";
 
 export interface ProcessingContext {
@@ -30,6 +34,17 @@ interface FoundMetadata {
     metadata: TrackMetadata;
     hasExistingCover: boolean;
 }
+
+interface TrackLookup {
+    source: string;
+    existing: ExistingTags;
+}
+
+const SEARCH_FIELDS: readonly (keyof TrackSearch)[] = [
+    "title",
+    "artist",
+    "album",
+];
 
 const OPTIONAL_FIELD_CHECKS: [string, (found: FoundMetadata) => boolean][] = [
     ["album", ({ metadata }) => !metadata.info.album.trim()],
@@ -79,13 +94,72 @@ function hasTitleAndArtist({ info }: TrackMetadata): boolean {
     return [info.title, info.artist].every((field) => field.trim());
 }
 
-async function findWritableMetadata(
-    search: TrackSearch,
-    existing: ExistingTags,
-    { metadataChain, logger }: ProcessingContext
-): Promise<TrackMetadata | null> {
-    const metadata = await metadataChain.find(search, existing);
+function isSameSearch(first: TrackSearch, second: TrackSearch): boolean {
+    return SEARCH_FIELDS.every(
+        (field) =>
+            normalizeTagValue(first[field]) === normalizeTagValue(second[field])
+    );
+}
 
+function getKeptInfo(info: TrackInfo): TrackInfo {
+    return hasSuspectTitle(info) ? { ...info, title: "" } : info;
+}
+
+// Only a suspect title gives way; other existing values still win.
+function keepExistingInfo(
+    metadata: TrackMetadata,
+    { info }: ExistingTags
+): TrackMetadata {
+    const merged = fillMissingFields(getKeptInfo(info), metadata.info);
+    return { ...metadata, info: merged };
+}
+
+function shouldSearchFileName(
+    fileSearch: TrackSearch,
+    tagSearch: TrackSearch,
+    { info }: ExistingTags
+): boolean {
+    return hasSuspectTags(info) && !isSameSearch(fileSearch, tagSearch);
+}
+
+// Wrong tags (an artist inside the title) also spoil the search they lead.
+async function findFromFileName(
+    { source, existing }: TrackLookup,
+    tagSearch: TrackSearch,
+    { sourceRoot, metadataChain, logger }: ProcessingContext
+): Promise<TrackMetadata | null> {
+    const search = buildTrackSearch(source, sourceRoot, EMPTY_TRACK_INFO);
+
+    if (!shouldSearchFileName(search, tagSearch, existing)) {
+        return null;
+    }
+
+    logger.info(
+        "Not found with the existing tags; searching again from the file and folder names."
+    );
+    logSearch(search, logger);
+    const found = await metadataChain.find(search, {
+        ...existing,
+        info: EMPTY_TRACK_INFO,
+    });
+    return found && keepExistingInfo(found, existing);
+}
+
+async function findTrackMetadata(
+    lookup: TrackLookup,
+    context: ProcessingContext
+): Promise<TrackMetadata | null> {
+    const { source, existing } = lookup;
+    const search = buildTrackSearch(source, context.sourceRoot, existing.info);
+    logSearch(search, context.logger);
+    const found = await context.metadataChain.find(search, existing);
+    return found ?? findFromFileName(lookup, search, context);
+}
+
+function keepWritableMetadata(
+    metadata: TrackMetadata | null,
+    logger: Logger
+): TrackMetadata | null {
     if (!metadata) {
         logger.info(
             "Track not found on available metadata services. Leaving source unchanged."
@@ -141,10 +215,11 @@ async function tagUntaggedTrack(
     existing: ExistingTags,
     context: ProcessingContext
 ): Promise<TrackStatus> {
-    const { sourceRoot, logger } = context;
-    const search = buildTrackSearch(source, sourceRoot, existing.info);
-    logSearch(search, logger);
-    const metadata = await findWritableMetadata(search, existing, context);
+    const { logger } = context;
+    const metadata = keepWritableMetadata(
+        await findTrackMetadata({ source, existing }, context),
+        logger
+    );
 
     if (!metadata) {
         return "SKIPPED";

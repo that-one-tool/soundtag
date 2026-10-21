@@ -1,3 +1,4 @@
+import { EMPTY_TRACK_INFO } from "../metadata/track-metadata.js";
 import * as path from "node:path";
 import { findAudioFiles } from "../library/file.js";
 import type { TrackInfo } from "../metadata/types.js";
@@ -18,8 +19,6 @@ export interface SharedCover {
     holder: string;
     coverData: Buffer;
 }
-
-const NO_INFO: TrackInfo = { title: "", artist: "", album: "", year: "" };
 
 async function readCoverAlbumKey(
     file: string,
@@ -147,7 +146,7 @@ async function copyFolderCover(
 
     const { coverData, holder } = shared;
     await getTagStore(source).write(source, {
-        info: NO_INFO,
+        info: EMPTY_TRACK_INFO,
         extras: {},
         coverData,
     });
