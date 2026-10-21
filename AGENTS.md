@@ -79,6 +79,9 @@ graph free of cycles.
   replaces a title or artist (ListenBrainz matches are MusicBrainz data, so
   they cannot confirm each other). It only proves the song exists; each
   alternative replaces only the fields it was built for (`replaces`).
+  `CanonicalTrack.albums` lists the albums a service knows the song on; an
+  album outside MusicBrainz's list is replaced only by the folder album or the
+  witness's album when MusicBrainz lists it.
 - **New audio format:** add it to `AUDIO_FORMATS` in `src/library/file.ts`, then
   map it to a `TagStore` in `src/tags/audio-tags.ts`. The compiler enforces that
   every format has a store.

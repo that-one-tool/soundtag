@@ -18,6 +18,7 @@ const request = {
     tagSearch: { title: "all", artist: "Artist", album: "Album" },
     alternatives: [],
     hasSuspectTags: false,
+    folderAlbum: "",
 };
 const corrector = new TrackCorrector(
     [
@@ -27,6 +28,8 @@ const corrector = new TrackCorrector(
                 title: "All",
                 artist: "Artist",
                 firstReleaseYear: "",
+                albums: [],
+                artistAlbums: [],
             }),
         },
     ],
@@ -65,4 +68,37 @@ test("getCorrectedMetadata holds only the corrected fields", async () => {
         coverData: null,
     });
     assert.equal(getCorrectedMetadata({ tags: stored, corrections: [] }), null);
+});
+
+test("correctTags drops the release fields of a corrected album so they are looked up again", async () => {
+    const albumCorrector = new TrackCorrector(
+        [
+            {
+                name: "Fake",
+                findCanonical: async () => ({
+                    title: "all",
+                    artist: "Artist",
+                    firstReleaseYear: "",
+                    albums: ["Real Album"],
+                    artistAlbums: ["Real Album"],
+                }),
+            },
+        ],
+        { name: "Witness", findCanonical: async () => null },
+        createProviderServices().lookups
+    );
+    const withPosition = {
+        ...stored,
+        extras: { ...stored.extras, trackNumber: 3, trackCount: 9 },
+    };
+
+    const track = await correctTags(
+        withPosition,
+        { ...request, folderAlbum: "Real Album" },
+        { corrector: albumCorrector, logger: createRecordingLogger() }
+    );
+
+    assert.equal(track.tags.info.album, "Real Album");
+    assert.deepEqual(track.tags.extras, { genre: "Rock" });
+    assert.equal(track.tags.hasCover, false);
 });

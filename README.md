@@ -252,9 +252,23 @@ only when the fields it keeps name the same song, and only when Deezer also
 finds that song. It also replaces the year
 with the song's first release year from MusicBrainz when that is earlier, such
 as the year of a compilation or reissue. That year is the earliest among the
-top 10 MusicBrainz recordings of the same title by the same credit, so
+top 100 MusicBrainz recordings of the same title by the same credit, so
 different songs sharing a generic title ("Intro") by one artist can get the
-earliest of their years. Each correction is logged as
+earliest of their years, and an early demo or live recording can make it a
+little earlier than the album release.
+
+An album the song is not on (such as a book title) is replaced too, when
+MusicBrainz finds the song: by the folder's album name if the artist released
+the song on it, otherwise by Deezer's album for the song if MusicBrainz lists
+it as one of the artist's releases (never a compilation). An album named with
+or without a subtitle or edition note (`Gold` for `Gold: Greatest Hits`,
+`Get Lucky - Single`) counts as right, so does an album its folder is named
+after, and an album nothing confirms is kept. After an album fix, the track and
+disc numbers, album artist and cover are looked up again for the new album and
+replaced where found; values not found keep those of the old album (a track
+number can then keep its old total). Fix mode makes one more MusicBrainz request
+per file than filling alone (about 3 seconds), since its search leaves out the
+album. Each correction is logged as
 `field: "old" → "new"`, the corrected tags are used for the search that fills
 the remaining gaps, and renaming follows the corrected tags.
 

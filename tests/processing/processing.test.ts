@@ -808,6 +808,8 @@ const dancingQueen: CanonicalTrack = {
     title: "Dancing Queen",
     artist: "ABBA",
     firstReleaseYear: "1976",
+    albums: [],
+    artistAlbums: [],
 };
 
 async function createCompilationTrack(
@@ -870,7 +872,7 @@ test("processTrack corrects a properly tagged file in fix mode", async () => {
         { field: "year", from: "2002", to: "1976" },
     ]);
     assert.deepEqual(searches, [
-        { title: "dancing queen", artist: "Abba", album: "Gold" },
+        { title: "dancing queen", artist: "Abba", album: "" },
     ]);
     assert.ok(
         logger.infos.includes(
@@ -984,6 +986,8 @@ test("processTrack keeps multi-value fields of a FLAC it only corrects", async (
     const { corrector } = createFakeCorrector({
         ...dancingQueen,
         firstReleaseYear: "",
+        albums: [],
+        artistAlbums: [],
     });
     const nothingChain = new MetadataChain(
         [{ name: "Fake", findMetadata: async () => null }],
@@ -1091,6 +1095,8 @@ test("processTrack replaces a wrong artist and title that two services confirm",
         title: "Stepping Out",
         artist: "Eric Clapton & The Powerhouse",
         firstReleaseYear: "1966",
+        albums: [],
+        artistAlbums: [],
     };
     const findSplitTitle = async ({ artist }: TrackSearch) =>
         artist === "Eric Clapton And The Powerhouse" ? steppingOut : null;
@@ -1119,4 +1125,78 @@ test("processTrack replaces a wrong artist and title that two services confirm",
         album: "Blues",
         year: "1966",
     });
+});
+
+test("processTrack replaces a wrong album and the cover and numbers that came with it", async () => {
+    const directory = await createTemporaryDirectory();
+    const albumDirectory = path.join(directory, "Band", "Real Album");
+    await fs.mkdir(albumDirectory, { recursive: true });
+    const source = path.join(albumDirectory, "track.mp3");
+    await fs.writeFile(source, "audio bytes");
+    await getTagStore(source).write(source, {
+        info: {
+            title: "Madison",
+            artist: "Band",
+            album: "The Half of It: A Memoir",
+            year: "2001",
+        },
+        extras: { genre: "Rock", trackNumber: 7 },
+        coverData: Buffer.from("old cover"),
+    });
+    const corrector = new TrackCorrector(
+        [
+            {
+                name: "Fake",
+                findCanonical: async () => ({
+                    title: "Madison",
+                    artist: "Band",
+                    firstReleaseYear: "",
+                    albums: ["Real Album"],
+                    artistAlbums: ["Real Album"],
+                }),
+            },
+        ],
+        { name: "Witness", findCanonical: async () => null },
+        createProviderServices().lookups
+    );
+    const searches: TrackSearch[] = [];
+    const releaseChain = new MetadataChain(
+        [
+            {
+                name: "Fake",
+                findMetadata: async (search) => {
+                    searches.push(search);
+                    return {
+                        info: {
+                            ...emptyInfo,
+                            title: "Madison",
+                            artist: "Band",
+                        },
+                        extras: { trackNumber: 2 },
+                        coverData: Buffer.from("new cover"),
+                    };
+                },
+            },
+        ],
+        [],
+        createProviderServices()
+    );
+
+    const result = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: releaseChain,
+        corrector,
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.equal(searches[0].album, "Real Album");
+    assert.equal(result.tags?.info.album, "Real Album");
+    assert.equal(result.tags?.extras.trackNumber, 2);
+    assert.equal(result.tags?.extras.genre, "Rock");
+    const tags = await NodeID3.Promise.read(source);
+    assert.deepEqual(
+        typeof tags.image === "object" && tags.image.imageBuffer,
+        Buffer.from("new cover")
+    );
 });

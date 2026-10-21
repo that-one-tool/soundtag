@@ -107,6 +107,8 @@ function getCanonicalTrack(match: ListenBrainzMatch): CanonicalTrack {
         title: valueOrEmpty(match.recording_name),
         artist: valueOrEmpty(match.artist_credit_name),
         firstReleaseYear: "",
+        albums: [],
+        artistAlbums: [],
     };
 }
 

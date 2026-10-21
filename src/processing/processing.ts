@@ -333,14 +333,17 @@ function buildCorrectionRequest(
     sourceRoot: string,
     info: TrackInfo
 ): CorrectionRequest {
-    const searches = {
-        tagSearch: buildTrackSearch(source, sourceRoot, info),
-        fileSearch: buildTrackSearch(source, sourceRoot, EMPTY_TRACK_INFO),
+    // Without the album, which a wrong album would make find nothing.
+    const tagSearch = {
+        ...buildTrackSearch(source, sourceRoot, info),
+        album: "",
     };
+    const fileSearch = buildTrackSearch(source, sourceRoot, EMPTY_TRACK_INFO);
     return {
-        tagSearch: searches.tagSearch,
-        alternatives: getAlternativeSearches(info, searches),
+        tagSearch,
+        alternatives: getAlternativeSearches(info, { tagSearch, fileSearch }),
         hasSuspectTags: hasSuspectIdentity(info),
+        folderAlbum: fileSearch.album,
     };
 }
 

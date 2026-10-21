@@ -4,6 +4,7 @@ import { EMPTY_TRACK_INFO } from "../metadata/track-metadata.js";
 import type {
     CorrectionRequest,
     TagCorrection,
+    TrackExtras,
     TrackMetadata,
 } from "../metadata/types.js";
 import type { Logger } from "../shared/logger.js";
@@ -26,6 +27,29 @@ function logCorrections(corrections: TagCorrection[], logger: Logger): void {
     }
 }
 
+const RELEASE_EXTRAS: ReadonlySet<string> = new Set<keyof TrackExtras>([
+    "albumArtist",
+    "trackNumber",
+    "trackCount",
+    "discNumber",
+    "discCount",
+]);
+
+// Treated as missing, so the search for the new album overwrites what it finds.
+function forgetOldRelease(
+    stored: StoredTags,
+    corrections: TagCorrection[]
+): StoredTags {
+    if (!corrections.some(({ field }) => field === "album")) {
+        return stored;
+    }
+
+    const kept = Object.entries(stored.extras).filter(
+        ([field]) => !RELEASE_EXTRAS.has(field)
+    );
+    return { ...stored, extras: Object.fromEntries(kept), hasCover: false };
+}
+
 export async function correctTags(
     stored: StoredTags,
     request: CorrectionRequest,
@@ -38,7 +62,8 @@ export async function correctTags(
     const corrections = await corrector.findCorrections(request, stored.info);
     logCorrections(corrections, logger);
     const info = applyCorrections(stored.info, corrections);
-    return { tags: { ...stored, info }, corrections };
+    const tags = { ...forgetOldRelease(stored, corrections), info };
+    return { tags, corrections };
 }
 
 // Stores skip empty fields, so untouched multi-value tags and dates are kept.

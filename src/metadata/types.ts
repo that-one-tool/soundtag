@@ -62,6 +62,10 @@ export interface CanonicalTrack {
     title: string;
     artist: string;
     firstReleaseYear: string;
+    // Albums the service lists the song on; empty when it does not say.
+    albums: string[];
+    // Of those, the albums the song's own artist released (no compilations).
+    artistAlbums: string[];
 }
 
 export interface CanonicalSource {
@@ -83,6 +87,7 @@ export interface CorrectionRequest {
     tagSearch: TrackSearch;
     alternatives: AlternativeSearch[];
     hasSuspectTags: boolean;
+    folderAlbum: string;
 }
 
 export interface TagCorrection {

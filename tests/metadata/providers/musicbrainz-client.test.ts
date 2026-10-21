@@ -59,7 +59,7 @@ test("MusicBrainzClient searches recordings by title, artist and album", async (
         urls[0].searchParams.get("query"),
         'recording:"Title" AND artist:"Artist" AND release:"Album"'
     );
-    assert.equal(urls[0].searchParams.get("limit"), "10");
+    assert.equal(urls[0].searchParams.get("limit"), "1");
     assert.equal(headers[0].get("user-agent"), userAgent);
 });
 
@@ -188,5 +188,23 @@ test("MusicBrainzClient notes a retry and shows its requests when verbose", asyn
     assert.match(
         logger.infos[2],
         /^ {9}MusicBrainz ✓ \(MusicBrainz HTTP 503, retried\) 0\.0s \(\+3\.0s wait\)$/
+    );
+});
+
+test("MusicBrainzClient searches many recordings without keeping them for the batch", async () => {
+    const urls: URL[] = [];
+    globalThis.fetch = async (input) => {
+        urls.push(new URL(input.toString()));
+        return Response.json({ recordings: [{ title: "Title" }] });
+    };
+    const client = createClient();
+
+    await client.searchAllRecordings(search);
+    const found = await client.searchAllRecordings(search);
+
+    assert.equal(found[0].title, "Title");
+    assert.deepEqual(
+        urls.map((url) => url.searchParams.get("limit")),
+        ["100", "100"]
     );
 });

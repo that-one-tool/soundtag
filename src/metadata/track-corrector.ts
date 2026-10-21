@@ -1,6 +1,9 @@
 import {
+    findAlbumReplacement,
     getCorrections,
+    getFolderCandidate,
     getIdentityCorrections,
+    isDisputedAlbum,
     mergeCanonicalTracks,
 } from "./track-corrections.js";
 import type { LookupLog } from "../shared/lookup-log.js";
@@ -15,8 +18,13 @@ import type {
     TrackSearch,
 } from "./types.js";
 
-interface ConfirmedIdentity {
+// The song a correction relies on and the search that found it.
+interface FoundSong {
     track: CanonicalTrack;
+    search: TrackSearch;
+}
+
+interface ConfirmedIdentity extends FoundSong {
     replaces: AlternativeSearch["replaces"];
 }
 
@@ -64,9 +72,57 @@ export class TrackCorrector {
             this.findCanonicalTracks(request.tagSearch)
         );
         const identity = await this.findIdentity(request, found, info);
-        return identity
+        const song = identity ?? {
+            track: mergeCanonicalTracks(found),
+            search: request.tagSearch,
+        };
+        const corrections = identity
             ? getIdentityCorrections(info, identity.track, identity.replaces)
-            : getCorrections(info, mergeCanonicalTracks(found));
+            : getCorrections(info, song.track);
+        const album = await this.findAlbumCorrections(info, song, request);
+        return [...corrections, ...album];
+    }
+
+    private async findAlbumCorrections(
+        info: TrackInfo,
+        song: FoundSong,
+        { folderAlbum }: CorrectionRequest
+    ): Promise<TagCorrection[]> {
+        if (!isDisputedAlbum(info, song.track.albums, folderAlbum)) {
+            return [];
+        }
+
+        const to = await this.findReplacementAlbum(info, song, folderAlbum);
+        return to ? [{ field: "album", from: info.album, to }] : [];
+    }
+
+    // Only an album the artist released replaces it, never a compilation.
+    private async findReplacementAlbum(
+        info: TrackInfo,
+        song: FoundSong,
+        folderAlbum: string
+    ): Promise<string> {
+        const candidate = getFolderCandidate(folderAlbum, info.artist);
+        const releases = song.track.artistAlbums;
+        return (
+            findAlbumReplacement(releases, [candidate]) ||
+            this.findWitnessedAlbum(info, song)
+        );
+    }
+
+    // Deezer names one album for the song, which counts only if MusicBrainz lists it.
+    private async findWitnessedAlbum(
+        info: TrackInfo,
+        { track, search }: FoundSong
+    ): Promise<string> {
+        const step = { label: "check", subject: `album "${info.album}"` };
+        const witnessed = await this.lookups.step(step, () =>
+            this.findCanonicalTrack(this.witness, search)
+        );
+        return findAlbumReplacement(
+            track.artistAlbums,
+            witnessed?.albums ?? []
+        );
     }
 
     private findIdentity(
@@ -122,7 +178,9 @@ export class TrackCorrector {
         }
 
         const witnessed = await this.findCanonicalTrack(this.witness, search);
-        return isConfirmedBy(witnessed, track) ? { track, replaces } : null;
+        return isConfirmedBy(witnessed, track)
+            ? { track, search, replaces }
+            : null;
     }
 
     private async findCanonicalTracks(

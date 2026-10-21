@@ -1,4 +1,9 @@
-import { isSameCredit, isSameRelease, isSameTrack } from "../track-matching.js";
+import {
+    isSameCredit,
+    isSameRelease,
+    isSameTrack,
+    isVariousArtists,
+} from "../track-matching.js";
 import {
     extractYear,
     getEarliestYear,
@@ -93,18 +98,42 @@ function getCredit(recording: MusicBrainzRecording): string {
 }
 
 // The original of a remix credits fewer artists, so its year is not the remix's.
-function getFirstReleaseYear(
+function keepSameCredit(
     recordings: MusicBrainzRecording[],
     artist: string
-): string {
-    const sameCredit = recordings.filter((recording) =>
+): MusicBrainzRecording[] {
+    return recordings.filter((recording) =>
         isSameCredit(getCredit(recording), artist)
     );
+}
+
+function getFirstReleaseYear(recordings: MusicBrainzRecording[]): string {
     return getEarliestYear(
-        sameCredit.map((recording) =>
+        recordings.map((recording) =>
             extractYear(recording["first-release-date"])
         )
     );
+}
+
+function getReleaseTitles(releases: MusicBrainzRelease[]): string[] {
+    const titles = releases.map(({ title }) => valueOrEmpty(title));
+    return [...new Set(titles.filter(Boolean))];
+}
+
+// Credited releases are the artist's own or compilations.
+function isArtistRelease(release: MusicBrainzRelease): boolean {
+    const albumArtist = getMusicBrainzArtist(release["artist-credit"]);
+    return Boolean(albumArtist) && !isVariousArtists(albumArtist);
+}
+
+function getAlbums(
+    recordings: MusicBrainzRecording[]
+): Pick<CanonicalTrack, "albums" | "artistAlbums"> {
+    const releases = recordings.flatMap(getCreditedReleases);
+    return {
+        albums: getReleaseTitles(releases),
+        artistAlbums: getReleaseTitles(releases.filter(isArtistRelease)),
+    };
 }
 
 // A shared artist also matches the original of a remix, which ranks first at times.
@@ -125,10 +154,12 @@ function getCanonicalTrack(
 ): CanonicalTrack {
     const named = pickNamedRecording(recordings, search);
     const artist = getCredit(named);
+    const sameCredit = keepSameCredit(recordings, artist);
     return {
         title: named.title ?? "",
         artist,
-        firstReleaseYear: getFirstReleaseYear(recordings, artist),
+        firstReleaseYear: getFirstReleaseYear(sameCredit),
+        ...getAlbums(recordings),
     };
 }
 
@@ -186,7 +217,7 @@ export class MusicBrainzProvider implements MetadataProvider, CanonicalSource {
             return null;
         }
 
-        const recordings = await this.client.searchRecordings(search);
+        const recordings = await this.client.searchAllRecordings(search);
         const matching = recordings.filter((recording) =>
             isSearchedRecording(recording, search)
         );

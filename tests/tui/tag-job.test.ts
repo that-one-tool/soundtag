@@ -49,6 +49,8 @@ const firstReleaseCorrector = new TrackCorrector(
                 title: "",
                 artist: "",
                 firstReleaseYear: "1999",
+                albums: [],
+                artistAlbums: [],
             }),
         },
     ],

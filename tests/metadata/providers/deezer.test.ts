@@ -301,6 +301,8 @@ test("DeezerProvider names the searched track without a year", async () => {
         title: "One More Time",
         artist: "Daft Punk",
         firstReleaseYear: "",
+        albums: ["Discovery"],
+        artistAlbums: [],
     });
     assert.deepEqual(requested, ["/search?q=Daft+Punk+One+More+Time&limit=5"]);
 });

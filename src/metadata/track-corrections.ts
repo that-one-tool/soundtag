@@ -1,4 +1,9 @@
-import { isSameCredit, isSameWording } from "./track-matching.js";
+import {
+    isSameCredit,
+    isSameName,
+    isSameRelease,
+    isSameWording,
+} from "./track-matching.js";
 import { extractYear, getEarliestYear } from "./track-metadata.js";
 import type {
     CanonicalTrack,
@@ -17,6 +22,8 @@ const EMPTY_CANONICAL_TRACK: CanonicalTrack = {
     title: "",
     artist: "",
     firstReleaseYear: "",
+    albums: [],
+    artistAlbums: [],
 };
 
 function respellWhen(
@@ -109,5 +116,65 @@ export function mergeCanonicalTracks(tracks: CanonicalTrack[]): CanonicalTrack {
         firstReleaseYear: getEarliestYear(
             tracks.map(({ firstReleaseYear }) => firstReleaseYear)
         ),
+        albums: [...new Set(tracks.flatMap(({ albums }) => albums))],
+        artistAlbums: [
+            ...new Set(tracks.flatMap(({ artistAlbums }) => artistAlbums)),
+        ],
     };
+}
+
+const SUBTITLE_START = /\s*[:([]|\s[-–—]\s/u;
+
+// Tags and services both add subtitles and notes: "Gold: Greatest Hits",
+// "Get Lucky - Single", "Random Access Memories (Deluxe Edition)".
+function getAlbumNames(album: string): string[] {
+    const names = [album, album.split(SUBTITLE_START)[0]];
+    return names.filter((name) => name.trim());
+}
+
+function isSameAlbumName(release: string, album: string): boolean {
+    return Boolean(release.trim()) && isSameRelease({ album: release }, album);
+}
+
+function isListedAlbum(album: string, albums: string[]): boolean {
+    const names = getAlbumNames(album);
+    return albums.some((release) =>
+        getAlbumNames(release).some((releaseName) =>
+            names.some((name) => isSameAlbumName(releaseName, name))
+        )
+    );
+}
+
+// A missing album is for fill mode, and a song without known albums proves nothing.
+export function isWrongAlbum(album: string, albums: string[]): boolean {
+    const isKnown = Boolean(album.trim()) && albums.length > 0;
+    return isKnown && !isListedAlbum(album, albums);
+}
+
+// Its folder naming the same album means the tag was set on purpose.
+export function isDisputedAlbum(
+    { album }: TrackInfo,
+    albums: string[],
+    folderAlbum: string
+): boolean {
+    return isWrongAlbum(album, albums) && !isSameAlbumName(folderAlbum, album);
+}
+
+// Exact names only, so a "Live" folder does not pick "Live: At Wembley".
+export function findAlbumReplacement(
+    releases: string[],
+    candidates: string[]
+): string {
+    const matches = candidates.flatMap((candidate) =>
+        releases.filter((release) => isSameAlbumName(candidate, release))
+    );
+    return matches[0] ?? "";
+}
+
+// A loose artist folder is not an album name.
+export function getFolderCandidate(
+    folderAlbum: string,
+    artist: string
+): string {
+    return isSameName(folderAlbum, artist) ? "" : folderAlbum;
 }
