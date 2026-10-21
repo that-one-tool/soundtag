@@ -47,9 +47,13 @@ SoundTag asks the services below in order, and stops once the title, artist,
 album, year, genre, track number and cover are all known. A result is only used
 when it is the searched song: the same title and, when known, an artist shared
 by both credits ("Daft Punk" matches "Daft Punk feat. Pharrell Williams"). Case,
-accents, punctuation, featured artists and remaster notes are ignored. One typo
-is tolerated inside a word of five letters or more, in names of at least nine
-letters and digits, unless it changes a number, a Roman numeral or a plural.
+accents, punctuation, featured artists, remaster notes and a leading "The" in
+artist names are ignored. One typo is tolerated inside a word of five letters
+or more, in names of at least nine letters and digits, unless it changes a
+number, a Roman numeral or a plural.
+Albums ignore case, accents, punctuation and a note that only says the album
+was remastered, but tolerate no typo: "(Deluxe Remastered Edition)" is another
+release.
 From ListenBrainz, Deezer and iTunes, the album, track and disc numbers and
 counts, album artist and cover are only taken when the result is on the track's
 album (or no album is known) and that album is by the track's artist or by

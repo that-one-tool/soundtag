@@ -12,8 +12,13 @@ export interface FoundRelease {
     trackArtist?: string;
 }
 
+// Albums made only of symbols ("+", "÷") are compared as written.
 function normalizeAlbum(album: string | undefined): string {
-    return valueOrEmpty(album).trim().toLowerCase();
+    const folded = foldText(album);
+    const withoutNotes = folded
+        .replaceAll(ALBUM_NOTE_BRACKET, "")
+        .replace(ALBUM_NOTE_SUFFIX, "");
+    return splitWords(withoutNotes).join("") || folded.trim();
 }
 
 function isSameAlbum(
@@ -28,9 +33,14 @@ function isSameAlbum(
 
 // Notes that name another version (live, karaoke, remix) must still differ.
 const NOISE_BRACKET =
-    /[([][^)\]]*\b(?:remaster|feat|ft\b|explicit|mono|stereo)[^)\]]*[)\]]/g;
+    /[([][^)\]]*\b(?:remaster(?:ed|s)?|feat|ft|explicit|mono|stereo)\b[^)\]]*[)\]]/gu;
 const NOISE_SUFFIX =
-    /\s[-–—]\s[^-–—]*\b(?:remaster|explicit|mono|stereo)[^-–—]*$/u;
+    /\s[-–—]\s[^-–—]*\b(?:remaster(?:ed|s)?|explicit|mono|stereo)\b[^-–—]*$/u;
+// An album note may only hold a remaster: "(Deluxe Remastered Edition)" is another release.
+const ALBUM_NOTE =
+    "(?:\\d{4}\\s+)?(?:digital(?:ly)?\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?(?:\\s+(?:version|edition))?";
+const ALBUM_NOTE_BRACKET = new RegExp(`[([]\\s*${ALBUM_NOTE}\\s*[)\\]]`, "gu");
+const ALBUM_NOTE_SUFFIX = new RegExp(`\\s[-–—]\\s${ALBUM_NOTE}\\s*$`, "u");
 const FEATURING_SUFFIX = /\s(?:feat\.?|ft\.|featuring)\s.*$/u;
 const WORD_SEPARATOR = /[^\p{L}\p{N}]+/u;
 const ARTIST_SEPARATOR = /\s+(?:feat\.?|ft\.?|featuring|&|x|with)\s+|\s*,\s*/iu;
@@ -40,16 +50,23 @@ const MIN_TYPO_LENGTH = 9;
 const MIN_TYPO_WORD_LENGTH = 5;
 const NUMBER_WORD = /\d|^[ivxlcdm]+$/;
 
-function getWords(name: string | undefined): string[] {
-    return valueOrEmpty(name)
+function foldText(text: string | undefined): string {
+    return valueOrEmpty(text)
         .toLowerCase()
         .normalize("NFD")
-        .replaceAll(/\p{M}/gu, "")
+        .replaceAll(/\p{M}/gu, "");
+}
+
+function splitWords(text: string): string[] {
+    return text.split(WORD_SEPARATOR).filter(Boolean);
+}
+
+function getWords(name: string | undefined): string[] {
+    const withoutNotes = foldText(name)
         .replaceAll(NOISE_BRACKET, "")
         .replace(NOISE_SUFFIX, "")
-        .replace(FEATURING_SUFFIX, "")
-        .split(WORD_SEPARATOR)
-        .filter(Boolean);
+        .replace(FEATURING_SUFFIX, "");
+    return splitWords(withoutNotes);
 }
 
 function getCommonPrefixLength(first: string, second: string): number {
@@ -134,18 +151,35 @@ function splitArtists(credit: string | undefined): string[] {
         .filter((artist) => getWords(artist).length > 0);
 }
 
+const LEADING_ARTICLE = /^\s*the\s+(?=\S)/iu;
+
+function removeLeadingArticle(name: string | undefined): string {
+    return valueOrEmpty(name).replace(LEADING_ARTICLE, "");
+}
+
+// Services disagree on "The Black Eyed Peas" versus "Black Eyed Peas".
+function isSameArtistName(found: string | undefined, searched: string) {
+    const withoutArticles = [found, searched].map(removeLeadingArticle);
+    return (
+        isSameName(found, searched) ||
+        isSameName(withoutArticles[0], withoutArticles[1])
+    );
+}
+
 // Credits list featured artists in any order: "A feat. B", "B & A", "B, A".
 function hasSharedArtist(found: string | undefined, searched: string) {
     const foundArtists = splitArtists(found);
     return splitArtists(searched).some((searchedArtist) =>
         foundArtists.some((foundArtist) =>
-            isSameName(foundArtist, searchedArtist)
+            isSameArtistName(foundArtist, searchedArtist)
         )
     );
 }
 
 function isSameArtist(found: string | undefined, searched: string): boolean {
-    return isSameName(found, searched) || hasSharedArtist(found, searched);
+    return (
+        isSameArtistName(found, searched) || hasSharedArtist(found, searched)
+    );
 }
 
 // The first search result can be a karaoke or cover version, whose extras would stick.

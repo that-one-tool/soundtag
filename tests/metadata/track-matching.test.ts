@@ -130,3 +130,111 @@ test("isSameTrack matches an artist shared by both credits", () => {
         false
     );
 });
+
+test("isSameTrack ignores a leading 'The' in artist names", () => {
+    const search = {
+        title: "Simple Little Melody",
+        artist: "Black Eyed Peas",
+        album: "",
+    };
+
+    assert.ok(
+        isSameTrack(
+            { title: "Simple Little Melody", artist: "The Black Eyed Peas" },
+            search
+        )
+    );
+    assert.ok(
+        isSameTrack(
+            { title: "Title", artist: "The The" },
+            { title: "Title", artist: "The The", album: "" }
+        )
+    );
+    assert.equal(
+        isSameTrack(
+            { title: "Simple Little Melody", artist: "The Peas" },
+            search
+        ),
+        false
+    );
+});
+
+test("isSameRelease compares albums like names", () => {
+    assert.ok(isSameRelease({ album: "The E•N•D" }, "The E.N.D."));
+    assert.ok(isSameRelease({ album: "12 X 5" }, "12 x 5"));
+    assert.ok(
+        isSameRelease({ album: "Talkin' Blues [Remastered]" }, "Talkin’ Blues")
+    );
+    assert.equal(
+        isSameRelease(
+            { album: "Back to Black (Deluxe Edition)" },
+            "Back to Black"
+        ),
+        false
+    );
+});
+
+test("isSameTrack keeps typo tolerance for artists starting with 'The'", () => {
+    const search = { title: "Help", artist: "The Beatles", album: "" };
+
+    assert.ok(isSameTrack({ title: "Help", artist: "The Beattles" }, search));
+    assert.ok(isSameTrack({ title: "Help", artist: "Beatles" }, search));
+    assert.ok(
+        isSameTrack(
+            { title: "Help", artist: "Jay-Z feat. The Roots" },
+            { ...search, artist: "Roots" }
+        )
+    );
+});
+
+test("isSameRelease accepts an album by the same artist with or without 'The'", () => {
+    assert.ok(
+        isSameRelease(
+            { album: "Album", albumArtist: "The Roots", trackArtist: "Roots" },
+            ""
+        )
+    );
+});
+
+test("isSameRelease drops only pure remaster notes from albums", () => {
+    assert.ok(
+        isSameRelease({ album: "Nevermind (2011 Remaster)" }, "Nevermind")
+    );
+    assert.ok(
+        isSameRelease({ album: "Nevermind - Remastered 2011" }, "Nevermind")
+    );
+    assert.equal(
+        isSameRelease(
+            { album: "Back to Black (Deluxe Remastered Edition)" },
+            "Back to Black"
+        ),
+        false
+    );
+    assert.equal(
+        isSameRelease(
+            { album: "Made in Japan (Live / Remastered)" },
+            "Made in Japan"
+        ),
+        false
+    );
+    assert.equal(
+        isSameRelease({ album: "Hits (Stereolab Remix)" }, "Hits"),
+        false
+    );
+    assert.equal(
+        isSameRelease({ album: "Album (feat. Someone)" }, "Album"),
+        false
+    );
+});
+
+test("isSameRelease compares albums made only of symbols as written", () => {
+    assert.ok(isSameRelease({ album: "÷" }, "÷"));
+    assert.equal(isSameRelease({ album: "×" }, "÷"), false);
+    assert.equal(isSameRelease({}, "÷"), false);
+});
+
+test("isSameName keeps notes whose word only starts like a noise word", () => {
+    assert.equal(isSameName("Title (Stereolab Remix)", "Title"), false);
+    assert.equal(isSameName("Title (Monolith Sessions)", "Title"), false);
+    assert.ok(isSameName("Title (Remastered)", "Title"));
+});
