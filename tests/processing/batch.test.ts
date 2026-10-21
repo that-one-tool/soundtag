@@ -23,6 +23,7 @@ import { TrackCorrector } from "../../src/metadata/track-corrector.js";
 import {
     createProviderServices,
     createTestChain,
+    silentWitness,
 } from "../helpers/metadata-chain.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
@@ -962,16 +963,19 @@ async function createCompilationTrack(directory: string): Promise<string> {
 test("processBatch reports the corrections of each file", async () => {
     const directory = await createTemporaryDirectory();
     const source = await createCompilationTrack(directory);
-    const corrector = new TrackCorrector([
-        {
-            name: "Fake",
-            findCanonical: async () => ({
-                title: "Dancing Queen",
-                artist: "ABBA",
-                firstReleaseYear: "1976",
-            }),
-        },
-    ]);
+    const corrector = new TrackCorrector(
+        [
+            {
+                name: "Fake",
+                findCanonical: async () => ({
+                    title: "Dancing Queen",
+                    artist: "ABBA",
+                    firstReleaseYear: "1976",
+                }),
+            },
+        ],
+        silentWitness
+    );
     const report = createReport([source], directory);
 
     await processBatch([source], {
@@ -1002,7 +1006,7 @@ test("processBatch only fills tags when no service can correct them", async () =
             sourceRoot: directory,
             metadataChain: new MetadataChain([], [], createProviderServices()),
             logger,
-            corrector: new TrackCorrector([]),
+            corrector: new TrackCorrector([], silentWitness),
         },
         report,
         stopSignal: new AbortController().signal,

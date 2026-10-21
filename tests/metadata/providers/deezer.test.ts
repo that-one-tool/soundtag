@@ -291,3 +291,28 @@ test("DeezerProvider keeps the track info when the album lookup fails", async ()
         "Deezer album lookup failed: Deezer error: quota",
     ]);
 });
+
+function findCanonicalWithDeezer() {
+    const services = createProviderServices();
+    return new DeezerProvider(
+        new DeezerClient(services),
+        services
+    ).findCanonical(search);
+}
+
+test("DeezerProvider names the searched track without a year", async () => {
+    const requested = mockDeezer(deezerResponses);
+
+    assert.deepEqual(await findCanonicalWithDeezer(), {
+        title: "One More Time",
+        artist: "Daft Punk",
+        firstReleaseYear: "",
+    });
+    assert.deepEqual(requested, ["/search?q=Daft+Punk+One+More+Time&limit=5"]);
+});
+
+test("DeezerProvider names nothing when no result is the searched track", async () => {
+    mockDeezer({ "/search": { data: [] } });
+
+    assert.equal(await findCanonicalWithDeezer(), null);
+});

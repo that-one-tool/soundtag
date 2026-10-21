@@ -14,6 +14,7 @@ import {
 } from "../metadata/track-metadata.js";
 import { parseTrackFilename } from "../library/track-name-parser.js";
 import type {
+    CorrectionRequest,
     ExistingTags,
     TrackExtras,
     TrackInfo,
@@ -22,7 +23,12 @@ import type {
 } from "../metadata/types.js";
 import type { StoredTags } from "../tags/types.js";
 import { normalizeTagValue } from "./album-tags.js";
-import { hasSuspectTags, hasSuspectTitle } from "./suspect-tags.js";
+import { getAlternativeSearches } from "./correction-searches.js";
+import {
+    hasSuspectIdentity,
+    hasSuspectTags,
+    hasSuspectTitle,
+} from "./suspect-tags.js";
 import {
     correctTags,
     getCorrectedMetadata,
@@ -293,13 +299,30 @@ function tagCorrectedTrack(
         : tagUntaggedTrack(source, track, context);
 }
 
+function buildCorrectionRequest(
+    source: string,
+    sourceRoot: string,
+    info: TrackInfo
+): CorrectionRequest {
+    const searches = {
+        tagSearch: buildTrackSearch(source, sourceRoot, info),
+        fileSearch: buildTrackSearch(source, sourceRoot, EMPTY_TRACK_INFO),
+    };
+    return {
+        tagSearch: searches.tagSearch,
+        alternatives: getAlternativeSearches(info, searches),
+        hasSuspectTags: hasSuspectIdentity(info),
+    };
+}
+
 function readCorrectedTags(
     source: string,
     stored: StoredTags,
     context: ProcessingContext
 ): Promise<CorrectedTags> {
-    const search = buildTrackSearch(source, context.sourceRoot, stored.info);
-    return correctTags(stored, search, context);
+    const { sourceRoot } = context;
+    const request = buildCorrectionRequest(source, sourceRoot, stored.info);
+    return correctTags(stored, request, context);
 }
 
 async function writeNewMetadata(

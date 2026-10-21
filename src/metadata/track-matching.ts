@@ -218,9 +218,14 @@ export function isSameTrack(
 
 const VARIOUS_ARTISTS = "variousartists";
 
+export function isVariousArtists(artist: string): boolean {
+    return getWords(artist).join("") === VARIOUS_ARTISTS;
+}
+
 function isAlbumArtistOf(albumArtist: string, trackArtist: string): boolean {
-    const isVarious = getWords(albumArtist).join("") === VARIOUS_ARTISTS;
-    return isVarious || isSameArtist(albumArtist, trackArtist);
+    return (
+        isVariousArtists(albumArtist) || isSameArtist(albumArtist, trackArtist)
+    );
 }
 
 // A cover band's record can list the original artist on its track.

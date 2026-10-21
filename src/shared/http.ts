@@ -1,4 +1,6 @@
-const REQUEST_TIMEOUT = 10_000;
+// Services that stall would hold up every file, while covers are larger downloads.
+const API_REQUEST_TIMEOUT = 6_000;
+const IMAGE_REQUEST_TIMEOUT = 10_000;
 
 export interface ImageRequest {
     url: string | URL;
@@ -8,12 +10,10 @@ export interface ImageRequest {
 
 export function fetchWithTimeout(
     url: string | URL,
-    init: Omit<RequestInit, "signal"> = {}
+    init: Omit<RequestInit, "signal"> = {},
+    timeout = API_REQUEST_TIMEOUT
 ): Promise<Response> {
-    return fetch(url, {
-        ...init,
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT),
-    });
+    return fetch(url, { ...init, signal: AbortSignal.timeout(timeout) });
 }
 
 export async function readJsonResponse<T>(
@@ -70,7 +70,11 @@ export async function downloadImage({
     headers,
     byteLimit = Number.POSITIVE_INFINITY,
 }: ImageRequest): Promise<Buffer> {
-    const response = await fetchWithTimeout(url, { headers });
+    const response = await fetchWithTimeout(
+        url,
+        { headers },
+        IMAGE_REQUEST_TIMEOUT
+    );
     assertSuccessfulImageResponse(response);
     assertImageContentType(response);
     const data = await readBodyBelowLimit(response, byteLimit);

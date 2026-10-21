@@ -5,9 +5,9 @@ import {
 import type { TrackCorrector } from "../metadata/track-corrector.js";
 import { EMPTY_TRACK_INFO } from "../metadata/track-metadata.js";
 import type {
+    CorrectionRequest,
     TagCorrection,
     TrackMetadata,
-    TrackSearch,
 } from "../metadata/types.js";
 import type { Logger } from "../shared/logger.js";
 import type { StoredTags } from "../tags/types.js";
@@ -30,7 +30,7 @@ function logCorrections(corrections: TagCorrection[], logger: Logger): void {
 
 export async function correctTags(
     stored: StoredTags,
-    search: TrackSearch,
+    request: CorrectionRequest,
     { corrector, logger }: CorrectionTools
 ): Promise<CorrectedTags> {
     if (!corrector) {
@@ -38,7 +38,7 @@ export async function correctTags(
     }
 
     logger.info("Checking the existing tags...");
-    const corrections = await corrector.findCorrections(search, stored.info);
+    const corrections = await corrector.findCorrections(request, stored.info);
     logCorrections(corrections, logger);
     const info = applyCorrections(stored.info, corrections);
     return { tags: { ...stored, info }, corrections };

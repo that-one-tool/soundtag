@@ -39,6 +39,30 @@ test("fetchWithTimeout passes request options and a timeout signal", async () =>
     assert.ok(receivedInit?.signal instanceof AbortSignal);
 });
 
+function recordTimeouts(): number[] {
+    const timeouts: number[] = [];
+    const createTimeout = AbortSignal.timeout.bind(AbortSignal);
+    AbortSignal.timeout = (milliseconds) => {
+        timeouts.push(milliseconds);
+        return createTimeout(milliseconds);
+    };
+    return timeouts;
+}
+
+test("API calls give up sooner than image downloads", async (context) => {
+    const createTimeout = AbortSignal.timeout;
+    context.after(() => {
+        AbortSignal.timeout = createTimeout;
+    });
+    const timeouts = recordTimeouts();
+    globalThis.fetch = async () => imageResponse("image");
+
+    await fetchWithTimeout("https://example.test/");
+    await downloadImage({ url: "https://example.test/cover.jpg" });
+
+    assert.deepEqual(timeouts, [6000, 10_000]);
+});
+
 test("readJsonResponse parses successful responses", async () => {
     assert.deepEqual(
         await readJsonResponse(Response.json({ value: 1 }), "Service"),

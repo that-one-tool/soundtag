@@ -7,6 +7,7 @@ import {
 } from "../../src/metadata/create-metadata-chain.js";
 import type { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import type {
+    CanonicalSource,
     ExistingTags,
     ProviderNeeds,
     ProviderServices,
@@ -64,3 +65,9 @@ export function createProviderServices(
         ...overrides,
     };
 }
+
+// Confirms no identity change, so fix mode only respells.
+export const silentWitness: CanonicalSource = {
+    name: "Witness",
+    findCanonical: async () => null,
+};

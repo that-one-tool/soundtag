@@ -6,6 +6,7 @@ import {
     isSameRelease,
     isSameTrack,
     isSameWording,
+    isVariousArtists,
 } from "../../src/metadata/track-matching.js";
 
 test("isSameName ignores case, accents, punctuation and noise brackets", () => {
@@ -263,4 +264,11 @@ test("isSameCredit needs the same artists on both sides", () => {
     assert.equal(isSameCredit("Bob Marley", "Marley Bob"), false);
     assert.equal(isSameCredit("Shakira & Shakira", "Shakira & Beyonce"), false);
     assert.equal(isSameCredit(undefined, "Shakira"), false);
+});
+
+test("isVariousArtists spots the compilation credit however it is written", () => {
+    assert.ok(isVariousArtists("Various Artists"));
+    assert.ok(isVariousArtists("VARIOUS-ARTISTS"));
+    assert.equal(isVariousArtists("Various"), false);
+    assert.equal(isVariousArtists(""), false);
 });

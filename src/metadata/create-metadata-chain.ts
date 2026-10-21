@@ -142,12 +142,12 @@ function createBrainzProviders(
 
 function createOtherProviders(
     config: MetadataChainConfig,
-    deezer: DeezerClient,
+    deezer: DeezerProvider,
     services: ProviderServices
 ): MetadataProvider[] {
     const keys = getProviderKeys(config);
     return [
-        new DeezerProvider(deezer, services),
+        deezer,
         new ItunesProvider(services),
         ...createLastFmProviders(keys, config, services),
     ];
@@ -182,11 +182,12 @@ export function createMetadataLookups(
     const keys = getProviderKeys(config);
     warnAboutMissingKeys(keys, logger);
     const brainz = createBrainzProviders(keys, services);
-    const deezer = new DeezerClient(services);
+    const deezerClient = new DeezerClient(services);
+    const deezer = new DeezerProvider(deezerClient, services);
     const chain = new MetadataChain(
         [...brainz, ...createOtherProviders(config, deezer, services)],
-        createCoverProviders(config, deezer, services),
+        createCoverProviders(config, deezerClient, services),
         services
     );
-    return { chain, corrector: new TrackCorrector(brainz) };
+    return { chain, corrector: new TrackCorrector(brainz, deezer) };
 }

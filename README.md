@@ -241,7 +241,15 @@ MusicBrainz, so it needs `MUSICBRAINZ_USER_AGENT` (and `LISTENBRAINZ_TOKEN`
 for ListenBrainz); without the User-Agent, runs only fill missing tags. It respells the title and artist when the service names the same
 song differently: case, accents, punctuation, one typo, or featured artists
 written another way (`Beyonce ft Shakira` becomes `Beyoncé feat. Shakira`). A
-different word, note or artist is never changed. It also replaces the year
+different word, note or artist is only changed when the tags look wrong
+(`Various Artists` or no artist, the artist inside the title, an
+`Artist - Title` label without a known artist) or lead to no
+song: it then searches again from the title split at its separator
+(`Alfa Rococo - Lever L'ancre`), from the file and folder names, and with the
+two words of the artist swapped (`Marley Bob`). A match replaces only the
+fields that looked wrong (the split title both, the swap only the artist),
+only when the fields it keeps name the same song, and only when Deezer also
+finds that song. It also replaces the year
 with the song's first release year from MusicBrainz when that is earlier, such
 as the year of a compilation or reissue. Each correction is logged as
 `field: "old" → "new"`, the corrected tags are used for the search that fills

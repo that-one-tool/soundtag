@@ -4,6 +4,7 @@ import {
     applyCorrections,
     describeCorrection,
     getCorrections,
+    getIdentityCorrections,
     mergeCanonicalTracks,
 } from "../../src/metadata/track-corrections.js";
 import type { CanonicalTrack, TrackInfo } from "../../src/metadata/types.js";
@@ -63,6 +64,55 @@ test("getCorrections ignores empty canonical values and identical ones", () => {
             canonical
         ),
         []
+    );
+});
+
+test("getIdentityCorrections replaces the title and artist and takes the first release year", () => {
+    const wrongIdentity = {
+        ...info,
+        title: "Abba - Dancing Queen",
+        artist: "Various Artists",
+    };
+
+    const fields = ["title", "artist"] as const;
+
+    assert.deepEqual(
+        getIdentityCorrections(wrongIdentity, canonical, [...fields]),
+        [
+            {
+                field: "title",
+                from: "Abba - Dancing Queen",
+                to: "Dancing Queen",
+            },
+            { field: "artist", from: "Various Artists", to: "ABBA" },
+            { field: "year", from: "2002", to: "1976" },
+        ]
+    );
+});
+
+test("getIdentityCorrections keeps identical and empty canonical values", () => {
+    const empty = { title: "", artist: "", firstReleaseYear: "" };
+    const right = { ...info, title: "Dancing Queen", artist: "ABBA" };
+
+    assert.deepEqual(getIdentityCorrections(info, empty, ["title"]), []);
+    assert.deepEqual(
+        getIdentityCorrections(right, canonical, ["title", "artist"]).map(
+            ({ field }) => field
+        ),
+        ["year"]
+    );
+});
+
+test("getIdentityCorrections replaces only the given fields", () => {
+    const corrections = getIdentityCorrections(
+        { ...info, artist: "Various Artists" },
+        canonical,
+        ["artist"]
+    );
+
+    assert.deepEqual(
+        corrections.map(({ field }) => field),
+        ["artist", "year"]
     );
 });
 

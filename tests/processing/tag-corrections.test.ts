@@ -13,22 +13,29 @@ const stored: StoredTags = {
     extras: { genre: "Rock", albumArtist: "Artist" },
     hasCover: true,
 };
-const search = { title: "all", artist: "Artist", album: "Album" };
-const corrector = new TrackCorrector([
-    {
-        name: "Fake",
-        findCanonical: async () => ({
-            title: "All",
-            artist: "Artist",
-            firstReleaseYear: "",
-        }),
-    },
-]);
+const request = {
+    tagSearch: { title: "all", artist: "Artist", album: "Album" },
+    alternatives: [],
+    hasSuspectTags: false,
+};
+const corrector = new TrackCorrector(
+    [
+        {
+            name: "Fake",
+            findCanonical: async () => ({
+                title: "All",
+                artist: "Artist",
+                firstReleaseYear: "",
+            }),
+        },
+    ],
+    { name: "Witness", findCanonical: async () => null }
+);
 
 test("correctTags keeps the stored tags outside fix mode", async () => {
     const logger = createRecordingLogger();
 
-    const track = await correctTags(stored, search, { logger });
+    const track = await correctTags(stored, request, { logger });
 
     assert.deepEqual(track, { tags: stored, corrections: [] });
     assert.deepEqual(logger.infos, []);
@@ -37,7 +44,7 @@ test("correctTags keeps the stored tags outside fix mode", async () => {
 test("correctTags applies and logs the corrections", async () => {
     const logger = createRecordingLogger();
 
-    const track = await correctTags(stored, search, { corrector, logger });
+    const track = await correctTags(stored, request, { corrector, logger });
 
     assert.equal(track.tags.info.title, "All");
     assert.deepEqual(logger.infos, [
@@ -48,7 +55,7 @@ test("correctTags applies and logs the corrections", async () => {
 
 // Rewriting untouched fields would flatten multi-value tags and full dates.
 test("getCorrectedMetadata holds only the corrected fields", async () => {
-    const track = await correctTags(stored, search, {
+    const track = await correctTags(stored, request, {
         corrector,
         logger: createRecordingLogger(),
     });

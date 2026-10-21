@@ -68,6 +68,21 @@ export interface CanonicalSource {
     findCanonical(search: TrackSearch): Promise<CanonicalTrack | null>;
 }
 
+export type IdentityField = "title" | "artist";
+
+// Only the fields that look wrong give way, so a good title survives a file name search.
+export interface AlternativeSearch {
+    search: TrackSearch;
+    replaces: IdentityField[];
+}
+
+// Alternatives replace the identity only when a witness confirms them.
+export interface CorrectionRequest {
+    tagSearch: TrackSearch;
+    alternatives: AlternativeSearch[];
+    hasSuspectTags: boolean;
+}
+
 export interface TagCorrection {
     field: keyof TrackInfo;
     from: string;

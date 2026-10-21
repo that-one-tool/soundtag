@@ -74,7 +74,11 @@ graph free of cycles.
   limit (`MusicBrainzClient` serves MusicBrainz search and the ListenBrainz
   release lookups). A service trusted for fix mode also implements
   `CanonicalSource`, and is passed to the `TrackCorrector` in
-  `createMetadataLookups`.
+  `createMetadataLookups`. Deezer is the corrector's witness: an independent
+  catalogue that must also find the song before an alternative search
+  replaces a title or artist (ListenBrainz matches are MusicBrainz data, so
+  they cannot confirm each other). It only proves the song exists; each
+  alternative replaces only the fields it was built for (`replaces`).
 - **New audio format:** add it to `AUDIO_FORMATS` in `src/library/file.ts`, then
   map it to a `TagStore` in `src/tags/audio-tags.ts`. The compiler enforces that
   every format has a store.

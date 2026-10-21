@@ -1,8 +1,15 @@
 import { isSameCredit, isSameWording } from "./track-matching.js";
 import { extractYear } from "./track-metadata.js";
-import type { CanonicalTrack, TagCorrection, TrackInfo } from "./types.js";
+import type {
+    CanonicalTrack,
+    IdentityField,
+    TagCorrection,
+    TrackInfo,
+} from "./types.js";
 
 type CorrectionRule = (current: string, canonical: CanonicalTrack) => string;
+
+type FieldRule = [keyof TrackInfo, CorrectionRule];
 
 const NO_CORRECTION = "";
 
@@ -32,7 +39,7 @@ function correctYear(current: string, { firstReleaseYear }: CanonicalTrack) {
     return isEarlier ? firstReleaseYear : NO_CORRECTION;
 }
 
-const CORRECTION_RULES: [keyof TrackInfo, CorrectionRule][] = [
+const CORRECTION_RULES: FieldRule[] = [
     [
         "title",
         (current, { title }) => respellWhen(isSameWording, title, current),
@@ -44,15 +51,41 @@ const CORRECTION_RULES: [keyof TrackInfo, CorrectionRule][] = [
     ["year", correctYear],
 ];
 
+function getReplaceRule(field: IdentityField): FieldRule {
+    return [field, (_current, canonical) => canonical[field]];
+}
+
+function applyRules(
+    rules: FieldRule[],
+    info: TrackInfo,
+    canonical: CanonicalTrack
+): TagCorrection[] {
+    return rules
+        .map(([field, correct]) => ({
+            field,
+            from: info[field],
+            to: correct(info[field], canonical),
+        }))
+        .filter(({ from, to }) => to && to !== from);
+}
+
 export function getCorrections(
     info: TrackInfo,
     canonical: CanonicalTrack
 ): TagCorrection[] {
-    return CORRECTION_RULES.map(([field, correct]) => ({
-        field,
-        from: info[field],
-        to: correct(info[field], canonical),
-    })).filter(({ from, to }) => to && to !== from);
+    return applyRules(CORRECTION_RULES, info, canonical);
+}
+
+export function getIdentityCorrections(
+    info: TrackInfo,
+    canonical: CanonicalTrack,
+    fields: IdentityField[]
+): TagCorrection[] {
+    const rules: FieldRule[] = [
+        ...fields.map(getReplaceRule),
+        ["year", correctYear],
+    ];
+    return applyRules(rules, info, canonical);
 }
 
 export function applyCorrections(

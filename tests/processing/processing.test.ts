@@ -799,15 +799,18 @@ test("processTrack searches once when the file name gives the same search", asyn
 
 function createFakeCorrector(canonical: CanonicalTrack | null) {
     const searches: TrackSearch[] = [];
-    const corrector = new TrackCorrector([
-        {
-            name: "Fake",
-            findCanonical: async (search) => {
-                searches.push(search);
-                return canonical;
+    const corrector = new TrackCorrector(
+        [
+            {
+                name: "Fake",
+                findCanonical: async (search) => {
+                    searches.push(search);
+                    return canonical;
+                },
             },
-        },
-    ]);
+        ],
+        { name: "Witness", findCanonical: async () => canonical }
+    );
     return { corrector, searches };
 }
 
@@ -1078,4 +1081,50 @@ test("processTrack writes the corrections when the match has no title or artist"
         result.corrections.map(({ field }) => field),
         ["year"]
     );
+});
+
+test("processTrack replaces a wrong artist and title that two services confirm", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "track.mp3");
+    await fs.writeFile(source, "audio bytes");
+    NodeID3.write(
+        {
+            title: "Eric Clapton And The Powerhouse - STEPPING OUT",
+            artist: "Various Artists",
+            album: "Blues",
+            year: "1999",
+        },
+        source
+    );
+    const steppingOut = {
+        title: "Stepping Out",
+        artist: "Eric Clapton & The Powerhouse",
+        firstReleaseYear: "1966",
+    };
+    const findSplitTitle = async ({ artist }: TrackSearch) =>
+        artist === "Eric Clapton And The Powerhouse" ? steppingOut : null;
+    const corrector = new TrackCorrector(
+        [{ name: "Fake", findCanonical: findSplitTitle }],
+        { name: "Witness", findCanonical: findSplitTitle }
+    );
+    const nothingChain = new MetadataChain(
+        [{ name: "Fake", findMetadata: async () => null }],
+        [],
+        createProviderServices()
+    );
+
+    const result = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: nothingChain,
+        corrector,
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.deepEqual(result.tags?.info, {
+        title: "Stepping Out",
+        artist: "Eric Clapton & The Powerhouse",
+        album: "Blues",
+        year: "1966",
+    });
 });

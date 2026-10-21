@@ -11,7 +11,10 @@ import type { PathMove } from "../../src/shared/paths.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { assertNoReport } from "../helpers/no-report.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
-import { createProviderServices } from "../helpers/metadata-chain.js";
+import {
+    createProviderServices,
+    silentWitness,
+} from "../helpers/metadata-chain.js";
 import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
@@ -38,16 +41,19 @@ const foundChain = new MetadataChain(
     createProviderServices({ logger: createRecordingLogger() })
 );
 
-const firstReleaseCorrector = new TrackCorrector([
-    {
-        name: "Fake",
-        findCanonical: async () => ({
-            title: "",
-            artist: "",
-            firstReleaseYear: "1999",
-        }),
-    },
-]);
+const firstReleaseCorrector = new TrackCorrector(
+    [
+        {
+            name: "Fake",
+            findCanonical: async () => ({
+                title: "",
+                artist: "",
+                firstReleaseYear: "1999",
+            }),
+        },
+    ],
+    silentWitness
+);
 
 async function createTrack(
     directory: string,
