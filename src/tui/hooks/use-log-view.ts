@@ -1,6 +1,12 @@
 import { useState } from "react";
 import type { LogBuffer } from "../log-buffer.js";
-import { getActiveAnchor, scrollLog, type LogAnchor } from "../log-scroll.js";
+import {
+    getActiveAnchor,
+    scrollLog,
+    type LogAnchor,
+    type LogSize,
+} from "../log-scroll.js";
+import { wrapLogLines } from "../log-wrap.js";
 import { PaneFocus } from "../pane-focus.js";
 import type { FocusedPane } from "../types.js";
 import { useStore } from "./use-store.js";
@@ -13,26 +19,30 @@ export interface LogView {
     scrollLog(delta: number): void;
 }
 
-function useLogAnchor(logBuffer: LogBuffer, height: number) {
-    const [anchor, setAnchor] = useState<LogAnchor>({ anchorId: null, height });
-    // Forget an anchor set for another height, so resizing back keeps the tail.
-    if (anchor.height !== height) {
-        setAnchor({ anchorId: null, height });
+function useLogAnchor(logBuffer: LogBuffer, size: LogSize) {
+    const [anchor, setAnchor] = useState<LogAnchor>({
+        anchorId: null,
+        ...size,
+    });
+    // Forget an anchor set for another size, so resizing back keeps the tail.
+    if (getActiveAnchor(anchor, size) === null && anchor.anchorId !== null) {
+        setAnchor({ anchorId: null, ...size });
     }
     const scrollBy = (delta: number) =>
         setAnchor((current) => ({
-            anchorId: scrollLog(logBuffer.getSnapshot(), height, {
-                anchorId: getActiveAnchor(current, height),
-                delta,
-            }),
-            height,
+            anchorId: scrollLog(
+                wrapLogLines(logBuffer.getSnapshot(), size.width),
+                size.height,
+                { anchorId: getActiveAnchor(current, size), delta }
+            ),
+            ...size,
         }));
-    return { anchorId: getActiveAnchor(anchor, height), scrollBy };
+    return { anchorId: getActiveAnchor(anchor, size), scrollBy };
 }
 
-export function useLogView(logBuffer: LogBuffer, height: number): LogView {
+export function useLogView(logBuffer: LogBuffer, size: LogSize): LogView {
     const [paneFocus] = useState(() => new PaneFocus());
-    const { anchorId, scrollBy } = useLogAnchor(logBuffer, height);
+    const { anchorId, scrollBy } = useLogAnchor(logBuffer, size);
     return {
         focus: useStore(paneFocus),
         anchorId,

@@ -1,4 +1,3 @@
-import { getErrorMessage } from "../../shared/errors.js";
 import { isSameName } from "../track-matching.js";
 import type { CoverProvider, ProviderServices, TrackSearch } from "../types.js";
 import {
@@ -40,15 +39,8 @@ export class DeezerCoverProvider implements CoverProvider {
     private async searchAlbum(
         search: TrackSearch
     ): Promise<DeezerAlbumSummary | undefined> {
-        try {
-            const query = buildQuery([search.artist, search.album]);
-            const albums = await this.client.searchAlbums(query);
-            return albums.find((album) => isSearchedAlbum(album, search));
-        } catch (error) {
-            this.services.logger.error(
-                `Deezer album search failed: ${getErrorMessage(error)}`
-            );
-            return undefined;
-        }
+        const query = buildQuery([search.artist, search.album]);
+        const albums = await this.client.searchAlbums(query);
+        return albums.find((album) => isSearchedAlbum(album, search));
     }
 }

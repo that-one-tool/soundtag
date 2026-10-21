@@ -40,3 +40,10 @@ const BROWSER_ROW_FRAME_COLUMNS = 8;
 export function getNameWidth(columns: number): number {
     return columns - getPanelWidth(columns) - BROWSER_ROW_FRAME_COLUMNS;
 }
+
+// The log pane's round border and one column of padding on each side.
+const LOG_FRAME_COLUMNS = 4;
+
+export function getLogWidth(columns: number): number {
+    return columns - LOG_FRAME_COLUMNS;
+}

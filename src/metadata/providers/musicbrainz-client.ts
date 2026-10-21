@@ -6,6 +6,7 @@ import {
 } from "../../shared/http.js";
 import {
     createRateLimiter,
+    sleepAndReport,
     type RateLimiter,
 } from "../../shared/rate-limiter.js";
 import type { ProviderServices, TrackSearch } from "../types.js";
@@ -95,7 +96,8 @@ export class MusicBrainzClient {
     ) {
         this.schedule = createRateLimiter(
             MUSICBRAINZ_REQUEST_INTERVAL,
-            services.clock
+            services.clock,
+            services.lookups.noteWait
         );
     }
 
@@ -141,13 +143,20 @@ export class MusicBrainzClient {
         }
 
         await response.body?.cancel();
-        await this.services.clock.sleep(
-            getRetryAfterDelay(response, DEFAULT_RETRY_DELAY, MAX_RETRY_DELAY)
+        const delay = getRetryAfterDelay(
+            response,
+            DEFAULT_RETRY_DELAY,
+            MAX_RETRY_DELAY
         );
+        // ListenBrainz release lookups also go through this client.
+        this.services.lookups.note("MusicBrainz HTTP 503, retried");
+        const { clock, lookups } = this.services;
+        await sleepAndReport(clock, delay, lookups.noteWait);
         return this.scheduleFetch(url);
     }
 
     private scheduleFetch(url: URL): Promise<Response> {
+        this.services.lookups.request(url);
         return this.schedule(() =>
             fetchWithTimeout(url, { headers: { "User-Agent": this.userAgent } })
         );

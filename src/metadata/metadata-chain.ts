@@ -1,5 +1,8 @@
+import type { LookupLog } from "../shared/lookup-log.js";
+import { isSameName } from "./track-matching.js";
 import {
     buildProviderSearch,
+    getAddedFieldNames,
     hasAllDetails,
     isComplete,
     mergeMetadata,
@@ -10,6 +13,7 @@ import type {
     MetadataProvider,
     ProviderNeeds,
     ProviderServices,
+    TrackInfo,
     TrackMetadata,
     TrackSearch,
 } from "./types.js";
@@ -20,12 +24,23 @@ interface ChainState {
     hasExistingCover: boolean;
 }
 
-function getCoverStatus({ metadata, hasExistingCover }: ChainState): string {
-    if (hasExistingCover) {
-        return "kept";
+function nameSong({ title, artist }: TrackInfo): string {
+    return artist ? `"${title}" by ${artist}` : `"${title}"`;
+}
+
+// Loose fallbacks can match another song, which the log must show.
+function describeCandidate(
+    search: TrackSearch,
+    current: TrackMetadata,
+    found: TrackMetadata
+): string {
+    const fields = getAddedFieldNames(current, found).join(", ");
+    if (isSameName(found.info.title, search.title)) {
+        return fields;
     }
 
-    return metadata.coverData ? "downloaded" : "unavailable";
+    const song = nameSong(found.info);
+    return fields ? `${song}: ${fields}` : song;
 }
 
 function needsCover({ metadata, hasExistingCover }: ChainState): boolean {
@@ -58,6 +73,10 @@ export class MetadataChain {
         private readonly services: ProviderServices
     ) {}
 
+    get lookups(): LookupLog {
+        return this.services.lookups;
+    }
+
     clearCache(): void {
         this.services.images.clear();
         this.services.cache.clear();
@@ -74,7 +93,6 @@ export class MetadataChain {
         }
 
         const completed = await this.addFallbackCover(search, state);
-        this.services.logger.info(`Cover: ${getCoverStatus(completed)}`);
         return completed.metadata;
     }
 
@@ -100,10 +118,11 @@ export class MetadataChain {
             return state;
         }
 
-        this.services.logger.info(`Querying ${provider.name}...`);
-        const candidate = await provider.findMetadata(
-            buildProviderSearch(search, state.metadata.info),
-            getNeeds(state)
+        const providerSearch = buildProviderSearch(search, state.metadata.info);
+        const candidate = await this.services.lookups.call(
+            provider.name,
+            () => provider.findMetadata(providerSearch, getNeeds(state)),
+            (found) => describeCandidate(providerSearch, state.metadata, found)
         );
         return mergeCandidate(state, candidate);
     }
@@ -128,11 +147,13 @@ export class MetadataChain {
             return state;
         }
 
-        this.services.logger.info(
-            `Searching ${coverProvider.name} for a cover...`
-        );
-        const coverData = await coverProvider.findCover(
-            buildProviderSearch(search, state.metadata.info)
+        const coverData = await this.services.lookups.call(
+            coverProvider.name,
+            () =>
+                coverProvider.findCover(
+                    buildProviderSearch(search, state.metadata.info)
+                ),
+            () => "cover"
         );
         return { ...state, metadata: { ...state.metadata, coverData } };
     }

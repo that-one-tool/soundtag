@@ -3,6 +3,7 @@ import {
     getIdentityCorrections,
     mergeCanonicalTracks,
 } from "./track-corrections.js";
+import type { LookupLog } from "../shared/lookup-log.js";
 import { isSameTrack } from "./track-matching.js";
 import type {
     AlternativeSearch,
@@ -39,11 +40,16 @@ function keepsMatchingFields(
     return isSameTrack(track, kept);
 }
 
+function describeAlternative({ kind, search }: AlternativeSearch): string {
+    return `${kind} "${search.title}" · ${search.artist}`;
+}
+
 // The witness is another catalogue, since ListenBrainz matches are MusicBrainz data.
 export class TrackCorrector {
     constructor(
         private readonly sources: CanonicalSource[],
-        private readonly witness: CanonicalSource
+        private readonly witness: CanonicalSource,
+        private readonly lookups: LookupLog
     ) {}
 
     canCorrect(): boolean {
@@ -54,7 +60,9 @@ export class TrackCorrector {
         request: CorrectionRequest,
         info: TrackInfo
     ): Promise<TagCorrection[]> {
-        const found = await this.findCanonicalTracks(request.tagSearch);
+        const found = await this.lookups.step({ label: "check" }, () =>
+            this.findCanonicalTracks(request.tagSearch)
+        );
         const identity = await this.findIdentity(request, found, info);
         return identity
             ? getIdentityCorrections(info, identity.track, identity.replaces)
@@ -90,7 +98,13 @@ export class TrackCorrector {
         alternative: AlternativeSearch,
         info: TrackInfo
     ): Promise<ConfirmedIdentity | null> {
-        const identity = await this.findConfirmedIdentityOf(alternative);
+        const step = {
+            label: "check",
+            subject: describeAlternative(alternative),
+        };
+        const identity = await this.lookups.step(step, () =>
+            this.findConfirmedIdentityOf(alternative)
+        );
         return identity && keepsMatchingFields(info, identity)
             ? identity
             : null;
@@ -107,7 +121,7 @@ export class TrackCorrector {
             return null;
         }
 
-        const witnessed = await this.witness.findCanonical(search);
+        const witnessed = await this.findCanonicalTrack(this.witness, search);
         return isConfirmedBy(witnessed, track) ? { track, replaces } : null;
     }
 
@@ -117,12 +131,21 @@ export class TrackCorrector {
         const found: CanonicalTrack[] = [];
 
         for (const source of this.sources) {
-            const track = await source.findCanonical(search);
+            const track = await this.findCanonicalTrack(source, search);
             if (track) {
                 found.push(track);
             }
         }
 
         return found;
+    }
+
+    private findCanonicalTrack(
+        source: CanonicalSource,
+        search: TrackSearch
+    ): Promise<CanonicalTrack | null> {
+        return this.lookups.call(source.name, () =>
+            source.findCanonical(search)
+        );
     }
 }

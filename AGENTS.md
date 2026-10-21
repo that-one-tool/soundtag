@@ -24,17 +24,17 @@ npm run build      # compile to dist/
 `tests/tags/audio-tags.test.ts`); the tag stores are tested through
 `tests/tags/audio-tags.test.ts`.
 
-| Folder                    | Responsibility                                                                                                                                                                                                                                                                                       |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/index.ts`            | Entry point and `soundtag` bin: loads `.env` and wires the stop session and browser launcher to `runApp`.                                                                                                                                                                                            |
-| `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, Ctrl+C handling, banner, summary, exit codes, and the lazy launch of the TUI.                                                                                                                                                        |
-| `src/tui/`                | Ink terminal UI: folder browser reducer, metadata panel, log pane, background `TaggingQueue`, session status dots. React components live in `components/` and hooks in `hooks/`.                                                                                                                     |
-| `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file (correcting its tags first in fix mode) and returns its status, tags and corrections; `renameTrack` then renames it from those tags; `renameAlbumFolder` renames single-album folders at the end. |
-| `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, renames with a per-batch folder name cache, track filenames, and search terms derived from filenames and folders.                                                                                                                           |
-| `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                                                                                                                                                           |
-| `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `TrackCorrector` finds fix-mode corrections from `CanonicalSource`s; `create-metadata-chain.ts` is the composition root (`createMetadataLookups`); pure merge and correction helpers.                                         |
-| `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                                                                                                                                                                  |
-| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, per-batch `ImageCache` and `BatchCache`, rate limiter with an injectable `Clock`, errors, `Logger`.                                                                                                                                      |
+| Folder                    | Responsibility                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/index.ts`            | Entry point and `soundtag` bin: loads `.env` and wires the stop session and browser launcher to `runApp`.                                                                                                                                                                                                                                       |
+| `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, Ctrl+C handling, banner, summary, exit codes, and the lazy launch of the TUI.                                                                                                                                                                                                   |
+| `src/tui/`                | Ink terminal UI: folder browser reducer, metadata panel, log pane, background `TaggingQueue`, session status dots. React components live in `components/` and hooks in `hooks/`.                                                                                                                                                                |
+| `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file (correcting its tags first in fix mode) and returns its status, tags and corrections; `renameTrack` then renames it from those tags; `renameAlbumFolder` renames single-album folders at the end; `track-log` formats each file's log lines. |
+| `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, renames with a per-batch folder name cache, track filenames, and search terms derived from filenames and folders.                                                                                                                                                                      |
+| `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                                                                                                                                                                                                      |
+| `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `TrackCorrector` finds fix-mode corrections from `CanonicalSource`s; `create-metadata-chain.ts` is the composition root (`createMetadataLookups`); pure merge and correction helpers.                                                                                    |
+| `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                                                                                                                                                                                                             |
+| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, per-batch `ImageCache` and `BatchCache`, rate limiter with an injectable `Clock`, errors, `Logger`, and `LookupLog` (one timed line per lookup step).                                                                                                                               |
 
 Each domain owns its contracts in its own `types.ts`. Imports only point toward
 lower layers, and a layer may skip levels: `cli` → `tui` → `processing` → `tags` /
@@ -87,6 +87,16 @@ graph free of cycles.
 - **Output from processing or metadata code:** log through an injected
   `Logger` (`src/shared/logger.ts`), never `console`, so the TUI can route it to
   its log pane. Headless runs pass `consoleLogger`.
+- **Service calls:** the chain and the corrector run each provider call
+  through `services.lookups` (`LookupLog`), which times it and writes one line
+  per step. Providers therefore throw search errors instead of logging them,
+  report a failure that does not stop the match with
+  `services.lookups.noteFailure`, pass every API request URL to
+  `services.lookups.request` for `--verbose`, and give their rate limiter
+  `services.lookups.noteWait`. Only a `ServiceError` (`src/shared/errors.ts`,
+  thrown by the HTTP helpers for HTTP, network, timeout and unreadable
+  responses) lets the chain move on to the next service; any other error is a
+  bug and fails the file.
 
 ## Conventions
 

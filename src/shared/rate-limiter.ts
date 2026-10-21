@@ -13,20 +13,34 @@ export const systemClock: Clock = {
     sleep: (milliseconds) => delay(milliseconds),
 };
 
+export type WaitListener = (milliseconds: number) => void;
+
+// Reports the time actually slept, which an instant test clock keeps at zero.
+export async function sleepAndReport(
+    clock: Clock,
+    milliseconds: number,
+    onWait: WaitListener
+): Promise<void> {
+    if (milliseconds <= 0) {
+        return;
+    }
+
+    const startedAt = clock.now();
+    await clock.sleep(milliseconds);
+    onWait(clock.now() - startedAt);
+}
+
 export function createRateLimiter(
     interval: number,
-    clock: Clock = systemClock
+    clock: Clock = systemClock,
+    onWait: WaitListener = () => undefined
 ): RateLimiter {
     let lastStartedAt = Number.NEGATIVE_INFINITY;
     let queue: Promise<unknown> = Promise.resolve();
 
     async function runWhenAllowed<T>(task: () => Promise<T>): Promise<T> {
         const remainingWait = interval - (clock.now() - lastStartedAt);
-
-        if (remainingWait > 0) {
-            await clock.sleep(remainingWait);
-        }
-
+        await sleepAndReport(clock, remainingWait, onWait);
         lastStartedAt = clock.now();
         return task();
     }

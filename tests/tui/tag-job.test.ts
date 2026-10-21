@@ -52,7 +52,8 @@ const firstReleaseCorrector = new TrackCorrector(
             }),
         },
     ],
-    silentWitness
+    silentWitness,
+    createProviderServices().lookups
 );
 
 async function createTrack(

@@ -168,8 +168,9 @@ function getCompletionExitCode(stopSignal: AbortSignal): number {
     return stopSignal.aborted ? EXIT_INTERRUPTED : EXIT_SUCCESS;
 }
 
+// Through the logger, so a progress line on screen is cleared first.
 function reportFailure(error: unknown): number {
-    console.error(`Error: ${getErrorMessage(error)}`);
+    consoleLogger.error(`Error: ${getErrorMessage(error)}`);
     return EXIT_FAILURE;
 }
 

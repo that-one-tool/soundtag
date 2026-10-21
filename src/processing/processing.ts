@@ -34,6 +34,12 @@ import {
     getCorrectedMetadata,
     type CorrectedTags,
 } from "./tag-corrections.js";
+import {
+    formatSearchSubject,
+    formatSkipLine,
+    formatTagsLine,
+    formatWriteLine,
+} from "./track-log.js";
 import type { TrackResult, TrackStatus } from "./types.js";
 
 export interface ProcessingContext {
@@ -52,6 +58,17 @@ interface FoundMetadata {
 interface TrackLookup {
     source: string;
     existing: ExistingTags;
+}
+
+interface SearchRun {
+    metadataChain: MetadataChain;
+    subject?: string;
+}
+
+interface PlannedWrite {
+    metadata: TrackMetadata | null;
+    existing: TrackInfo;
+    missing: string[];
 }
 
 const SEARCH_FIELDS: readonly (keyof TrackSearch)[] = [
@@ -91,16 +108,13 @@ export function buildTrackSearch(
     };
 }
 
-function formatSearchDetail(label: string, value: string): string {
-    return value ? ` (${label}: "${value}")` : "";
-}
-
-function logSearch(
-    { title, artist, album }: TrackSearch,
-    logger: Logger
-): void {
-    logger.info(
-        `Searching: "${title}"${formatSearchDetail("artist", artist)}${formatSearchDetail("album", album)}`
+function searchServices(
+    search: TrackSearch,
+    existing: ExistingTags,
+    { metadataChain, subject }: SearchRun
+): Promise<TrackMetadata | null> {
+    return metadataChain.lookups.step({ label: "search", subject }, () =>
+        metadataChain.find(search, existing)
     );
 }
 
@@ -113,6 +127,14 @@ function isSameSearch(first: TrackSearch, second: TrackSearch): boolean {
         (field) =>
             normalizeTagValue(first[field]) === normalizeTagValue(second[field])
     );
+}
+
+// Terms taken from the file or folder names are worth showing.
+function getSearchSubject(
+    search: TrackSearch,
+    info: TrackInfo
+): string | undefined {
+    return isSameSearch(search, info) ? undefined : formatSearchSubject(search);
 }
 
 function getKeptInfo(info: TrackInfo): TrackInfo {
@@ -140,7 +162,7 @@ function shouldSearchFileName(
 async function findFromFileName(
     { source, existing }: TrackLookup,
     tagSearch: TrackSearch,
-    { sourceRoot, metadataChain, logger }: ProcessingContext
+    { sourceRoot, metadataChain }: ProcessingContext
 ): Promise<TrackMetadata | null> {
     const search = buildTrackSearch(source, sourceRoot, EMPTY_TRACK_INFO);
 
@@ -148,13 +170,11 @@ async function findFromFileName(
         return null;
     }
 
-    logger.info(
-        "Not found with the existing tags; searching again from the file and folder names."
-    );
-    logSearch(search, logger);
-    const found = await metadataChain.find(search, {
-        ...existing,
-        info: EMPTY_TRACK_INFO,
+    const subject = `file name ${formatSearchSubject(search)}`;
+    const withoutInfo = { ...existing, info: EMPTY_TRACK_INFO };
+    const found = await searchServices(search, withoutInfo, {
+        metadataChain,
+        subject,
     });
     return found && keepExistingInfo(found, existing);
 }
@@ -165,8 +185,12 @@ async function findTrackMetadata(
 ): Promise<TrackMetadata | null> {
     const { source, existing } = lookup;
     const search = buildTrackSearch(source, context.sourceRoot, existing.info);
-    logSearch(search, context.logger);
-    const found = await context.metadataChain.find(search, existing);
+    const { metadataChain } = context;
+    const subject = getSearchSubject(search, existing.info);
+    const found = await searchServices(search, existing, {
+        metadataChain,
+        subject,
+    });
     return found ?? findFromFileName(lookup, search, context);
 }
 
@@ -175,32 +199,22 @@ function keepWritableMetadata(
     logger: Logger
 ): TrackMetadata | null {
     if (!metadata) {
-        logger.info(
-            "Track not found on available metadata services. Leaving source unchanged."
-        );
+        logger.info(formatSkipLine("not found"));
         return null;
     }
 
     if (!hasTitleAndArtist(metadata)) {
-        logger.info(
-            "Track title or artist is missing. Leaving source unchanged."
-        );
+        logger.info(formatSkipLine("no title or artist found"));
         return null;
     }
 
     return metadata;
 }
 
-function logMissingFields(found: FoundMetadata, logger: Logger): void {
-    const missingFields = OPTIONAL_FIELD_CHECKS.filter(([, isMissing]) =>
+function getMissingFields(found: FoundMetadata): string[] {
+    return OPTIONAL_FIELD_CHECKS.filter(([, isMissing]) =>
         isMissing(found)
     ).map(([label]) => label);
-
-    if (missingFields.length > 0) {
-        logger.info(
-            `Some metadata was unavailable (${missingFields.join(", ")}); saving the fields that were found.`
-        );
-    }
 }
 
 function addsMetadata(
@@ -248,10 +262,13 @@ async function tagFoundTrack(
     }
 
     const hasExistingCover = track.tags.hasCover;
-    logMissingFields({ metadata, hasExistingCover }, logger);
     return writeNewMetadata(
         source,
-        getMetadataToWrite(track, metadata),
+        {
+            metadata: getMetadataToWrite(track, metadata),
+            existing: track.tags.info,
+            missing: getMissingFields({ metadata, hasExistingCover }),
+        },
         logger
     );
 }
@@ -271,7 +288,21 @@ async function tagUntaggedTrack(
     const corrected = getCorrectedMetadata(track);
     return isWritable(found) || !corrected
         ? tagFoundTrack(source, { track, found }, context)
-        : writeNewMetadata(source, corrected, context.logger);
+        : writeCorrections(source, track, context.logger);
+}
+
+function writeCorrections(
+    source: string,
+    track: CorrectedTags,
+    logger: Logger
+): Promise<TrackStatus> {
+    const metadata = getCorrectedMetadata(track);
+    const existing = track.tags.info;
+    return writeNewMetadata(
+        source,
+        { metadata, existing, missing: [] },
+        logger
+    );
 }
 
 async function keepProperTags(
@@ -279,13 +310,11 @@ async function keepProperTags(
     track: CorrectedTags,
     logger: Logger
 ): Promise<TrackStatus> {
-    const corrected = getCorrectedMetadata(track);
-
-    if (corrected) {
-        return writeNewMetadata(source, corrected, logger);
+    if (track.corrections.length > 0) {
+        return writeCorrections(source, track, logger);
     }
 
-    logger.info("Already properly tagged. Skipping.");
+    logger.info(formatSkipLine("already tagged"));
     return "SKIPPED";
 }
 
@@ -327,17 +356,18 @@ function readCorrectedTags(
 
 async function writeNewMetadata(
     source: string,
-    metadata: TrackMetadata | null,
+    planned: PlannedWrite,
     logger: Logger
 ): Promise<TrackStatus> {
+    const { metadata } = planned;
+
     if (!metadata) {
-        logger.info("No new metadata found. Leaving source unchanged.");
+        logger.info(formatSkipLine("nothing new"));
         return "SKIPPED";
     }
 
-    logger.info("Writing tags...");
     await getTagStore(source).write(source, metadata);
-    logger.info("Successfully tagged source file.");
+    logger.info(formatWriteLine({ ...planned, metadata }));
     return "TAGGED";
 }
 
@@ -359,8 +389,8 @@ async function tagTrack(
     source: string,
     context: ProcessingContext
 ): Promise<TrackResult> {
-    context.logger.info("Reading existing tags...");
     const storedTags = await getTagStore(source).read(source);
+    context.logger.info(formatTagsLine(storedTags.info));
     const track = await readCorrectedTags(source, storedTags, context);
     const status = await tagCorrectedTrack(source, track, context);
     // Only a write changes the tags, so other tracks keep the ones already read.

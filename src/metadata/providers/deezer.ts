@@ -1,4 +1,3 @@
-import { getErrorMessage } from "../../shared/errors.js";
 import { isSameRelease, isSameTrack } from "../track-matching.js";
 import {
     optionalCount,
@@ -193,15 +192,8 @@ export class DeezerProvider implements MetadataProvider, CanonicalSource {
     private async searchTrack(
         search: TrackSearch
     ): Promise<DeezerTrack | null> {
-        try {
-            const query = buildQuery([search.artist, search.title]);
-            return pickTrack(await this.client.searchTracks(query), search);
-        } catch (error) {
-            this.services.logger.error(
-                `Deezer search failed: ${getErrorMessage(error)}`
-            );
-            return null;
-        }
+        const query = buildQuery([search.artist, search.title]);
+        return pickTrack(await this.client.searchTracks(query), search);
     }
 
     private findDetails(
@@ -226,9 +218,7 @@ export class DeezerProvider implements MetadataProvider, CanonicalSource {
         try {
             return await this.loadAlbumDetails(request, searchedAlbum);
         } catch (error) {
-            this.services.logger.error(
-                `Deezer album lookup failed: ${getErrorMessage(error)}`
-            );
+            this.services.lookups.noteFailure("album lookup", error);
             return { ...NO_DETAILS, isRelease: request.isRelease };
         }
     }

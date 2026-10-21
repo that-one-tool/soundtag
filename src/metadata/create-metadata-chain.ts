@@ -13,6 +13,7 @@ import { MusicBrainzProvider } from "./providers/musicbrainz.js";
 import { BatchCache } from "../shared/batch-cache.js";
 import { ImageCache } from "../shared/image-cache.js";
 import type { Logger } from "../shared/logger.js";
+import { LookupLog } from "../shared/lookup-log.js";
 import type { Clock } from "../shared/rate-limiter.js";
 import type {
     CanonicalSource,
@@ -108,10 +109,9 @@ function createMusicBrainzProviders(
 
 function createLastFmProviders(
     keys: ProviderKeys,
-    config: MetadataChainConfig,
     services: ProviderServices
 ): MetadataProvider[] {
-    const settings = { apiKey: keys.lastFmApiKey, verbose: config.verbose };
+    const settings = { apiKey: keys.lastFmApiKey };
     return keys.lastFmApiKey ? [new LastFmProvider(settings, services)] : [];
 }
 
@@ -149,7 +149,7 @@ function createOtherProviders(
     return [
         deezer,
         new ItunesProvider(services),
-        ...createLastFmProviders(keys, config, services),
+        ...createLastFmProviders(keys, services),
     ];
 }
 
@@ -164,24 +164,25 @@ function createCoverProviders(
     ];
 }
 
-function createServices(clock: Clock, logger: Logger): ProviderServices {
+function createServices(
+    verbose: boolean,
+    clock: Clock,
+    logger: Logger
+): ProviderServices {
     return {
         clock,
         logger,
         images: new ImageCache(),
         cache: new BatchCache(),
+        lookups: new LookupLog({ logger, clock, verbose }),
     };
 }
 
-export function createMetadataLookups(
+function createChain(
     config: MetadataChainConfig,
-    clock: Clock,
-    logger: Logger
-): MetadataLookups {
-    const services = createServices(clock, logger);
-    const keys = getProviderKeys(config);
-    warnAboutMissingKeys(keys, logger);
-    const brainz = createBrainzProviders(keys, services);
+    brainz: BrainzProvider[],
+    services: ProviderServices
+): { chain: MetadataChain; deezer: DeezerProvider } {
     const deezerClient = new DeezerClient(services);
     const deezer = new DeezerProvider(deezerClient, services);
     const chain = new MetadataChain(
@@ -189,5 +190,19 @@ export function createMetadataLookups(
         createCoverProviders(config, deezerClient, services),
         services
     );
-    return { chain, corrector: new TrackCorrector(brainz, deezer) };
+    return { chain, deezer };
+}
+
+export function createMetadataLookups(
+    config: MetadataChainConfig,
+    clock: Clock,
+    logger: Logger
+): MetadataLookups {
+    const services = createServices(config.verbose, clock, logger);
+    const keys = getProviderKeys(config);
+    warnAboutMissingKeys(keys, logger);
+    const brainz = createBrainzProviders(keys, services);
+    const { chain, deezer } = createChain(config, brainz, services);
+    const corrector = new TrackCorrector(brainz, deezer, services.lookups);
+    return { chain, corrector };
 }

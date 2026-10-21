@@ -21,6 +21,7 @@ export class LogBuffer implements Logger {
     private readonly listeners = new Listeners();
     private lines: readonly LogLine[] = [];
     private nextId = 0;
+    private progressId: number | null = null;
 
     constructor(private readonly maxLines = DEFAULT_MAX_LINES) {}
 
@@ -37,7 +38,25 @@ export class LogBuffer implements Logger {
         this.append(message, true);
     }
 
+    progress(message: string): void {
+        if (!message) {
+            this.removeProgress();
+            this.listeners.notify();
+            return;
+        }
+
+        // One line, so the next message can replace all of it.
+        this.append(message.replaceAll("\n", " "), false);
+        this.progressId = this.nextId - 1;
+    }
+
+    private removeProgress(): void {
+        this.lines = this.lines.filter(({ id }) => id !== this.progressId);
+        this.progressId = null;
+    }
+
     private append(message: string, isError: boolean): void {
+        this.removeProgress();
         const added = message.split("\n").map((text) => ({
             id: this.nextId++,
             text: text.trim() ? text : "",

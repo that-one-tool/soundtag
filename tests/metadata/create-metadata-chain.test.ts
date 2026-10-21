@@ -104,9 +104,11 @@ test("createMetadataLookups gives the injected logger to the chain and providers
     globalThis.fetch = async () => new Response(null, { status: 500 });
 
     try {
-        await chain.find(
-            { title: "Title", artist: "Artist", album: "" },
-            emptyTags
+        await chain.lookups.step({ label: "search" }, () =>
+            chain.find(
+                { title: "Title", artist: "Artist", album: "" },
+                emptyTags
+            )
         );
     } finally {
         globalThis.fetch = originalFetch;
@@ -114,10 +116,11 @@ test("createMetadataLookups gives the injected logger to the chain and providers
 
     assert.deepEqual(logger.errors, [
         "MusicBrainz and ListenBrainz require MUSICBRAINZ_USER_AGENT.",
-        "Deezer search failed: Deezer request failed: HTTP 500",
-        "iTunes Search failed: iTunes Search request failed: HTTP 500",
-        "Last.fm search failed: Last.fm request failed: HTTP 500",
     ]);
+    assert.equal(
+        logger.infos.at(-1),
+        "  search Deezer ✗ HTTP 500 0.0s · iTunes ✗ HTTP 500 0.0s · Last.fm ✗ HTTP 500 0.0s"
+    );
 });
 
 test("createMetadataLookups corrects tags from ListenBrainz and MusicBrainz", () => {

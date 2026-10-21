@@ -193,3 +193,27 @@ export function buildProviderSearch(
         album: pickFilled(search.album, info.album),
     };
 }
+
+const NAMED_FIELDS: [string, (metadata: TrackMetadata) => unknown][] = [
+    ...TRACK_FIELDS.map(
+        (field): [string, (metadata: TrackMetadata) => unknown] => [
+            field,
+            ({ info }) => info[field].trim(),
+        ]
+    ),
+    ["genre", ({ extras }) => extras.genre],
+    ["album artist", ({ extras }) => extras.albumArtist],
+    ["track number", ({ extras }) => extras.trackNumber],
+    ["disc number", ({ extras }) => extras.discNumber],
+    ["cover", ({ coverData }) => coverData],
+];
+
+export function getAddedFieldNames(
+    current: TrackMetadata,
+    candidate: TrackMetadata
+): string[] {
+    const merged = mergeMetadata(current, candidate);
+    return NAMED_FIELDS.filter(
+        ([, read]) => !read(current) && read(merged)
+    ).map(([name]) => name);
+}

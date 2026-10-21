@@ -1,7 +1,4 @@
-import {
-    applyCorrections,
-    describeCorrection,
-} from "../metadata/track-corrections.js";
+import { applyCorrections } from "../metadata/track-corrections.js";
 import type { TrackCorrector } from "../metadata/track-corrector.js";
 import { EMPTY_TRACK_INFO } from "../metadata/track-metadata.js";
 import type {
@@ -11,6 +8,7 @@ import type {
 } from "../metadata/types.js";
 import type { Logger } from "../shared/logger.js";
 import type { StoredTags } from "../tags/types.js";
+import { formatCorrectionsLine } from "./track-log.js";
 
 export interface CorrectedTags {
     tags: StoredTags;
@@ -23,8 +21,8 @@ export interface CorrectionTools {
 }
 
 function logCorrections(corrections: TagCorrection[], logger: Logger): void {
-    for (const correction of corrections) {
-        logger.info(`Corrected ${describeCorrection(correction)}`);
+    if (corrections.length > 0) {
+        logger.info(formatCorrectionsLine(corrections));
     }
 }
 
@@ -37,7 +35,6 @@ export async function correctTags(
         return { tags: stored, corrections: [] };
     }
 
-    logger.info("Checking the existing tags...");
     const corrections = await corrector.findCorrections(request, stored.info);
     logCorrections(corrections, logger);
     const info = applyCorrections(stored.info, corrections);

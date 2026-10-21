@@ -1,4 +1,3 @@
-import { getErrorMessage } from "../../shared/errors.js";
 import type { ImageRequest } from "../../shared/http.js";
 import { isSameRelease, isSameTrack } from "../track-matching.js";
 import {
@@ -173,20 +172,10 @@ export class ListenBrainzProvider implements MetadataProvider, CanonicalSource {
             return null;
         }
 
-        return keepSearchedMatch(await this.lookUp(search), search);
-    }
-
-    private async lookUp(
-        search: TrackSearch
-    ): Promise<ListenBrainzMatch | null> {
-        try {
-            return await this.listenBrainz.lookUp(search);
-        } catch (error) {
-            this.services.logger.error(
-                `ListenBrainz lookup failed: ${getErrorMessage(error)}`
-            );
-            return null;
-        }
+        return keepSearchedMatch(
+            await this.listenBrainz.lookUp(search),
+            search
+        );
     }
 
     private findReleaseDetails(
@@ -216,9 +205,7 @@ export class ListenBrainzProvider implements MetadataProvider, CanonicalSource {
                 extras: getTrackPositionExtras(release, recordingId),
             };
         } catch (error) {
-            this.services.logger.error(
-                `MusicBrainz release lookup failed: ${getErrorMessage(error)}`
-            );
+            this.services.lookups.noteFailure("release lookup", error);
             return NO_DETAILS;
         }
     }

@@ -28,6 +28,7 @@ test("getAlternativeSearches splits the title, then reads the file name, without
 
     assert.deepEqual(createSearches(info), [
         {
+            kind: "split title",
             search: {
                 title: "Lever L'ancre (Live)",
                 artist: "Alfa Rococo",
@@ -35,7 +36,11 @@ test("getAlternativeSearches splits the title, then reads the file name, without
             },
             replaces: ["title", "artist"],
         },
-        { search: fileSearch, replaces: ["title", "artist"] },
+        {
+            kind: "file name",
+            search: fileSearch,
+            replaces: ["title", "artist"],
+        },
     ]);
 });
 
@@ -43,7 +48,7 @@ test("getAlternativeSearches lets the file name replace only the suspect fields"
     const info = createInfo("Lever L'ancre (Live)", "Various Artists");
 
     assert.deepEqual(createSearches(info), [
-        { search: fileSearch, replaces: ["artist"] },
+        { kind: "file name", search: fileSearch, replaces: ["artist"] },
     ]);
 });
 
@@ -52,6 +57,7 @@ test("getAlternativeSearches swaps the two words of an artist to replace only th
 
     assert.deepEqual(createSearches(info), [
         {
+            kind: "swapped artist",
             search: { title: "Is This Love", artist: "Bob Marley", album: "" },
             replaces: ["artist"],
         },

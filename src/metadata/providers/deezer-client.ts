@@ -1,3 +1,4 @@
+import { ServiceError } from "../../shared/errors.js";
 import { fetchWithTimeout, readJsonResponse } from "../../shared/http.js";
 import type { ImageRequest } from "../../shared/http.js";
 import {
@@ -51,7 +52,7 @@ interface DeezerErrorPayload {
 
 function assertNoDeezerError({ error }: DeezerErrorPayload): void {
     if (error) {
-        throw new Error(`Deezer error: ${error.message ?? "unknown"}`);
+        throw new ServiceError(`Deezer error: ${error.message ?? "unknown"}`);
     }
 }
 
@@ -80,7 +81,8 @@ export class DeezerClient {
     constructor(private readonly services: ProviderServices) {
         this.schedule = createRateLimiter(
             DEEZER_REQUEST_INTERVAL,
-            services.clock
+            services.clock,
+            services.lookups.noteWait
         );
     }
 
@@ -122,6 +124,7 @@ export class DeezerClient {
         params: Record<string, string>
     ): Promise<Payload> {
         const url = buildDeezerUrl(path, params);
+        this.services.lookups.request(url);
         const payload = await this.schedule(async () =>
             readJsonResponse<Payload & DeezerErrorPayload>(
                 await fetchWithTimeout(url),

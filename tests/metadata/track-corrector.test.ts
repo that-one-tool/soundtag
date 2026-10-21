@@ -7,6 +7,8 @@ import type {
     CorrectionRequest,
     TrackSearch,
 } from "../../src/metadata/types.js";
+import { createRecordingLogger } from "../helpers/logger.js";
+import { createProviderServices } from "../helpers/metadata-chain.js";
 
 const search: TrackSearch = {
     title: "dancing queen",
@@ -39,6 +41,8 @@ const variousInfo = {
     year: "1999",
 };
 
+const { lookups } = createProviderServices({ logger: createRecordingLogger() });
+
 function createSource(
     findings: Record<string, CanonicalTrack>
 ): CanonicalSource & { searches: TrackSearch[] } {
@@ -59,8 +63,16 @@ function createRequest(
     return {
         tagSearch: search,
         alternatives: [
-            { search: splitSearch, replaces: ["title", "artist"] },
-            { search: fileSearch, replaces: ["title", "artist"] },
+            {
+                kind: "split title",
+                search: splitSearch,
+                replaces: ["title", "artist"],
+            },
+            {
+                kind: "file name",
+                search: fileSearch,
+                replaces: ["title", "artist"],
+            },
         ],
         hasSuspectTags: true,
         ...overrides,
@@ -84,7 +96,11 @@ test("TrackCorrector asks every source and corrects from their findings", async 
         },
     });
     const witness = createSource({});
-    const corrector = new TrackCorrector([spelling, missing, year], witness);
+    const corrector = new TrackCorrector(
+        [spelling, missing, year],
+        witness,
+        lookups
+    );
 
     const corrections = await corrector.findCorrections(
         createRequest({ hasSuspectTags: false }),
@@ -112,7 +128,7 @@ test("TrackCorrector replaces suspect tags when the witness agrees on an alterna
             firstReleaseYear: "",
         },
     });
-    const corrector = new TrackCorrector([source], witness);
+    const corrector = new TrackCorrector([source], witness, lookups);
 
     const corrections = await corrector.findCorrections(
         createRequest(),
@@ -131,7 +147,7 @@ test("TrackCorrector replaces suspect tags when the witness agrees on an alterna
 test("TrackCorrector tries the alternatives of trusted tags the sources do not find", async () => {
     const source = createSource({ "Eric Clapton": steppingOut });
     const witness = createSource({ "Eric Clapton": steppingOut });
-    const corrector = new TrackCorrector([source], witness);
+    const corrector = new TrackCorrector([source], witness, lookups);
 
     const corrections = await corrector.findCorrections(
         createRequest({ hasSuspectTags: false }),
@@ -148,7 +164,7 @@ test("TrackCorrector keeps trusted tags the sources find", async () => {
         "Eric Clapton": steppingOut,
     });
     const witness = createSource({ "Eric Clapton": steppingOut });
-    const corrector = new TrackCorrector([source], witness);
+    const corrector = new TrackCorrector([source], witness, lookups);
 
     await corrector.findCorrections(createRequest({ hasSuspectTags: false }), {
         ...search,
@@ -171,7 +187,7 @@ test("TrackCorrector only respells when the witness finds another song", async (
             firstReleaseYear: "",
         },
     });
-    const corrector = new TrackCorrector([source], witness);
+    const corrector = new TrackCorrector([source], witness, lookups);
 
     const corrections = await corrector.findCorrections(createRequest(), {
         ...search,
@@ -187,7 +203,7 @@ test("TrackCorrector only respells when the witness finds another song", async (
 
 test("TrackCorrector changes nothing when no alternative is confirmed", async () => {
     const source = createSource({ "Eric Clapton": steppingOut });
-    const corrector = new TrackCorrector([source], createSource({}));
+    const corrector = new TrackCorrector([source], createSource({}), lookups);
 
     const corrections = await corrector.findCorrections(
         createRequest(),
@@ -200,9 +216,11 @@ test("TrackCorrector changes nothing when no alternative is confirmed", async ()
 test("TrackCorrector keeps the fields an alternative may not replace", async () => {
     const source = createSource({ "Eric Clapton": steppingOut });
     const witness = createSource({ "Eric Clapton": steppingOut });
-    const corrector = new TrackCorrector([source], witness);
+    const corrector = new TrackCorrector([source], witness, lookups);
     const request = createRequest({
-        alternatives: [{ search: splitSearch, replaces: ["artist"] }],
+        alternatives: [
+            { kind: "split title", search: splitSearch, replaces: ["artist"] },
+        ],
     });
 
     const corrections = await corrector.findCorrections(request, {
@@ -219,9 +237,11 @@ test("TrackCorrector keeps the fields an alternative may not replace", async () 
 test("TrackCorrector skips an alternative whose song differs from the kept fields", async () => {
     const source = createSource({ "Eric Clapton": steppingOut });
     const witness = createSource({ "Eric Clapton": steppingOut });
-    const corrector = new TrackCorrector([source], witness);
+    const corrector = new TrackCorrector([source], witness, lookups);
     const request = createRequest({
-        alternatives: [{ search: splitSearch, replaces: ["artist"] }],
+        alternatives: [
+            { kind: "split title", search: splitSearch, replaces: ["artist"] },
+        ],
     });
 
     const corrections = await corrector.findCorrections(request, {
@@ -233,9 +253,39 @@ test("TrackCorrector skips an alternative whose song differs from the kept field
 });
 
 test("TrackCorrector tells whether it has any source", () => {
-    assert.equal(new TrackCorrector([], createSource({})).canCorrect(), false);
     assert.equal(
-        new TrackCorrector([createSource({})], createSource({})).canCorrect(),
+        new TrackCorrector([], createSource({}), lookups).canCorrect(),
+        false
+    );
+    assert.equal(
+        new TrackCorrector(
+            [createSource({})],
+            createSource({}),
+            lookups
+        ).canCorrect(),
         true
     );
+});
+
+test("TrackCorrector logs one line per search with each service", async () => {
+    const logger = createRecordingLogger();
+    const source = createSource({
+        "Eric Clapton & The Powerhouse": steppingOut,
+    });
+    const witness = createSource({
+        "Eric Clapton & The Powerhouse": steppingOut,
+    });
+    const corrector = new TrackCorrector(
+        [source],
+        witness,
+        createProviderServices({ logger }).lookups
+    );
+
+    await corrector.findCorrections(createRequest(), variousInfo);
+
+    assert.deepEqual(logger.infos, [
+        "  check  Fake no match 0.0s",
+        '  check  split title "Stepping Out" · Eric Clapton: Fake no match 0.0s',
+        '  check  file name "Stepping Out" · Eric Clapton & The Powerhouse: Fake ✓ 0.0s · Fake ✓ 0.0s',
+    ]);
 });

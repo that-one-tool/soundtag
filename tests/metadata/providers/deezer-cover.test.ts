@@ -8,7 +8,6 @@ import type {
 } from "../../../src/metadata/types.js";
 import { DEEZER_COVER_XL, mockDeezer } from "../../helpers/deezer.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
-import { createRecordingLogger } from "../../helpers/logger.js";
 import { createProviderServices } from "../../helpers/metadata-chain.js";
 
 restoreFetchAfterEach();
@@ -74,17 +73,11 @@ test("DeezerCoverProvider returns null when no album matches", async () => {
     assert.equal(await findDeezerCover(search), null);
 });
 
-test("DeezerCoverProvider logs a failed search", async () => {
-    const logger = createRecordingLogger();
+test("DeezerCoverProvider lets a failed search reach the lookup log", async () => {
     globalThis.fetch = async () => new Response(null, { status: 500 });
 
-    const cover = await findDeezerCover(
-        search,
-        createProviderServices({ logger })
+    await assert.rejects(
+        findDeezerCover(search, createProviderServices()),
+        /HTTP 500/
     );
-
-    assert.equal(cover, null);
-    assert.deepEqual(logger.errors, [
-        "Deezer album search failed: Deezer request failed: HTTP 500",
-    ]);
 });

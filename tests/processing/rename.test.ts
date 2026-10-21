@@ -62,7 +62,7 @@ test("renameTrack renames a file to its artist and title", async () => {
     const expected = path.join(directory, "AC_DC - Thunderstruck.mp3");
     assert.equal(renamed, expected);
     await fs.access(expected);
-    assert.ok(output.logs.includes("Renamed to: AC_DC - Thunderstruck.mp3"));
+    assert.ok(output.logs.includes("  rename AC_DC - Thunderstruck.mp3"));
 });
 
 test("renameTrack leaves a file that already has the format", async () => {
@@ -98,7 +98,7 @@ test("renameTrack warns and keeps the name when the target exists", async () => 
     await fs.access(source);
     assert.ok(
         output.logs.includes(
-            "Not renamed: AC_DC - Thunderstruck.mp3 already exists."
+            "  rename skipped: AC_DC - Thunderstruck.mp3 already exists"
         )
     );
 });
@@ -189,7 +189,7 @@ test("renameTrack logs to the injected logger", async () => {
         { folderNames: new FolderNameCache([source]), logger }
     );
 
-    assert.deepEqual(logger.infos, ["Renamed to: AC_DC - Thunderstruck.mp3"]);
+    assert.deepEqual(logger.infos, ["  rename AC_DC - Thunderstruck.mp3"]);
     assert.deepEqual(output.logs, []);
 });
 

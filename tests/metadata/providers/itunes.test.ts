@@ -4,7 +4,6 @@ import { test } from "node:test";
 import { ItunesProvider } from "../../../src/metadata/providers/itunes.js";
 import { instantClock } from "../../helpers/clock.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
-import { createRecordingLogger } from "../../helpers/logger.js";
 import type { Clock } from "../../../src/shared/rate-limiter.js";
 import {
     createProviderServices,
@@ -63,17 +62,15 @@ test("iTunes searches are rate-limited when requests run concurrently", async ()
     assert.deepEqual(sleeps, [4000]);
 });
 
-test("ItunesProvider logs failures to the injected logger", async () => {
-    const logger = createRecordingLogger();
+test("ItunesProvider lets a failed search reach the lookup log", async () => {
     globalThis.fetch = async () => new Response(null, { status: 500 });
 
-    await new ItunesProvider(
-        createProviderServices({ clock: instantClock, logger })
-    ).findMetadata({ title: "Title", artist: "", album: "" }, detailNeeds);
-
-    assert.deepEqual(logger.errors, [
-        "iTunes Search failed: iTunes Search request failed: HTTP 500",
-    ]);
+    await assert.rejects(
+        new ItunesProvider(
+            createProviderServices({ clock: instantClock })
+        ).findMetadata({ title: "Title", artist: "", album: "" }, detailNeeds),
+        /HTTP 500/
+    );
 });
 
 const itunesRelease = {

@@ -264,30 +264,23 @@ test("ListenBrainzProvider skips MusicBrainz without a release id", async () => 
     assert.equal(requested.length, 1);
 });
 
-test("ListenBrainzProvider logs a failed lookup and returns null", async () => {
-    const logger = createRecordingLogger();
+test("ListenBrainzProvider lets a failed lookup reach the lookup log", async () => {
     globalThis.fetch = async () => new Response(null, { status: 401 });
 
-    const metadata = await findWithListenBrainz(
-        coverNeeds,
-        search,
-        createProviderServices({ logger })
+    await assert.rejects(
+        findWithListenBrainz(coverNeeds, search, createProviderServices()),
+        /ListenBrainz rejected the token: check LISTENBRAINZ_TOKEN\./
     );
-
-    assert.equal(metadata, null);
-    assert.deepEqual(logger.errors, [
-        "ListenBrainz lookup failed: ListenBrainz rejected the token: check LISTENBRAINZ_TOKEN.",
-    ]);
 });
 
 test("ListenBrainzProvider keeps the match when the release lookup fails", async () => {
     const logger = createRecordingLogger();
     mockServices({ releaseStatus: 500 });
 
-    const metadata = await findWithListenBrainz(
-        { cover: false, details: true },
-        search,
-        createProviderServices({ logger })
+    const services = createProviderServices({ logger });
+
+    const metadata = await services.lookups.call("ListenBrainz", () =>
+        findWithListenBrainz({ cover: false, details: true }, search, services)
     );
 
     assert.equal(metadata?.info.album, "The Wall");
@@ -295,8 +288,8 @@ test("ListenBrainzProvider keeps the match when the release lookup fails", async
         genre: "Progressive Rock",
         albumArtist: "Pink Floyd",
     });
-    assert.deepEqual(logger.errors, [
-        "MusicBrainz release lookup failed: MusicBrainz request failed: HTTP 500",
+    assert.deepEqual(logger.infos, [
+        "         ListenBrainz ✓ (release lookup failed: HTTP 500) 0.0s",
     ]);
 });
 

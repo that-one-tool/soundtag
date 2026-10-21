@@ -101,30 +101,16 @@ test("findTrackMetadata gets track info and downloads medium cover art", async (
     assert.equal(lastFmRequests[1].searchParams.get("track"), "Matched title");
     assert.equal(lastFmRequests[1].searchParams.get("autocorrect"), "1");
     assert.equal(lastFmRequests[2].href, "https://images.example/medium.jpg");
-    const trackInfoLog = output.find((line) =>
-        line.startsWith("Last.fm track.getInfo URL:")
+    assert.ok(
+        output.some((line) =>
+            /Last\.fm ✓ "Matched title" by Matched artist: title, artist, album/.test(
+                line
+            )
+        )
     );
-    assert.ok(trackInfoLog);
-    const loggedUrl = new URL(
-        trackInfoLog.slice("Last.fm track.getInfo URL: ".length)
-    );
-    assert.equal(loggedUrl.searchParams.get("method"), "track.getInfo");
-    assert.equal(loggedUrl.searchParams.get("artist"), "Matched artist");
-    assert.equal(loggedUrl.searchParams.get("track"), "Matched title");
-    assert.equal(loggedUrl.searchParams.get("api_key"), "[REDACTED]");
-    assert.equal(trackInfoLog.includes("test-key"), false);
-    assert.deepEqual(
-        output.filter((line) =>
-            /^(Match:|Artist:|Title:|Album:|Year:|Cover:)/.test(line)
-        ),
-        [
-            "Match: Matched artist - Matched title",
-            "Artist: Matched artist",
-            "Title: Matched title",
-            "Album: Matched album",
-            "Year: 2024",
-            "Cover: downloaded",
-        ]
+    assert.equal(
+        output.some((line) => line.includes("test-key")),
+        false
     );
 });
 
@@ -540,9 +526,7 @@ test("findTrackMetadata preserves partial Last.fm metadata when MusicBrainz fail
         extras: {},
         coverData: null,
     });
-    assert.deepEqual(errors, [
-        "MusicBrainz search failed: MusicBrainz request failed: HTTP 503",
-    ]);
+    assert.deepEqual(errors, []);
 });
 
 test("findTrackMetadata uses large cover art when it is below 500 KB", async () => {

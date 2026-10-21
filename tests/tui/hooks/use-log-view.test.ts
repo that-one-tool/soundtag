@@ -15,11 +15,12 @@ afterEach(() => cleanup());
 interface ProbeProps {
     logBuffer: LogBuffer;
     height: number;
+    width?: number;
     onView(view: LogView): void;
 }
 
-function LogViewProbe({ logBuffer, height, onView }: ProbeProps) {
-    const view = useLogView(logBuffer, height);
+function LogViewProbe({ logBuffer, height, width = 80, onView }: ProbeProps) {
+    const view = useLogView(logBuffer, { height, width });
     onView(view);
     return createElement(Text, null, `anchor ${view.anchorId ?? "none"}`);
 }
@@ -36,6 +37,25 @@ test("useLogView follows the latest lines again after a resize and back", async 
     probe.rerender(createElement(LogViewProbe, { ...props, height: 3 }));
     await waitForFrame(probe.lastFrame, "anchor none");
     probe.rerender(createElement(LogViewProbe, { ...props, height: 2 }));
+
+    await waitForFrame(probe.lastFrame, "anchor none");
+    assert.equal(latest?.anchorId, null);
+});
+
+test("useLogView follows the latest lines again after a width change", async () => {
+    const logBuffer = new LogBuffer();
+    logBuffer.info("a\nb\nc\nd\ne");
+    let latest: LogView | undefined;
+    const props = {
+        logBuffer,
+        height: 2,
+        onView: (view: LogView) => (latest = view),
+    };
+    const probe = render(createElement(LogViewProbe, props));
+
+    latest?.scrollLog(-1);
+    await waitForFrame(probe.lastFrame, "anchor 3");
+    probe.rerender(createElement(LogViewProbe, { ...props, width: 60 }));
 
     await waitForFrame(probe.lastFrame, "anchor none");
     assert.equal(latest?.anchorId, null);

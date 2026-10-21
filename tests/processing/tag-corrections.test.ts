@@ -7,6 +7,7 @@ import {
 import { TrackCorrector } from "../../src/metadata/track-corrector.js";
 import type { StoredTags } from "../../src/tags/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
+import { createProviderServices } from "../helpers/metadata-chain.js";
 
 const stored: StoredTags = {
     info: { title: "all", artist: "Artist", album: "Album", year: "2002" },
@@ -29,7 +30,8 @@ const corrector = new TrackCorrector(
             }),
         },
     ],
-    { name: "Witness", findCanonical: async () => null }
+    { name: "Witness", findCanonical: async () => null },
+    createProviderServices().lookups
 );
 
 test("correctTags keeps the stored tags outside fix mode", async () => {
@@ -47,10 +49,7 @@ test("correctTags applies and logs the corrections", async () => {
     const track = await correctTags(stored, request, { corrector, logger });
 
     assert.equal(track.tags.info.title, "All");
-    assert.deepEqual(logger.infos, [
-        "Checking the existing tags...",
-        'Corrected title: "all" → "All"',
-    ]);
+    assert.deepEqual(logger.infos, ['  fix    title: "all" → "All"']);
 });
 
 // Rewriting untouched fields would flatten multi-value tags and full dates.

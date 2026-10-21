@@ -83,3 +83,16 @@ test("systemClock sleeps for the requested time on a monotonic clock", async () 
 
     assert.ok(systemClock.now() - startedAt >= 15);
 });
+
+test("createRateLimiter reports each wait", async () => {
+    const clock = createFakeClock();
+    const waits: number[] = [];
+    const schedule = createRateLimiter(1000, clock, (milliseconds) =>
+        waits.push(milliseconds)
+    );
+
+    await schedule(async () => clock.advance(300));
+    await schedule(async () => undefined);
+
+    assert.deepEqual(waits, [700]);
+});

@@ -1,4 +1,3 @@
-import { getErrorMessage } from "../../shared/errors.js";
 import { isSameRelease, isSameTrack } from "../track-matching.js";
 import { extractYear, valueOrEmpty } from "../track-metadata.js";
 import type {
@@ -154,15 +153,8 @@ export class MusicBrainzProvider implements MetadataProvider, CanonicalSource {
     private async searchRecording(
         search: TrackSearch
     ): Promise<MusicBrainzRecording | null> {
-        try {
-            const [recording] = await this.client.searchRecordings(search);
-            return keepSearchedRecording(recording, search);
-        } catch (error) {
-            this.services.logger.error(
-                `MusicBrainz search failed: ${getErrorMessage(error)}`
-            );
-            return null;
-        }
+        const [recording] = await this.client.searchRecordings(search);
+        return keepSearchedRecording(recording, search);
     }
 
     private downloadCover(

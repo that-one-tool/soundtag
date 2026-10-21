@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { YouTubeCoverProvider } from "../../../src/metadata/providers/youtube.js";
 import { captureConsole } from "../../helpers/console.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
-import { createRecordingLogger } from "../../helpers/logger.js";
 import { createProviderServices } from "../../helpers/metadata-chain.js";
 
 restoreFetchAfterEach();
@@ -100,32 +99,14 @@ test("YouTubeCoverProvider returns null when no video has a thumbnail", async ()
     }
 });
 
-test("YouTubeCoverProvider logs search failures", async () => {
+test("YouTubeCoverProvider lets a failed search reach the lookup log", async () => {
     globalThis.fetch = async () => new Response(null, { status: 403 });
 
-    assert.equal(
-        await new YouTubeCoverProvider(
-            "key",
-            createProviderServices()
-        ).findCover(search),
-        null
+    await assert.rejects(
+        new YouTubeCoverProvider("key", createProviderServices()).findCover(
+            search
+        ),
+        /HTTP 403/
     );
-    assert.deepEqual(output.errors, [
-        "YouTube thumbnail search failed: YouTube Data API request failed: HTTP 403",
-    ]);
-});
-
-test("YouTubeCoverProvider logs failures to the injected logger", async () => {
-    const logger = createRecordingLogger();
-    globalThis.fetch = async () => new Response(null, { status: 403 });
-
-    await new YouTubeCoverProvider(
-        "key",
-        createProviderServices({ logger })
-    ).findCover(search);
-
-    assert.deepEqual(logger.errors, [
-        "YouTube thumbnail search failed: YouTube Data API request failed: HTTP 403",
-    ]);
     assert.deepEqual(output.errors, []);
 });

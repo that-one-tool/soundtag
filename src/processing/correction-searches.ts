@@ -21,6 +21,7 @@ function getSplitTitleSearch(info: TrackInfo): AlternativeSearch {
     );
     const isTitleSuspect = getSuspectFields(info).includes("title");
     return {
+        kind: "split title",
         search: { title, artist, album: "" },
         replaces: isTitleSuspect ? ["title", "artist"] : [],
     };
@@ -31,6 +32,7 @@ function getFileSearch(
     fileSearch: TrackSearch
 ): AlternativeSearch {
     return {
+        kind: "file name",
         search: { ...fileSearch, album: "" },
         replaces: getSuspectFields(info),
     };
@@ -52,6 +54,7 @@ function getSwappedArtistSearch({
         ? words.toReversed().join(" ")
         : "";
     return {
+        kind: "swapped artist",
         search: { title, artist: swapped, album: "" },
         replaces: ["artist"],
     };

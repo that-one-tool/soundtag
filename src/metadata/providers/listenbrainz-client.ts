@@ -1,3 +1,4 @@
+import { ServiceError } from "../../shared/errors.js";
 import { fetchWithTimeout, readJsonResponse } from "../../shared/http.js";
 import {
     createRateLimiter,
@@ -55,7 +56,7 @@ function buildLookupUrl({ title, artist, album }: TrackSearch): URL {
 
 function readLookupResponse(response: Response): Promise<ListenBrainzMatch> {
     if (response.status === UNAUTHORIZED) {
-        throw new Error(
+        throw new ServiceError(
             "ListenBrainz rejected the token: check LISTENBRAINZ_TOKEN."
         );
     }
@@ -77,7 +78,8 @@ export class ListenBrainzClient {
     ) {
         this.schedule = createRateLimiter(
             LISTENBRAINZ_REQUEST_INTERVAL,
-            services.clock
+            services.clock,
+            services.lookups.noteWait
         );
     }
 
@@ -92,6 +94,7 @@ export class ListenBrainzClient {
     }
 
     private request(url: URL): Promise<ListenBrainzMatch> {
+        this.services.lookups.request(url);
         return this.schedule(async () =>
             readLookupResponse(
                 await fetchWithTimeout(url, { headers: this.getHeaders() })

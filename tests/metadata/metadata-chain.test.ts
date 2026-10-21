@@ -15,6 +15,7 @@ import type {
 import { createProviderServices } from "../helpers/metadata-chain.js";
 import { BatchCache } from "../../src/shared/batch-cache.js";
 import { ImageCache } from "../../src/shared/image-cache.js";
+import { ServiceError } from "../../src/shared/errors.js";
 
 const originalConsoleLog = console.log;
 const emptyInfo: TrackInfo = { title: "", artist: "", album: "", year: "" };
@@ -224,6 +225,12 @@ test("MetadataChain skips the cover provider when a cover was found", async () =
     assert.deepEqual(coverProvider.searches, []);
 });
 
+function findInStep(chain: MetadataChain, existing = emptyTags) {
+    return chain.lookups.step({ label: "search" }, () =>
+        chain.find(search, existing)
+    );
+}
+
 test("MetadataChain tries cover providers in order until one finds a cover", async () => {
     const providers = [
         new FakeCoverProvider(null, "First"),
@@ -232,59 +239,92 @@ test("MetadataChain tries cover providers in order until one finds a cover", asy
     ];
     const logger = createRecordingLogger();
     const chain = new MetadataChain(
-        [new FakeMetadataProvider(createMetadata({ title: "Found" }))],
+        [new FakeMetadataProvider(createMetadata({ title: "Query" }))],
         providers,
         createProviderServices({ logger })
     );
 
-    assert.equal((await chain.find(search, emptyTags))?.coverData, cover);
+    assert.equal((await findInStep(chain))?.coverData, cover);
     assert.deepEqual(
         providers.map(({ searches }) => searches.length),
         [1, 1, 0]
     );
     assert.deepEqual(logger.infos, [
-        "Querying Fake...",
-        "Searching First for a cover...",
-        "Searching Second for a cover...",
-        "Cover: downloaded",
+        "  search Fake ✓ title 0.0s · First no match 0.0s · Second ✓ cover 0.0s",
     ]);
 });
 
-test("MetadataChain reports whether a cover was found", async () => {
-    const chain = new MetadataChain(
-        [new FakeMetadataProvider(createMetadata({ title: "Found" }))],
-        [new FakeCoverProvider(null)],
-        createProviderServices()
-    );
-
-    assert.equal((await chain.find(search, emptyTags))?.coverData, null);
-    assert.deepEqual(output, [
-        "Querying Fake...",
-        "Searching FakeCover for a cover...",
-        "Cover: unavailable",
-    ]);
-
-    output = [];
-    await new MetadataChain(
-        [new FakeMetadataProvider(createMetadata({ title: "Found" }, cover))],
-        [],
-        createProviderServices()
-    ).find(search, emptyTags);
-    assert.deepEqual(output, ["Querying Fake...", "Cover: downloaded"]);
-});
-
-test("MetadataChain reports the cover result to the injected logger", async () => {
+test("MetadataChain reports what each service added to the injected logger", async () => {
     const logger = createRecordingLogger();
     const chain = new MetadataChain(
-        [new FakeMetadataProvider(createMetadata({ title: "Title" }, cover))],
+        [new FakeMetadataProvider(createMetadata({ title: "Query" }, cover))],
         [],
         createProviderServices({ logger })
     );
 
-    await chain.find(search, emptyTags);
+    await findInStep(chain);
 
-    assert.deepEqual(logger.infos, ["Querying Fake...", "Cover: downloaded"]);
+    assert.deepEqual(logger.infos, ["  search Fake ✓ title, cover 0.0s"]);
     assert.deepEqual(output, []);
+});
+
+test("MetadataChain names a match on another song than the searched one", async () => {
+    const logger = createRecordingLogger();
+    const chain = new MetadataChain(
+        [
+            new FakeMetadataProvider(
+                createMetadata({ title: "Other Song", artist: "Band" })
+            ),
+        ],
+        [],
+        createProviderServices({ logger })
+    );
+
+    await findInStep(chain, { ...emptyTags, hasCover: true });
+
+    assert.deepEqual(logger.infos, [
+        '  search Fake ✓ "Other Song" by Band: title, artist 0.0s',
+    ]);
+});
+
+test("MetadataChain names another song even when it adds nothing", async () => {
+    const logger = createRecordingLogger();
+    const chain = new MetadataChain(
+        [new FakeMetadataProvider(createMetadata({ title: "Other Song" }))],
+        [],
+        createProviderServices({ logger })
+    );
+    const existing = {
+        ...emptyTags,
+        info: { ...emptyInfo, title: "Query" },
+        hasCover: true,
+    };
+
+    await findInStep(chain, existing);
+
+    assert.deepEqual(logger.infos, ['  search Fake ✓ "Other Song" 0.0s']);
+});
+
+test("MetadataChain carries on after a failing service", async () => {
+    const logger = createRecordingLogger();
+    const broken: MetadataProvider = {
+        name: "Broken",
+        findMetadata: async () => {
+            throw new ServiceError("Broken request failed: HTTP 500");
+        },
+    };
+    const chain = new MetadataChain(
+        [broken, new FakeMetadataProvider(createMetadata({ title: "Query" }))],
+        [],
+        createProviderServices({ logger })
+    );
+
+    const metadata = await findInStep(chain, { ...emptyTags, hasCover: true });
+
+    assert.equal(metadata?.info.title, "Query");
+    assert.deepEqual(logger.infos, [
+        "  search Broken ✗ HTTP 500 0.0s · Fake ✓ title 0.0s",
+    ]);
 });
 
 test("MetadataChain keeps existing extras and fills the missing ones", async () => {
@@ -308,7 +348,9 @@ test("MetadataChain keeps existing extras and fills the missing ones", async () 
 });
 
 test("MetadataChain keeps an existing cover without downloading another", async () => {
-    const provider = new FakeMetadataProvider(createMetadata({ title: "T" }));
+    const provider = new FakeMetadataProvider(
+        createMetadata({ title: "Query" })
+    );
     const coverProvider = new FakeCoverProvider(cover);
     const logger = createRecordingLogger();
     const chain = new MetadataChain(
@@ -317,12 +359,12 @@ test("MetadataChain keeps an existing cover without downloading another", async 
         createProviderServices({ logger })
     );
 
-    const metadata = await chain.find(search, { ...emptyTags, hasCover: true });
+    const metadata = await findInStep(chain, { ...emptyTags, hasCover: true });
 
     assert.equal(metadata?.coverData, null);
     assert.equal(provider.calls[0].needs.cover, false);
     assert.deepEqual(coverProvider.searches, []);
-    assert.deepEqual(logger.infos, ["Querying Fake...", "Cover: kept"]);
+    assert.deepEqual(logger.infos, ["  search Fake ✓ title 0.0s"]);
 });
 
 test("MetadataChain counts an existing cover towards complete metadata", async () => {
@@ -347,24 +389,24 @@ test("MetadataChain counts an existing cover towards complete metadata", async (
     assert.deepEqual(lastProvider.calls, []);
 });
 
-test("MetadataChain logs each provider it queries and the cover search", async () => {
+test("MetadataChain logs each service it queries and the cover search", async () => {
     const logger = createRecordingLogger();
     const chain = new MetadataChain(
         [
             new FakeMetadataProvider(null, "First"),
-            new FakeMetadataProvider(createMetadata({ title: "T" }), "Second"),
+            new FakeMetadataProvider(
+                createMetadata({ title: "Query" }),
+                "Second"
+            ),
         ],
         [new FakeCoverProvider(cover)],
         createProviderServices({ logger })
     );
 
-    await chain.find(search, emptyTags);
+    await findInStep(chain);
 
     assert.deepEqual(logger.infos, [
-        "Querying First...",
-        "Querying Second...",
-        "Searching FakeCover for a cover...",
-        "Cover: downloaded",
+        "  search First no match 0.0s · Second ✓ title 0.0s · FakeCover ✓ cover 0.0s",
     ]);
 });
 

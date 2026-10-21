@@ -145,13 +145,8 @@ test("processBatch records each file status and logs its position", async () => 
     });
     await fs.access(broken);
     assert.deepEqual(
-        output.logs.filter((line) => /^\n?\[|^Format:/.test(line)),
-        [
-            "\n[1/2] broken.flac",
-            "Format: FLAC",
-            "\n[2/2] tagged.mp3",
-            "Format: MP3",
-        ]
+        output.logs.filter((line) => line.startsWith("\n[")),
+        ["\n[1/2] broken.flac (FLAC)", "\n[2/2] tagged.mp3 (MP3)"]
     );
 });
 
@@ -314,7 +309,9 @@ test("processBatch renames only the first of two files with the same tags", asyn
     assert.deepEqual(report.renamed, { "a.mp3": "Artist - Title.mp3" });
     await fs.access(files[1]);
     assert.ok(
-        output.logs.includes("Not renamed: Artist - Title.mp3 already exists.")
+        output.logs.includes(
+            "  rename skipped: Artist - Title.mp3 already exists"
+        )
     );
 });
 
@@ -335,11 +332,7 @@ test("processBatch logs to the context logger", async () => {
         renameFiles: false,
     });
 
-    assert.deepEqual(logger.infos, [
-        "\n[1/1] broken.flac",
-        "Format: FLAC",
-        "Reading existing tags...",
-    ]);
+    assert.deepEqual(logger.infos, ["\n[1/1] broken.flac (FLAC)"]);
     assert.deepEqual(output.logs, []);
 });
 
@@ -974,7 +967,8 @@ test("processBatch reports the corrections of each file", async () => {
                 }),
             },
         ],
-        silentWitness
+        silentWitness,
+        createProviderServices().lookups
     );
     const report = createReport([source], directory);
 
@@ -1006,7 +1000,11 @@ test("processBatch only fills tags when no service can correct them", async () =
             sourceRoot: directory,
             metadataChain: new MetadataChain([], [], createProviderServices()),
             logger,
-            corrector: new TrackCorrector([], silentWitness),
+            corrector: new TrackCorrector(
+                [],
+                silentWitness,
+                createProviderServices().lookups
+            ),
         },
         report,
         stopSignal: new AbortController().signal,
@@ -1017,6 +1015,6 @@ test("processBatch only fills tags when no service can correct them", async () =
         logger.infos[0],
         "Fixing tags requires MUSICBRAINZ_USER_AGENT; only missing tags are filled."
     );
-    assert.ok(!logger.infos.includes("Checking the existing tags..."));
+    assert.ok(!logger.infos.some((line) => line.startsWith("  fix")));
     assert.equal(report.corrected, undefined);
 });

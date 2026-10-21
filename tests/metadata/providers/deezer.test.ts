@@ -260,18 +260,10 @@ test("DeezerProvider returns null when nothing is found", async () => {
     assert.equal(await findWithDeezer(coverNeeds), null);
 });
 
-test("DeezerProvider logs a failed search and returns null", async () => {
-    const logger = createRecordingLogger();
+test("DeezerProvider lets a failed search reach the lookup log", async () => {
     globalThis.fetch = async () => new Response(null, { status: 500 });
 
-    const metadata = await findWithDeezer(coverNeeds, {
-        services: createProviderServices({ logger }),
-    });
-
-    assert.equal(metadata, null);
-    assert.deepEqual(logger.errors, [
-        "Deezer search failed: Deezer request failed: HTTP 500",
-    ]);
+    await assert.rejects(findWithDeezer(coverNeeds), /HTTP 500/);
 });
 
 test("DeezerProvider keeps the track info when the album lookup fails", async () => {
@@ -281,14 +273,16 @@ test("DeezerProvider keeps the track info when the album lookup fails", async ()
         "/album/7": { error: { message: "quota" } },
     });
 
-    const metadata = await findWithDeezer(detailNeeds, {
-        services: createProviderServices({ logger }),
-    });
+    const services = createProviderServices({ logger });
+
+    const metadata = await services.lookups.call("Deezer", () =>
+        findWithDeezer(detailNeeds, { services })
+    );
 
     assert.equal(metadata?.info.album, "Discovery");
     assert.deepEqual(metadata?.extras, {});
-    assert.deepEqual(logger.errors, [
-        "Deezer album lookup failed: Deezer error: quota",
+    assert.deepEqual(logger.infos, [
+        "         Deezer ✓ (album lookup failed: Deezer error: quota) 0.0s",
     ]);
 });
 

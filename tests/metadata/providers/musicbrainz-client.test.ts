@@ -4,7 +4,9 @@ import { MusicBrainzClient } from "../../../src/metadata/providers/musicbrainz-c
 import type { ProviderServices } from "../../../src/metadata/types.js";
 import { createFakeClock } from "../../helpers/clock.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
+import { createRecordingLogger } from "../../helpers/logger.js";
 import { createProviderServices } from "../../helpers/metadata-chain.js";
+import { LookupLog } from "../../../src/shared/lookup-log.js";
 
 restoreFetchAfterEach();
 const userAgent = "SoundTag/1.0 (test@example.com)";
@@ -97,7 +99,7 @@ test("MusicBrainzClient rate-limits the retry", async () => {
 
     await createClient({ clock }).searchRecordings(search);
 
-    assert.deepEqual(clock.sleeps, [0, 3000]);
+    assert.deepEqual(clock.sleeps, [3000]);
 });
 
 test("MusicBrainzClient gives up after a second unavailable response", async () => {
@@ -163,4 +165,28 @@ test("MusicBrainzClient searches each recording once per batch", async () => {
 
     assert.equal(found[0].title, "Retried title");
     assert.equal(urls.length, 2);
+});
+
+test("MusicBrainzClient notes a retry and shows its requests when verbose", async () => {
+    const logger = createRecordingLogger();
+    const clock = createFakeClock();
+    const lookups = new LookupLog({ logger, clock, verbose: true });
+    mockMusicBrainzResponses([
+        () => new Response("busy", { status: 503 }),
+        recordings,
+    ]);
+    const client = createClient({ clock, logger, lookups });
+
+    await lookups.call("MusicBrainz", () => client.searchRecordings(search));
+
+    assert.equal(logger.infos.length, 3);
+    assert.match(
+        logger.infos[0],
+        /^ {9}https:\/\/musicbrainz\.org\/ws\/2\/recording\?query=/
+    );
+    assert.equal(logger.infos[1], logger.infos[0]);
+    assert.match(
+        logger.infos[2],
+        /^ {9}MusicBrainz ✓ \(MusicBrainz HTTP 503, retried\) 0\.0s \(\+3\.0s wait\)$/
+    );
 });

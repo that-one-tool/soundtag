@@ -6,6 +6,7 @@ import {
     getRetryAfterDelay,
     readJsonResponse,
 } from "../../src/shared/http.js";
+import { ServiceError } from "../../src/shared/errors.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 
 restoreFetchAfterEach();
@@ -178,4 +179,64 @@ test("downloadImage cancels the response body once the byte limit is reached", a
         /too large/
     );
     assert.equal(cancelled, true);
+});
+
+test("fetchWithTimeout reports network failures and timeouts as service errors", async () => {
+    globalThis.fetch = async () => {
+        throw new TypeError("fetch failed");
+    };
+    await assert.rejects(fetchWithTimeout("https://example.test/"), (error) => {
+        assert.ok(error instanceof ServiceError);
+        assert.equal(error.message, "fetch failed");
+        return true;
+    });
+
+    globalThis.fetch = async () => {
+        throw new DOMException("aborted", "TimeoutError");
+    };
+    await assert.rejects(
+        fetchWithTimeout("https://example.test/"),
+        new ServiceError("timed out")
+    );
+});
+
+test("readJsonResponse reports failures and unreadable bodies as service errors", async () => {
+    await assert.rejects(
+        readJsonResponse(new Response(null, { status: 500 }), "Service"),
+        ServiceError
+    );
+    await assert.rejects(
+        readJsonResponse(new Response("not json"), "Service"),
+        ServiceError
+    );
+});
+
+test("downloadImage reports a bad image as a service error", async () => {
+    globalThis.fetch = async () => new Response("text");
+
+    await assert.rejects(
+        downloadImage({ url: "https://example.test/cover.jpg" }),
+        ServiceError
+    );
+});
+
+test("downloadImage reports a body that breaks off as a service error", async () => {
+    const body = new ReadableStream({
+        pull(controller) {
+            controller.error(new TypeError("terminated"));
+        },
+    });
+    globalThis.fetch = async () => imageResponse(body);
+
+    await assert.rejects(
+        downloadImage({ url: "https://example.test/cover.jpg" }),
+        new ServiceError("terminated")
+    );
+});
+
+test("readJsonResponse rejects a body that is not an object", async () => {
+    await assert.rejects(
+        readJsonResponse(Response.json(null), "Service"),
+        new ServiceError("Service returned an unexpected response")
+    );
 });

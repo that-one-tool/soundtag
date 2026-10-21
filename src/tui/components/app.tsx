@@ -6,7 +6,12 @@ import { useLogView } from "../hooks/use-log-view.js";
 import { useQuit } from "../hooks/use-quit.js";
 import { useRename } from "../hooks/use-rename.js";
 import { useStore } from "../hooks/use-store.js";
-import { getLayout, getNameWidth, getPanelWidth } from "../layout.js";
+import {
+    getLayout,
+    getLogWidth,
+    getNameWidth,
+    getPanelWidth,
+} from "../layout.js";
 import { getEntryStatus } from "../track-statuses.js";
 import type { TuiServices } from "../tui-services.js";
 import { getShownCover } from "../shown-cover.js";
@@ -24,11 +29,13 @@ export interface AppProps {
 
 function useLayout() {
     const { rows, columns } = useWindowSize();
+    const layout = getLayout(rows);
     return {
         rows,
-        ...getLayout(rows),
+        ...layout,
         panelWidth: getPanelWidth(columns),
         nameWidth: getNameWidth(columns),
+        logSize: { height: layout.logLines, width: getLogWidth(columns) },
     };
 }
 
@@ -76,7 +83,7 @@ function useAppState({ startDirectory, services }: AppProps) {
     const layout = useLayout();
     const browsing = useBrowsing(startDirectory, services);
     const { status, requestQuit } = useStatus(services);
-    const logView = useLogView(services.logBuffer, layout.logLines);
+    const logView = useLogView(services.logBuffer, layout.logSize);
     const rename = useRename(services.renamer);
     useKeyboard({
         ...services,
@@ -94,12 +101,12 @@ function useAppState({ startDirectory, services }: AppProps) {
 
 function getLogPaneProps({
     services,
-    logLines,
+    logSize,
     logView,
 }: ReturnType<typeof useAppState>): LogPaneProps {
     return {
         logBuffer: services.logBuffer,
-        height: logLines,
+        ...logSize,
         anchorId: logView.anchorId,
         focused: logView.focus === "log",
     };

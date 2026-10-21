@@ -1,6 +1,7 @@
 import { BatchCache } from "../../src/shared/batch-cache.js";
 import { ImageCache } from "../../src/shared/image-cache.js";
 import { consoleLogger } from "../../src/shared/logger.js";
+import { LookupLog } from "../../src/shared/lookup-log.js";
 import {
     createMetadataLookups,
     type MetadataChainConfig,
@@ -57,11 +58,13 @@ export function findTrackMetadata(
 export function createProviderServices(
     overrides: Partial<ProviderServices> = {}
 ): ProviderServices {
+    const logger = overrides.logger ?? consoleLogger;
     return {
         clock: instantClock,
-        logger: consoleLogger,
+        logger,
         images: new ImageCache(),
         cache: new BatchCache(),
+        lookups: new LookupLog({ logger, clock: instantClock, verbose: false }),
         ...overrides,
     };
 }

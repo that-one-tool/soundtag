@@ -7,6 +7,7 @@ import {
 import { buildTrackFilename } from "../library/track-filename.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
+import { formatLogLine } from "../shared/lookup-log.js";
 import { hasCoreTags } from "../tags/audio-tags.js";
 import type { StoredTags } from "../tags/types.js";
 import type { ProcessingTrack, TrackStatus } from "./types.js";
@@ -57,11 +58,13 @@ async function moveToFilename(
     const destination = path.join(path.dirname(source), filename);
 
     if (!(await renameIfFree(source, destination, folderNames))) {
-        logger.info(`Not renamed: ${filename} already exists.`);
+        logger.info(
+            formatLogLine("rename", `skipped: ${filename} already exists`)
+        );
         return null;
     }
 
-    logger.info(`Renamed to: ${filename}`);
+    logger.info(formatLogLine("rename", filename));
     return destination;
 }
 

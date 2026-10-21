@@ -5,9 +5,13 @@ export interface LogWindow {
     hiddenBelow: number;
 }
 
-export interface LogAnchor {
-    anchorId: number | null;
+export interface LogSize {
     height: number;
+    width: number;
+}
+
+export interface LogAnchor extends LogSize {
+    anchorId: number | null;
 }
 
 export interface LogScroll {
@@ -20,7 +24,8 @@ function clampEnd(end: number, lines: readonly LogLine[], height: number) {
 }
 
 // The anchor is the bottom visible line; without one the view follows the
-// latest lines. An anchor dropped from the buffer leaves the oldest lines.
+// latest lines. A replaced anchor row (progress) keeps the view at the row
+// before it; an anchor dropped from the buffer leaves the oldest lines.
 function getWindowEnd(
     lines: readonly LogLine[],
     height: number,
@@ -30,7 +35,7 @@ function getWindowEnd(
         return lines.length;
     }
 
-    const anchorIndex = lines.findIndex((line) => line.id === anchorId);
+    const anchorIndex = lines.findLastIndex((line) => line.id <= anchorId);
     return clampEnd(anchorIndex + 1, lines, height);
 }
 
@@ -66,10 +71,11 @@ export function scrollLog(
     return end < lines.length ? lines[end - 1].id : null;
 }
 
-// Lines set for another pane height would no longer be the bottom one.
+// Lines set for another pane size would no longer be the bottom one.
 export function getActiveAnchor(
-    { anchorId, height }: LogAnchor,
-    currentHeight: number
+    { anchorId, height, width }: LogAnchor,
+    current: LogSize
 ): number | null {
-    return height === currentHeight ? anchorId : null;
+    const isSameSize = height === current.height && width === current.width;
+    return isSameSize ? anchorId : null;
 }

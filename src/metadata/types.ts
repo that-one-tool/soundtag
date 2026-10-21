@@ -1,6 +1,7 @@
 import type { BatchCache } from "../shared/batch-cache.js";
 import type { ImageCache } from "../shared/image-cache.js";
 import type { Logger } from "../shared/logger.js";
+import type { LookupLog } from "../shared/lookup-log.js";
 import type { Clock } from "../shared/rate-limiter.js";
 
 export interface TrackInfo {
@@ -72,6 +73,7 @@ export type IdentityField = "title" | "artist";
 
 // Only the fields that look wrong give way, so a good title survives a file name search.
 export interface AlternativeSearch {
+    kind: string;
     search: TrackSearch;
     replaces: IdentityField[];
 }
@@ -94,4 +96,5 @@ export interface ProviderServices {
     logger: Logger;
     images: ImageCache;
     cache: BatchCache;
+    lookups: LookupLog;
 }

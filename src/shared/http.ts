@@ -1,3 +1,5 @@
+import { getErrorMessage, ServiceError } from "./errors.js";
+
 // Services that stall would hold up every file, while covers are larger downloads.
 const API_REQUEST_TIMEOUT = 6_000;
 const IMAGE_REQUEST_TIMEOUT = 10_000;
@@ -8,12 +10,31 @@ export interface ImageRequest {
     byteLimit?: number;
 }
 
+function toServiceError(error: unknown): ServiceError {
+    const isTimeout = error instanceof Error && error.name === "TimeoutError";
+    return new ServiceError(isTimeout ? "timed out" : getErrorMessage(error));
+}
+
+function rethrowAsServiceError(error: unknown): never {
+    throw error instanceof ServiceError ? error : toServiceError(error);
+}
+
+function assertObjectPayload(payload: unknown, serviceName: string): void {
+    if (typeof payload !== "object" || payload === null) {
+        throw new ServiceError(
+            `${serviceName} returned an unexpected response`
+        );
+    }
+}
+
 export function fetchWithTimeout(
     url: string | URL,
     init: Omit<RequestInit, "signal"> = {},
     timeout = API_REQUEST_TIMEOUT
 ): Promise<Response> {
-    return fetch(url, { ...init, signal: AbortSignal.timeout(timeout) });
+    return fetch(url, { ...init, signal: AbortSignal.timeout(timeout) }).catch(
+        rethrowAsServiceError
+    );
 }
 
 export async function readJsonResponse<T>(
@@ -21,17 +42,19 @@ export async function readJsonResponse<T>(
     serviceName: string
 ): Promise<T> {
     if (!response.ok) {
-        throw new Error(
+        throw new ServiceError(
             `${serviceName} request failed: HTTP ${response.status}`
         );
     }
 
-    return (await response.json()) as T;
+    const payload: unknown = await response.json().catch(rethrowAsServiceError);
+    assertObjectPayload(payload, serviceName);
+    return payload as T;
 }
 
 function assertSuccessfulImageResponse(response: Response): void {
     if (!response.ok) {
-        throw new Error(`Image request failed: HTTP ${response.status}`);
+        throw new ServiceError(`Image request failed: HTTP ${response.status}`);
     }
 }
 
@@ -39,13 +62,13 @@ function assertImageContentType(response: Response): void {
     const contentType = response.headers.get("content-type") ?? "";
 
     if (!contentType.toLowerCase().startsWith("image/")) {
-        throw new Error("Image response was not an image.");
+        throw new ServiceError("Image response was not an image.");
     }
 }
 
 function assertBelowByteLimit(totalBytes: number, byteLimit: number): void {
     if (totalBytes >= byteLimit) {
-        throw new Error("Image response was too large.");
+        throw new ServiceError("Image response was too large.");
     }
 }
 
@@ -77,10 +100,13 @@ export async function downloadImage({
     );
     assertSuccessfulImageResponse(response);
     assertImageContentType(response);
-    const data = await readBodyBelowLimit(response, byteLimit);
+    // The body can still break off or time out after the headers arrived.
+    const data = await readBodyBelowLimit(response, byteLimit).catch(
+        rethrowAsServiceError
+    );
 
     if (data.length === 0) {
-        throw new Error("Image response was empty.");
+        throw new ServiceError("Image response was empty.");
     }
 
     return data;

@@ -255,7 +255,30 @@ as the year of a compilation or reissue. Each correction is logged as
 `field: "old" → "new"`, the corrected tags are used for the search that fills
 the remaining gaps, and renaming follows the corrected tags.
 
-Pass `-v` or `--verbose` to log the Last.fm `track.getInfo` request URL:
+Each file gets one log line per step: its current `tags`, each fix-mode
+`check`, the `fix`es, each `search`, then `write`, `skip` or `rename`. A step
+lists every service it asked, with its result (`✓` and the fields it added,
+`no match`, or `✗` and the error) and its time, then any wait for the
+service's request spacing (MusicBrainz takes one request every 3 seconds), and
+names the song a service matched when it is not the searched one:
+
+```text
+[3/3] marley.flac (FLAC)
+  tags   Is This Love · Marley Bob · Legend · 2002
+  check  ListenBrainz no match 0.5s · MusicBrainz no match 0.3s (+2.1s wait)
+  check  swapped artist "Is This Love" · Bob Marley: ListenBrainz ✓ 0.6s · MusicBrainz ✓ (MusicBrainz HTTP 503, retried) 0.3s (+5.9s wait) · Deezer ✓ 0.2s
+  fix    artist: "Marley Bob" → "Bob Marley"
+  search ListenBrainz ✓ genre, cover 0.4s · MusicBrainz ✓ track number 0.4s
+  write  genre "Reggae" · track 3 · cover
+```
+
+While a service is still answering, the TUI log pane and an interactive
+terminal show the step so far on a last line that the finished step replaces.
+Service requests time out after 6 seconds, cover downloads after 10. A
+service error moves on to the next service; any other error fails the file.
+
+Pass `-v` or `--verbose` to also log every service request URL, with API keys
+and tokens hidden:
 
 ```sh
 soundtag /path/to/music -v

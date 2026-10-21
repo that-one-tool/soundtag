@@ -74,3 +74,42 @@ test("LogBuffer notifies subscribers with a new snapshot", () => {
     assert.equal(notifications, 1);
     assert.notEqual(buffer.getSnapshot(), before);
 });
+
+test("LogBuffer shows progress as a last line that the next line replaces", () => {
+    const buffer = new LogBuffer();
+
+    buffer.info("one");
+    buffer.progress("MusicBrainz…");
+    buffer.progress("Deezer…");
+    const shown = buffer.getSnapshot().map((line) => line.text);
+    buffer.info("two");
+
+    assert.deepEqual(shown, ["one", "Deezer…"]);
+    assert.deepEqual(
+        buffer.getSnapshot().map((line) => line.text),
+        ["one", "two"]
+    );
+});
+
+test("LogBuffer drops the progress line when progress ends", () => {
+    const buffer = new LogBuffer();
+
+    buffer.progress("Deezer…");
+    buffer.progress("");
+
+    assert.deepEqual(buffer.getSnapshot(), []);
+});
+
+test("LogBuffer keeps a multi-line progress on one replaceable line", () => {
+    const buffer = new LogBuffer();
+
+    buffer.progress("one\ntwo");
+    const shown = buffer.getSnapshot().map((line) => line.text);
+    buffer.info("done");
+
+    assert.deepEqual(shown, ["one two"]);
+    assert.deepEqual(
+        buffer.getSnapshot().map((line) => line.text),
+        ["done"]
+    );
+});

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useStore } from "../hooks/use-store.js";
 import type { LogBuffer, LogLine } from "../log-buffer.js";
 import { getLogWindow } from "../log-scroll.js";
+import { wrapLogLines } from "../log-wrap.js";
 import { ERROR_COLOR, PANE_COLOR } from "../theme.js";
 
 function LogLineText({ line }: { line: LogLine }) {
@@ -55,12 +56,19 @@ function LogFrame({ height, focused, hiddenBelow, children }: LogFrameProps) {
 export interface LogPaneProps {
     logBuffer: LogBuffer;
     height: number;
+    width: number;
     anchorId: number | null;
     focused: boolean;
 }
 
-export function LogPane({ logBuffer, anchorId, ...frame }: LogPaneProps) {
-    const window = getLogWindow(useStore(logBuffer), frame.height, anchorId);
+export function LogPane({
+    logBuffer,
+    anchorId,
+    width,
+    ...frame
+}: LogPaneProps) {
+    const rows = wrapLogLines(useStore(logBuffer), width);
+    const window = getLogWindow(rows, frame.height, anchorId);
     return (
         <LogFrame {...frame} hiddenBelow={window.hiddenBelow}>
             {window.lines.map((line) => (

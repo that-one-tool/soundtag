@@ -4,6 +4,7 @@ import {
     buildProviderSearch,
     extractYear,
     fillMissingExtras,
+    getAddedFieldNames,
     getNewExtras,
     hasNewFields,
     fillMissingFields,
@@ -248,4 +249,25 @@ test("getFirstFilled returns the first non-empty value", () => {
 test("valueOrEmpty turns missing values into empty strings", () => {
     assert.equal(valueOrEmpty(" kept "), " kept ");
     assert.equal(valueOrEmpty(undefined), "");
+});
+
+test("getAddedFieldNames names the fields a candidate fills", () => {
+    const current = {
+        info: { title: "Song", artist: "", album: "", year: "" },
+        extras: { genre: "Rock" },
+        coverData: null,
+    };
+    const candidate = {
+        info: { title: "Other", artist: "Band", album: "", year: "1999" },
+        extras: { genre: "Pop", trackNumber: 2, trackCount: 9 },
+        coverData: Buffer.from("cover"),
+    };
+
+    assert.deepEqual(getAddedFieldNames(current, candidate), [
+        "artist",
+        "year",
+        "track number",
+        "cover",
+    ]);
+    assert.deepEqual(getAddedFieldNames(candidate, current), []);
 });

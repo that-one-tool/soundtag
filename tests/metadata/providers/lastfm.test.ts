@@ -8,6 +8,7 @@ import { createRecordingLogger } from "../../helpers/logger.js";
 import { createFakeClock, instantClock } from "../../helpers/clock.js";
 import type { Clock } from "../../../src/shared/rate-limiter.js";
 import type { Logger } from "../../../src/shared/logger.js";
+import { LookupLog } from "../../../src/shared/lookup-log.js";
 import {
     createProviderServices,
     coverNeeds,
@@ -27,9 +28,10 @@ function createLastFm(
         logger: consoleLogger,
         ...overrides,
     };
+    const lookups = new LookupLog({ logger, clock, verbose });
     return new LastFmProvider(
-        { apiKey: "key", verbose },
-        createProviderServices({ clock, logger })
+        { apiKey: "key" },
+        createProviderServices({ clock, logger, lookups })
     );
 }
 
@@ -82,12 +84,12 @@ test("LastFmProvider spaces its API requests but not its cover download", async 
     assert.deepEqual(clock.sleeps, [2000]);
 });
 
-test("LastFmProvider logs empty album details when nothing matches", async () => {
+test("LastFmProvider returns null quietly when nothing matches", async () => {
     globalThis.fetch = async () =>
         Response.json({ results: { trackmatches: { track: [] } } });
 
     assert.equal(await createLastFm().findMetadata(search, coverNeeds), null);
-    assert.deepEqual(output.logs, ["Album: ", "Year: "]);
+    assert.deepEqual(output.logs, []);
 });
 
 test("LastFmProvider reads the first match from a result list with a plain artist", async () => {
@@ -184,25 +186,23 @@ test("LastFmProvider removes a repeated artist prefix regardless of case", async
     assert.equal(metadata?.info.title, "Waterloo");
 });
 
-test("LastFmProvider logs to the injected logger", async () => {
+test("LastFmProvider shows its request URLs when verbose and throws a failed search", async () => {
     const logger = createRecordingLogger();
     globalThis.fetch = async () => new Response(null, { status: 500 });
 
-    await createLastFm({ verbose: true, logger }).findMetadata(
-        search,
-        coverNeeds
+    await assert.rejects(
+        createLastFm({ verbose: true, logger }).findMetadata(
+            search,
+            coverNeeds
+        ),
+        /HTTP 500/
     );
 
-    assert.deepEqual(logger.errors, [
-        "Last.fm search failed: Last.fm request failed: HTTP 500",
-    ]);
     assert.deepEqual(logger.infos, [
-        "Last.fm track.getInfo URL: https://ws.audioscrobbler.com/2.0/?method=track.getInfo&artist=Artist&track=Title&api_key=%5BREDACTED%5D&format=json&autocorrect=1",
-        "Album: ",
-        "Year: ",
+        "         https://ws.audioscrobbler.com/2.0/?method=track.getInfo&artist=Artist&track=Title&api_key=[REDACTED]&format=json&autocorrect=1",
+        "         https://ws.audioscrobbler.com/2.0/?method=track.search&track=Title&api_key=[REDACTED]&format=json&limit=1&artist=Artist",
     ]);
     assert.deepEqual(output.logs, []);
-    assert.deepEqual(output.errors, []);
 });
 
 function mockTrackInfo(requests: URL[], track: object): void {

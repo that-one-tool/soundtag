@@ -1,5 +1,3 @@
-import { getErrorMessage } from "../../shared/errors.js";
-import type { Logger } from "../../shared/logger.js";
 import { fetchWithTimeout, readJsonResponse } from "../../shared/http.js";
 import type { CoverProvider, ProviderServices, TrackSearch } from "../types.js";
 
@@ -69,34 +67,15 @@ function getBestThumbnailUrl(data: YouTubeSearchResponse): string | null {
 async function findThumbnailUrl(
     search: TrackSearch,
     apiKey: string,
-    logger: Logger
+    { lookups }: ProviderServices
 ): Promise<string | null> {
-    try {
-        const data = await readJsonResponse<YouTubeSearchResponse>(
-            await fetchWithTimeout(buildYouTubeSearchUrl(search, apiKey)),
-            "YouTube Data API"
-        );
-        return getBestThumbnailUrl(data);
-    } catch (error) {
-        logger.error(
-            `YouTube thumbnail search failed: ${getErrorMessage(error)}`
-        );
-        return null;
-    }
-}
-
-async function downloadThumbnail(
-    url: string,
-    { logger, images }: ProviderServices
-): Promise<Buffer | null> {
-    try {
-        return await images.download({ url });
-    } catch (error) {
-        logger.error(
-            `YouTube thumbnail download failed: ${getErrorMessage(error)}`
-        );
-        return null;
-    }
+    const url = buildYouTubeSearchUrl(search, apiKey);
+    lookups.request(url);
+    const data = await readJsonResponse<YouTubeSearchResponse>(
+        await fetchWithTimeout(url),
+        "YouTube Data API"
+    );
+    return getBestThumbnailUrl(data);
 }
 
 export class YouTubeCoverProvider implements CoverProvider {
@@ -111,10 +90,10 @@ export class YouTubeCoverProvider implements CoverProvider {
         const thumbnailUrl = await findThumbnailUrl(
             search,
             this.apiKey,
-            this.services.logger
+            this.services
         );
         return thumbnailUrl
-            ? downloadThumbnail(thumbnailUrl, this.services)
+            ? this.services.images.download({ url: thumbnailUrl })
             : null;
     }
 }

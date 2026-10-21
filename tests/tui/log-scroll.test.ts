@@ -35,6 +35,23 @@ test("getLogWindow ends at the anchored line", () => {
     assert.equal(window.hiddenBelow, 2);
 });
 
+test("getLogWindow keeps its place when the anchored row was replaced", () => {
+    const rows = [0, 1, 2, 2.001, 3].map((id) => ({
+        id,
+        text: String(id),
+        isError: false,
+    }));
+
+    const window = getLogWindow(
+        rows.filter(({ id }) => id !== 2.001),
+        2,
+        2.001
+    );
+
+    assert.deepEqual(getTexts(window.lines), ["1", "2"]);
+    assert.equal(window.hiddenBelow, 1);
+});
+
 test("getLogWindow shows an older line instead of a leading blank one", () => {
     const lines = createLines(["first", "", "second", "third"]);
 
@@ -78,7 +95,10 @@ test("getLogWindow shows the oldest page for an anchor near the top", () => {
     assert.equal(window.hiddenBelow, 2);
 });
 
-test("getActiveAnchor follows the latest lines once the pane height changed", () => {
-    assert.equal(getActiveAnchor({ anchorId: 3, height: 5 }, 5), 3);
-    assert.equal(getActiveAnchor({ anchorId: 3, height: 5 }, 12), null);
+test("getActiveAnchor follows the latest lines once the pane size changed", () => {
+    const anchor = { anchorId: 3, height: 5, width: 80 };
+
+    assert.equal(getActiveAnchor(anchor, { height: 5, width: 80 }), 3);
+    assert.equal(getActiveAnchor(anchor, { height: 12, width: 80 }), null);
+    assert.equal(getActiveAnchor(anchor, { height: 5, width: 60 }), null);
 });

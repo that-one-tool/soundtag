@@ -188,15 +188,13 @@ test("MusicBrainzProvider returns null when nothing is found", async () => {
     assert.equal(await createProvider().findMetadata(search, coverNeeds), null);
 });
 
-test("MusicBrainzProvider logs failures to the injected logger", async () => {
-    const logger = createRecordingLogger();
+test("MusicBrainzProvider lets a failed search reach the lookup log", async () => {
     globalThis.fetch = async () => new Response(null, { status: 500 });
 
-    await createProvider({ logger }).findMetadata(search, detailNeeds);
-
-    assert.deepEqual(logger.errors, [
-        "MusicBrainz search failed: MusicBrainz request failed: HTTP 500",
-    ]);
+    await assert.rejects(
+        createProvider().findMetadata(search, detailNeeds),
+        /HTTP 500/
+    );
 });
 
 test("MusicBrainzProvider gives the canonical spelling and first release year", async () => {

@@ -1,4 +1,3 @@
-import { getErrorMessage } from "../../shared/errors.js";
 import type { ImageCache } from "../../shared/image-cache.js";
 import { fetchWithTimeout, readJsonResponse } from "../../shared/http.js";
 import {
@@ -126,7 +125,8 @@ export class ItunesProvider implements MetadataProvider {
     constructor(private readonly services: ProviderServices) {
         this.schedule = createRateLimiter(
             ITUNES_REQUEST_INTERVAL,
-            services.clock
+            services.clock,
+            services.lookups.noteWait
         );
     }
 
@@ -162,19 +162,13 @@ export class ItunesProvider implements MetadataProvider {
     ): Promise<ItunesTrack | null> {
         const url = buildItunesSearchUrl(search);
 
-        try {
-            const data = await this.schedule(async () =>
-                readJsonResponse<ItunesSearchResponse>(
-                    await fetchWithTimeout(url),
-                    "iTunes Search"
-                )
-            );
-            return keepSearchedTrack(getFirstItunesTrack(data), search);
-        } catch (error) {
-            this.services.logger.error(
-                `iTunes Search failed: ${getErrorMessage(error)}`
-            );
-            return null;
-        }
+        this.services.lookups.request(url);
+        const data = await this.schedule(async () =>
+            readJsonResponse<ItunesSearchResponse>(
+                await fetchWithTimeout(url),
+                "iTunes Search"
+            )
+        );
+        return keepSearchedTrack(getFirstItunesTrack(data), search);
     }
 }

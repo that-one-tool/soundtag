@@ -44,7 +44,7 @@ test("createTuiServices routes job results to the status store and logs", async 
             "MusicBrainz and ListenBrainz require MUSICBRAINZ_USER_AGENT."
         )
     );
-    assert.ok(logText.some((text) => text.startsWith("Searching:")));
+    assert.ok(logText.some((text) => text.startsWith("  search ")));
 });
 
 test("createTuiServices marks files as redone only once their new status is recorded", async () => {

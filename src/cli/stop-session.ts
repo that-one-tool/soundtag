@@ -1,3 +1,4 @@
+import { consoleLogger } from "../shared/logger.js";
 import { systemClock, type Clock } from "../shared/rate-limiter.js";
 import { EXIT_INTERRUPTED } from "./exit-codes.js";
 
@@ -23,7 +24,10 @@ function requestStop(stopRequest: StopRequest, now: number): void {
         process.exit(EXIT_INTERRUPTED);
     }
 
-    console.log("\nInterrupted. Press Ctrl+C again to quit immediately.");
+    // Through the logger, so a progress line on screen is cleared first.
+    consoleLogger.info(
+        "\nInterrupted. Press Ctrl+C again to quit immediately."
+    );
     stopRequest.controller.abort();
     stopRequest.requestedAt = now;
 }

@@ -46,8 +46,8 @@ function logTrackHeader(
     source: string,
     logger: Logger
 ): void {
-    logger.info(`\n${position}`);
-    logger.info(`Format: ${path.extname(source).slice(1).toUpperCase()}`);
+    const format = path.extname(source).slice(1).toUpperCase();
+    logger.info(`\n${position} (${format})`);
 }
 
 export interface BatchRun {

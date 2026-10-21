@@ -305,7 +305,7 @@ test("processTrack skips files that are already properly tagged", async () => {
         ).status,
         "SKIPPED"
     );
-    assert.ok(output.logs.includes("Already properly tagged. Skipping."));
+    assert.ok(output.logs.includes("  skip   already tagged"));
 });
 
 test("processTrack skips tracks no provider can identify", async () => {
@@ -327,11 +327,7 @@ test("processTrack skips tracks no provider can identify", async () => {
         ).status,
         "SKIPPED"
     );
-    assert.ok(
-        output.logs.includes(
-            "Track not found on available metadata services. Leaving source unchanged."
-        )
-    );
+    assert.ok(output.logs.includes("  skip   not found"));
 });
 
 test("processTrack skips matches without a title and artist", async () => {
@@ -363,11 +359,7 @@ test("processTrack skips matches without a title and artist", async () => {
         ).status,
         "SKIPPED"
     );
-    assert.ok(
-        output.logs.includes(
-            "Track title or artist is missing. Leaving source unchanged."
-        )
-    );
+    assert.ok(output.logs.includes("  skip   no title or artist found"));
 });
 
 test("buildTrackSearch prefers embedded tags, then filename, then folders", () => {
@@ -445,19 +437,17 @@ test("processTrack logs its search and the metadata it could not find", async ()
         ).status,
         "TAGGED"
     );
-    assert.ok(
-        output.logs.includes(
-            'Searching: "Title" (artist: "Artist") (album: "Folder Album")'
-        )
+    const lines = output.logs.slice(
+        output.logs.indexOf("  tags   – · – · – · –")
     );
-    assert.ok(
-        output.logs.includes(
-            "Some metadata was unavailable (album, year, genre, track number, cover art); saving the fields that were found."
-        )
+    assert.equal(lines[0], "  tags   – · – · – · –");
+    assert.match(
+        lines[1],
+        /^ {2}search "Title" · Artist · Folder Album: .*Last\.fm ✓ title, artist /
     );
-    assert.ok(output.logs.includes("Successfully tagged source file."));
-    assert.ok(output.logs.includes("Reading existing tags..."));
-    assert.ok(output.logs.includes("Writing tags..."));
+    assert.deepEqual(lines.slice(2), [
+        '  write  title "Title" · artist "Artist" (missing: album, year, genre, track number, cover art)',
+    ]);
 });
 
 test("processTrack logs to the context logger", async () => {
@@ -526,8 +516,7 @@ test("processTrack adds a missing genre and keeps the existing tags and cover", 
     assert.equal(tags.trackNumber, "2");
     assert.ok(typeof tags.image === "object");
     assert.deepEqual(tags.image.imageBuffer, cover);
-    assert.ok(!output.logs.some((line) => line.includes("cover art")));
-    assert.ok(output.logs.includes("Cover: kept"));
+    assert.ok(!output.logs.some((line) => line.includes("cover")));
 });
 
 test("processTrack keeps every existing genre of a re-tagged FLAC", async () => {
@@ -605,9 +594,7 @@ test("processTrack leaves a file unchanged when the services add nothing new", a
 
     assert.equal(status, "SKIPPED");
     assert.deepEqual(await fs.readFile(source), before);
-    assert.ok(
-        output.logs.includes("No new metadata found. Leaving source unchanged.")
-    );
+    assert.ok(output.logs.includes("  skip   nothing new"));
 });
 
 test("processTrack returns the tags it read from a skipped track", async () => {
@@ -736,8 +723,10 @@ test("processTrack searches again from the file name and replaces a suspect titl
         ["Lever l'ancre", "Alfa Rococo", "Tagged album", "2007"]
     );
     assert.ok(
-        output.logs.includes(
-            "Not found with the existing tags; searching again from the file and folder names."
+        output.logs.some((line) =>
+            line.startsWith(
+                `  search file name "Lever l'ancre" · Alfa Rococo: `
+            )
         )
     );
 });
@@ -775,7 +764,7 @@ test("processTrack reports a track found by neither search once", async () => {
     assert.equal(status, "SKIPPED");
     assert.equal(searches.length, 2);
     assert.equal(
-        output.logs.filter((line) => line.startsWith("Track not found")).length,
+        output.logs.filter((line) => line === "  skip   not found").length,
         1
     );
 });
@@ -809,7 +798,8 @@ function createFakeCorrector(canonical: CanonicalTrack | null) {
                 },
             },
         ],
-        { name: "Witness", findCanonical: async () => canonical }
+        { name: "Witness", findCanonical: async () => canonical },
+        createProviderServices().lookups
     );
     return { corrector, searches };
 }
@@ -882,7 +872,11 @@ test("processTrack corrects a properly tagged file in fix mode", async () => {
     assert.deepEqual(searches, [
         { title: "dancing queen", artist: "Abba", album: "Gold" },
     ]);
-    assert.ok(logger.infos.includes('Corrected year: "2002" → "1976"'));
+    assert.ok(
+        logger.infos.includes(
+            '  fix    title: "dancing queen" → "Dancing Queen" · artist: "Abba" → "ABBA" · year: "2002" → "1976"'
+        )
+    );
 });
 
 test("processTrack skips a properly tagged file with nothing to correct", async () => {
@@ -898,7 +892,7 @@ test("processTrack skips a properly tagged file with nothing to correct", async 
 
     assert.equal(result.status, "SKIPPED");
     assert.deepEqual(result.corrections, []);
-    assert.ok(output.logs.includes("Already properly tagged. Skipping."));
+    assert.ok(output.logs.includes("  skip   already tagged"));
 });
 
 test("processTrack searches with the corrected tags and fills the gaps", async () => {
@@ -954,10 +948,7 @@ test("processTrack writes the corrections when the services find nothing else", 
 
     assert.equal(result.status, "TAGGED");
     assert.equal(result.tags?.info.title, "Dancing Queen");
-    assert.equal(
-        output.logs.some((line) => line.startsWith("Track not found")),
-        false
-    );
+    assert.equal(output.logs.includes("  skip   not found"), false);
 });
 
 test("processTrack corrects nothing outside fix mode", async () => {
@@ -1105,7 +1096,8 @@ test("processTrack replaces a wrong artist and title that two services confirm",
         artist === "Eric Clapton And The Powerhouse" ? steppingOut : null;
     const corrector = new TrackCorrector(
         [{ name: "Fake", findCanonical: findSplitTitle }],
-        { name: "Witness", findCanonical: findSplitTitle }
+        { name: "Witness", findCanonical: findSplitTitle },
+        createProviderServices().lookups
     );
     const nothingChain = new MetadataChain(
         [{ name: "Fake", findMetadata: async () => null }],

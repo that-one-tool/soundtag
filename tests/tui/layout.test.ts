@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
     getLayout,
+    getLogWidth,
     getNameWidth,
     getPanelWidth,
 } from "../../src/tui/layout.js";
@@ -41,4 +42,8 @@ test("getPanelWidth fits the cover but takes at most half the terminal", () => {
 test("getNameWidth leaves the browser row frame and the panel aside", () => {
     assert.equal(getNameWidth(100), 42);
     assert.equal(getNameWidth(200), 140);
+});
+
+test("getLogWidth leaves room for the log pane border and padding", () => {
+    assert.equal(getLogWidth(120), 116);
 });
