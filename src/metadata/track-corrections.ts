@@ -1,5 +1,5 @@
 import { isSameCredit, isSameWording } from "./track-matching.js";
-import { extractYear } from "./track-metadata.js";
+import { extractYear, getEarliestYear } from "./track-metadata.js";
 import type {
     CanonicalTrack,
     IdentityField,
@@ -100,17 +100,14 @@ export function describeCorrection({ field, from, to }: TagCorrection): string {
     return `${field}: "${from}" → "${to}"`;
 }
 
-function getEarliestYear(tracks: CanonicalTrack[]): string {
-    const years = tracks.map(({ firstReleaseYear }) => firstReleaseYear);
-    return years.filter(Boolean).toSorted()[0] ?? "";
-}
-
 // The first source that names the song gives the spelling of both fields.
 export function mergeCanonicalTracks(tracks: CanonicalTrack[]): CanonicalTrack {
     const named = tracks.find(({ title }) => title) ?? EMPTY_CANONICAL_TRACK;
     return {
         title: named.title,
         artist: named.artist,
-        firstReleaseYear: getEarliestYear(tracks),
+        firstReleaseYear: getEarliestYear(
+            tracks.map(({ firstReleaseYear }) => firstReleaseYear)
+        ),
     };
 }

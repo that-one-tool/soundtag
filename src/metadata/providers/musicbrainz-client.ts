@@ -73,7 +73,8 @@ function buildRecordingSearchUrl({ title, artist, album }: TrackSearch): URL {
     const url = new URL("recording", MUSICBRAINZ_BASE);
     url.searchParams.set("query", terms.join(" AND "));
     url.searchParams.set("fmt", "json");
-    url.searchParams.set("limit", "1");
+    // Fix mode looks for the earliest recording of the song among these.
+    url.searchParams.set("limit", "10");
     return url;
 }
 

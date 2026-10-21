@@ -217,3 +217,7 @@ export function getAddedFieldNames(
         ([, read]) => !read(current) && read(merged)
     ).map(([name]) => name);
 }
+
+export function getEarliestYear(years: string[]): string {
+    return years.filter(Boolean).toSorted()[0] ?? "";
+}

@@ -251,7 +251,10 @@ fields that looked wrong (the split title both, the swap only the artist),
 only when the fields it keeps name the same song, and only when Deezer also
 finds that song. It also replaces the year
 with the song's first release year from MusicBrainz when that is earlier, such
-as the year of a compilation or reissue. Each correction is logged as
+as the year of a compilation or reissue. That year is the earliest among the
+top 10 MusicBrainz recordings of the same title by the same credit, so
+different songs sharing a generic title ("Intro") by one artist can get the
+earliest of their years. Each correction is logged as
 `field: "old" → "new"`, the corrected tags are used for the search that fills
 the remaining gaps, and renaming follows the corrected tags.
 

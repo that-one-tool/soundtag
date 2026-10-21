@@ -59,7 +59,7 @@ test("MusicBrainzClient searches recordings by title, artist and album", async (
         urls[0].searchParams.get("query"),
         'recording:"Title" AND artist:"Artist" AND release:"Album"'
     );
-    assert.equal(urls[0].searchParams.get("limit"), "1");
+    assert.equal(urls[0].searchParams.get("limit"), "10");
     assert.equal(headers[0].get("user-agent"), userAgent);
 });
 

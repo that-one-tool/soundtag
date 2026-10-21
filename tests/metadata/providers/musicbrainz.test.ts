@@ -221,6 +221,113 @@ test("MusicBrainzProvider gives the canonical spelling and first release year", 
     assert.deepEqual(requested, ["musicbrainz.org"]);
 });
 
+test("MusicBrainzProvider takes the earliest year among recordings of the song", async () => {
+    mockMusicBrainz([
+        {
+            title: "Is This Love",
+            "artist-credit": [{ name: "Bob Marley & The Wailers" }],
+            "first-release-date": "1996",
+        },
+        {
+            title: "Is This Love (Live)",
+            "artist-credit": [{ name: "Bob Marley & The Wailers" }],
+            "first-release-date": "1970",
+        },
+        {
+            title: "Is This Love",
+            "artist-credit": [{ name: "Karaoke Band" }],
+            "first-release-date": "1960",
+        },
+        {
+            title: "Is this love",
+            "artist-credit": [{ name: "Bob Marley & The Wailers" }],
+            "first-release-date": "1978-02",
+        },
+    ]);
+
+    const canonical = await createProvider().findCanonical({
+        title: "Is This Love",
+        artist: "Bob Marley",
+        album: "",
+    });
+
+    assert.deepEqual(canonical, {
+        title: "Is This Love",
+        artist: "Bob Marley & The Wailers",
+        firstReleaseYear: "1978",
+    });
+});
+
+test("MusicBrainzProvider takes years only from recordings with the same credit", async () => {
+    mockMusicBrainz([
+        {
+            title: "Higher Love",
+            "artist-credit": [
+                { name: "Kygo", joinphrase: " & " },
+                { name: "Whitney Houston" },
+            ],
+            "first-release-date": "2019",
+        },
+        {
+            title: "Higher Love",
+            "artist-credit": [{ name: "Whitney Houston" }],
+            "first-release-date": "1990",
+        },
+    ]);
+
+    const canonical = await createProvider().findCanonical({
+        title: "Higher Love",
+        artist: "Kygo & Whitney Houston",
+        album: "",
+    });
+
+    assert.equal(canonical?.firstReleaseYear, "2019");
+});
+
+test("MusicBrainzProvider prefers the recording credited like the search", async () => {
+    mockMusicBrainz([
+        {
+            title: "Higher Love",
+            "artist-credit": [{ name: "Whitney Houston" }],
+            "first-release-date": "1990",
+        },
+        {
+            title: "Higher Love",
+            "artist-credit": [
+                { name: "Kygo", joinphrase: " & " },
+                { name: "Whitney Houston" },
+            ],
+            "first-release-date": "2019",
+        },
+    ]);
+
+    const canonical = await createProvider().findCanonical({
+        title: "Higher Love",
+        artist: "Kygo & Whitney Houston",
+        album: "",
+    });
+
+    assert.deepEqual(canonical, {
+        title: "Higher Love",
+        artist: "Kygo & Whitney Houston",
+        firstReleaseYear: "2019",
+    });
+});
+
+test("MusicBrainzProvider names the song from a lower result when the first is another song", async () => {
+    mockMusicBrainz([
+        {
+            title: "Is This Love",
+            "artist-credit": [{ name: "Karaoke Band" }],
+        },
+        searchedRecording,
+    ]);
+
+    const canonical = await createProvider().findCanonical(search);
+
+    assert.equal(canonical?.title, searchedRecording.title);
+});
+
 test("MusicBrainzProvider gives no release year as the first release year", async () => {
     mockMusicBrainz([
         { ...searchedRecording, releases: [{ id: "gold", date: "1992" }] },
