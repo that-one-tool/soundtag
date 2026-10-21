@@ -19,6 +19,7 @@ import type {
 import type { PathMove } from "../../src/shared/paths.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
+import { TrackCorrector } from "../../src/metadata/track-corrector.js";
 import {
     createProviderServices,
     createTestChain,
@@ -940,4 +941,78 @@ test("processBatch tells sibling folders of one album apart by disc tag", async 
 
     await fs.access(path.join(root, "Artist - Album - CD1", "Artist - A1.mp3"));
     await fs.access(path.join(root, "Artist - Album - CD2", "Artist - B2.mp3"));
+});
+
+async function createCompilationTrack(directory: string): Promise<string> {
+    const source = path.join(directory, "track.mp3");
+    await fs.writeFile(source, "audio bytes");
+    await getTagStore(source).write(source, {
+        info: {
+            title: "Dancing Queen",
+            artist: "ABBA",
+            album: "Gold",
+            year: "2002",
+        },
+        extras: { genre: "Pop" },
+        coverData: Buffer.from("cover"),
+    });
+    return source;
+}
+
+test("processBatch reports the corrections of each file", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = await createCompilationTrack(directory);
+    const corrector = new TrackCorrector([
+        {
+            name: "Fake",
+            findCanonical: async () => ({
+                title: "Dancing Queen",
+                artist: "ABBA",
+                firstReleaseYear: "1976",
+            }),
+        },
+    ]);
+    const report = createReport([source], directory);
+
+    await processBatch([source], {
+        context: {
+            sourceRoot: directory,
+            metadataChain: new MetadataChain([], [], createProviderServices()),
+            logger: createRecordingLogger(),
+            corrector,
+        },
+        report,
+        stopSignal: new AbortController().signal,
+        renameFiles: false,
+    });
+
+    assert.deepEqual(report.corrected, {
+        "track.mp3": ['year: "2002" → "1976"'],
+    });
+});
+
+test("processBatch only fills tags when no service can correct them", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = await createCompilationTrack(directory);
+    const logger = createRecordingLogger();
+    const report = createReport([source], directory);
+
+    await processBatch([source], {
+        context: {
+            sourceRoot: directory,
+            metadataChain: new MetadataChain([], [], createProviderServices()),
+            logger,
+            corrector: new TrackCorrector([]),
+        },
+        report,
+        stopSignal: new AbortController().signal,
+        renameFiles: false,
+    });
+
+    assert.equal(
+        logger.infos[0],
+        "Fixing tags requires MUSICBRAINZ_USER_AGENT; only missing tags are filled."
+    );
+    assert.ok(!logger.infos.includes("Checking the existing tags..."));
+    assert.equal(report.corrected, undefined);
 });

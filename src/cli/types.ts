@@ -5,6 +5,7 @@ export interface TaggingSettings {
     recursive: boolean;
     verbose: boolean;
     renameFiles: boolean;
+    fixTags: boolean;
     musicBrainzUserAgent?: string;
     youtubeApiKey?: string;
     listenBrainzToken?: string;
@@ -25,4 +26,5 @@ export interface CommandLineOptions {
     recursive: boolean;
     verbose: boolean;
     renameFiles: boolean;
+    fixTags: boolean;
 }

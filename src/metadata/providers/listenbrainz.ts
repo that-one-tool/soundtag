@@ -7,6 +7,8 @@ import {
     valueOrEmpty,
 } from "../track-metadata.js";
 import type {
+    CanonicalSource,
+    CanonicalTrack,
     MetadataProvider,
     ProviderNeeds,
     ProviderServices,
@@ -101,6 +103,14 @@ function getMatchInfo(
     };
 }
 
+function getCanonicalTrack(match: ListenBrainzMatch): CanonicalTrack {
+    return {
+        title: valueOrEmpty(match.recording_name),
+        artist: valueOrEmpty(match.artist_credit_name),
+        firstReleaseYear: "",
+    };
+}
+
 function getMatchExtras(
     match: ListenBrainzMatch,
     isRelease: boolean
@@ -118,7 +128,8 @@ function hasCoverArt(
     return Boolean(release.caa_release_mbid && release.caa_id);
 }
 
-export class ListenBrainzProvider implements MetadataProvider {
+// Its year needs a release lookup, so MusicBrainz gives the first release year.
+export class ListenBrainzProvider implements MetadataProvider, CanonicalSource {
     readonly name = "ListenBrainz";
 
     constructor(
@@ -148,6 +159,11 @@ export class ListenBrainzProvider implements MetadataProvider {
             extras: removeUnknownValues(extras),
             coverData: await this.findCover(match, releaseNeeds.cover),
         };
+    }
+
+    async findCanonical(search: TrackSearch): Promise<CanonicalTrack | null> {
+        const match = await this.findMatch(search);
+        return match && getCanonicalTrack(match);
     }
 
     private async findMatch(

@@ -7,9 +7,11 @@ import { runApp, type AppEnvironment } from "../../src/cli/app.js";
 import type { TuiOptions } from "../../src/tui/run-tui.js";
 import type { TuiOutcome } from "../../src/tui/types.js";
 import { captureConsole } from "../helpers/console.js";
+import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { assertNoReport } from "../helpers/no-report.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
+restoreFetchAfterEach();
 const output = captureConsole();
 const createTemporaryDirectory = useTemporaryDirectories("soundtag-app-test-");
 const withoutBrowser = {
@@ -75,6 +77,36 @@ test("runApp tags a library and prints a summary", async () => {
     assert.ok(!output.logs.includes("Failed:"));
     assert.ok(!output.logs.some((line) => line.startsWith("Not processed:")));
     await assertNoReport(workingDirectory);
+});
+
+test("runApp corrects existing tags with --fix and lists the corrections", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    await writeFullyTaggedMp3(path.join(workingDirectory, "tagged.mp3"));
+    globalThis.fetch = async (input) =>
+        new URL(input.toString()).hostname === "musicbrainz.org"
+            ? Response.json({
+                  recordings: [
+                      {
+                          title: "Title",
+                          "artist-credit": [{ name: "Artist" }],
+                          "first-release-date": "1999-05-01",
+                      },
+                  ],
+              })
+            : Response.json({});
+
+    assert.equal(
+        await runAppIn(workingDirectory, [".", "--fix", "--no-rename"]),
+        0
+    );
+
+    assert.ok(output.logs.includes("Successful: 1"));
+    assert.deepEqual(output.logs.slice(-4), [
+        "Corrected:",
+        '  tagged.mp3: year: "2024" → "1999"',
+        "========================================",
+        "Done!",
+    ]);
 });
 
 test("runApp keeps file names with --no-rename", async () => {
@@ -182,6 +214,7 @@ test("runApp opens the folder browser in the working directory", async () => {
             recursive: false,
             verbose: false,
             renameFiles: false,
+            fixTags: false,
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
             youtubeApiKey: undefined,
             listenBrainzToken: "test-token",

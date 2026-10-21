@@ -2,6 +2,7 @@ import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { findAudioFiles } from "../library/file.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
+import type { TrackCorrector } from "../metadata/track-corrector.js";
 import {
     countStatuses,
     createReport,
@@ -16,6 +17,7 @@ import type { TagJobRunner, TagJobSettings, TagTarget } from "./types.js";
 
 export interface TagJobDependencies {
     metadataChain: MetadataChain;
+    corrector: TrackCorrector;
     logger: Logger;
     libraryRoot: string;
     onTrackProcessed: (result: ProcessedTrack) => void;
@@ -72,11 +74,12 @@ async function runBatch(
     { stopSignal, settings }: TagRun,
     dependencies: TagJobDependencies
 ): Promise<ProcessingReport> {
-    const { metadataChain, logger, ...batchSettings } = dependencies;
+    const { metadataChain, corrector, logger, ...batchSettings } = dependencies;
     logger.info(`Tagging ${files.length} audio files in ${sourceRoot}`);
     const report = createReport(files, sourceRoot);
+    const fixing = settings.fixTags ? corrector : undefined;
     await processBatch(files, {
-        context: { sourceRoot, metadataChain, logger },
+        context: { sourceRoot, metadataChain, logger, corrector: fixing },
         report,
         stopSignal,
         renameFiles: settings.renameFiles,

@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { createTagJobRunner } from "../../src/tui/tag-job.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
+import { TrackCorrector } from "../../src/metadata/track-corrector.js";
 import { getTagStore } from "../../src/tags/audio-tags.js";
 import type { ProcessedTrack } from "../../src/processing/types.js";
 import type { PathMove } from "../../src/shared/paths.js";
@@ -11,7 +12,7 @@ import { createRecordingLogger } from "../helpers/logger.js";
 import { assertNoReport } from "../helpers/no-report.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 import { createProviderServices } from "../helpers/metadata-chain.js";
-import { RENAMING_ON } from "../helpers/tui.js";
+import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-tag-job-test-"
@@ -37,6 +38,17 @@ const foundChain = new MetadataChain(
     createProviderServices({ logger: createRecordingLogger() })
 );
 
+const firstReleaseCorrector = new TrackCorrector([
+    {
+        name: "Fake",
+        findCanonical: async () => ({
+            title: "",
+            artist: "",
+            firstReleaseYear: "1999",
+        }),
+    },
+]);
+
 async function createTrack(
     directory: string,
     filename: string
@@ -47,7 +59,7 @@ async function createTrack(
     return source;
 }
 
-const RENAMING_OFF = { renameFiles: false };
+const RENAMING_OFF = { renameFiles: false, fixTags: false };
 
 function createRunner(overrides: { libraryRoot?: string } = {}) {
     const processed: ProcessedTrack[] = [];
@@ -55,6 +67,7 @@ function createRunner(overrides: { libraryRoot?: string } = {}) {
     const logger = createRecordingLogger();
     const runJob = createTagJobRunner({
         metadataChain: foundChain,
+        corrector: firstReleaseCorrector,
         logger,
         libraryRoot: path.parse(process.cwd()).root,
         onTrackProcessed: (result) => processed.push(result),
@@ -93,7 +106,7 @@ test("a folder job tags subfolders when recursive", async () => {
             kind: "folder",
             path: directory,
             recursive: true,
-            settings: RENAMING_ON,
+            settings: DEFAULT_JOB_SETTINGS,
         },
         new AbortController().signal
     );
@@ -268,7 +281,7 @@ test("a folder job renames the album folder below the library root", async () =>
             kind: "folder",
             path: album,
             recursive: false,
-            settings: RENAMING_ON,
+            settings: DEFAULT_JOB_SETTINGS,
         },
         new AbortController().signal
     );
@@ -301,4 +314,24 @@ test("a folder job keeps file and folder names when renaming is off", async () =
         { source, status: "TAGGED", destination: null },
     ]);
     assert.deepEqual(moves, []);
+});
+
+test("a job corrects existing tags only when fixing is on", async () => {
+    const directory = await createTemporaryDirectory();
+    const fixed = await createTrack(directory, "fixed.mp3");
+    const kept = await createTrack(directory, "kept.mp3");
+    const { runJob } = createRunner();
+    const fixing = { renameFiles: false, fixTags: true };
+
+    await runJob(
+        { kind: "file", path: fixed, settings: fixing },
+        new AbortController().signal
+    );
+    await runJob(
+        { kind: "file", path: kept, settings: RENAMING_OFF },
+        new AbortController().signal
+    );
+
+    assert.equal((await getTagStore(fixed).read(fixed)).info.year, "1999");
+    assert.equal((await getTagStore(kept).read(kept)).info.year, "2024");
 });

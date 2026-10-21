@@ -4,6 +4,7 @@ import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
 import { inferFolderSearchTerms } from "../library/folder-context.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
+import type { TrackCorrector } from "../metadata/track-corrector.js";
 import {
     EMPTY_TRACK_INFO,
     fillMissingFields,
@@ -22,12 +23,19 @@ import type {
 import type { StoredTags } from "../tags/types.js";
 import { normalizeTagValue } from "./album-tags.js";
 import { hasSuspectTags, hasSuspectTitle } from "./suspect-tags.js";
+import {
+    correctTags,
+    getCorrectedMetadata,
+    type CorrectedTags,
+} from "./tag-corrections.js";
 import type { TrackResult, TrackStatus } from "./types.js";
 
 export interface ProcessingContext {
     sourceRoot: string;
     metadataChain: MetadataChain;
     logger: Logger;
+    // Only set in fix mode.
+    corrector?: TrackCorrector;
 }
 
 interface FoundMetadata {
@@ -200,7 +208,7 @@ function addsMetadata(
     );
 }
 
-function getMetadataToWrite(
+function getNewMetadata(
     existing: ExistingTags,
     metadata: TrackMetadata
 ): TrackMetadata | null {
@@ -210,27 +218,88 @@ function getMetadataToWrite(
         : null;
 }
 
-async function tagUntaggedTrack(
+function getMetadataToWrite(
+    track: CorrectedTags,
+    metadata: TrackMetadata
+): TrackMetadata | null {
+    return getNewMetadata(track.tags, metadata) ?? getCorrectedMetadata(track);
+}
+
+interface FoundTrack {
+    track: CorrectedTags;
+    found: TrackMetadata | null;
+}
+
+async function tagFoundTrack(
     source: string,
-    existing: ExistingTags,
-    context: ProcessingContext
+    { track, found }: FoundTrack,
+    { logger }: ProcessingContext
 ): Promise<TrackStatus> {
-    const { logger } = context;
-    const metadata = keepWritableMetadata(
-        await findTrackMetadata({ source, existing }, context),
-        logger
-    );
+    const metadata = keepWritableMetadata(found, logger);
 
     if (!metadata) {
         return "SKIPPED";
     }
 
-    logMissingFields({ metadata, hasExistingCover: existing.hasCover }, logger);
+    const hasExistingCover = track.tags.hasCover;
+    logMissingFields({ metadata, hasExistingCover }, logger);
     return writeNewMetadata(
         source,
-        getMetadataToWrite(existing, metadata),
+        getMetadataToWrite(track, metadata),
         logger
     );
+}
+
+function isWritable(found: TrackMetadata | null): boolean {
+    return found !== null && hasTitleAndArtist(found);
+}
+
+// Corrections are still written when the services find nothing usable.
+async function tagUntaggedTrack(
+    source: string,
+    track: CorrectedTags,
+    context: ProcessingContext
+): Promise<TrackStatus> {
+    const lookup = { source, existing: track.tags };
+    const found = await findTrackMetadata(lookup, context);
+    const corrected = getCorrectedMetadata(track);
+    return isWritable(found) || !corrected
+        ? tagFoundTrack(source, { track, found }, context)
+        : writeNewMetadata(source, corrected, context.logger);
+}
+
+async function keepProperTags(
+    source: string,
+    track: CorrectedTags,
+    logger: Logger
+): Promise<TrackStatus> {
+    const corrected = getCorrectedMetadata(track);
+
+    if (corrected) {
+        return writeNewMetadata(source, corrected, logger);
+    }
+
+    logger.info("Already properly tagged. Skipping.");
+    return "SKIPPED";
+}
+
+function tagCorrectedTrack(
+    source: string,
+    track: CorrectedTags,
+    context: ProcessingContext
+): Promise<TrackStatus> {
+    return isProperlyTagged(track.tags)
+        ? keepProperTags(source, track, context.logger)
+        : tagUntaggedTrack(source, track, context);
+}
+
+function readCorrectedTags(
+    source: string,
+    stored: StoredTags,
+    context: ProcessingContext
+): Promise<CorrectedTags> {
+    const search = buildTrackSearch(source, context.sourceRoot, stored.info);
+    return correctTags(stored, search, context);
 }
 
 async function writeNewMetadata(
@@ -269,19 +338,14 @@ async function tagTrack(
 ): Promise<TrackResult> {
     context.logger.info("Reading existing tags...");
     const storedTags = await getTagStore(source).read(source);
-
-    if (isProperlyTagged(storedTags)) {
-        context.logger.info("Already properly tagged. Skipping.");
-        return { status: "SKIPPED", tags: storedTags };
-    }
-
-    const status = await tagUntaggedTrack(source, storedTags, context);
+    const track = await readCorrectedTags(source, storedTags, context);
+    const status = await tagCorrectedTrack(source, track, context);
     // Only a write changes the tags, so other tracks keep the ones already read.
     const tags =
         status === "TAGGED"
             ? await readWrittenTags(source, context.logger)
             : storedTags;
-    return { status, tags };
+    return { status, tags, corrections: track.corrections };
 }
 
 export async function processTrack(
@@ -292,6 +356,6 @@ export async function processTrack(
         return await tagTrack(source, context);
     } catch (error) {
         context.logger.error(`Processing error: ${getErrorMessage(error)}`);
-        return { status: "FAILED", tags: null };
+        return { status: "FAILED", tags: null, corrections: [] };
     }
 }

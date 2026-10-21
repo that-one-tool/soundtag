@@ -1,7 +1,7 @@
 import { consoleLogger } from "../../src/shared/logger.js";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { createMetadataChain } from "../../src/metadata/create-metadata-chain.js";
+import { createMetadataLookups } from "../../src/metadata/create-metadata-chain.js";
 import { DeezerCoverProvider } from "../../src/metadata/providers/deezer-cover.js";
 import { DeezerProvider } from "../../src/metadata/providers/deezer.js";
 import { ListenBrainzProvider } from "../../src/metadata/providers/listenbrainz.js";
@@ -20,8 +20,8 @@ afterEach(() => {
     console.error = originalConsoleError;
 });
 
-test("createMetadataChain orders every configured provider", () => {
-    const chain = createMetadataChain(
+test("createMetadataLookups orders every configured provider", () => {
+    const { chain } = createMetadataLookups(
         {
             lastFmApiKey: "key",
             verbose: false,
@@ -49,10 +49,10 @@ test("createMetadataChain orders every configured provider", () => {
     );
 });
 
-test("createMetadataChain warns and skips unconfigured optional providers", () => {
+test("createMetadataLookups warns and skips unconfigured optional providers", () => {
     const logger = createRecordingLogger();
 
-    const chain = createMetadataChain(
+    const { chain } = createMetadataLookups(
         {
             lastFmApiKey: " ",
             verbose: false,
@@ -81,8 +81,8 @@ test("createMetadataChain warns and skips unconfigured optional providers", () =
     ]);
 });
 
-test("createMetadataChain skips ListenBrainz without a MusicBrainz User-Agent", () => {
-    const chain = createMetadataChain(
+test("createMetadataLookups skips ListenBrainz without a MusicBrainz User-Agent", () => {
+    const { chain } = createMetadataLookups(
         { verbose: false, listenBrainzToken: "token" },
         instantClock,
         createRecordingLogger()
@@ -94,9 +94,9 @@ test("createMetadataChain skips ListenBrainz without a MusicBrainz User-Agent", 
     );
 });
 
-test("createMetadataChain gives the injected logger to the chain and providers", async () => {
+test("createMetadataLookups gives the injected logger to the chain and providers", async () => {
     const logger = createRecordingLogger();
-    const chain = createMetadataChain(
+    const { chain } = createMetadataLookups(
         { lastFmApiKey: "key", verbose: false, musicBrainzUserAgent: " " },
         instantClock,
         logger
@@ -118,4 +118,23 @@ test("createMetadataChain gives the injected logger to the chain and providers",
         "iTunes Search failed: iTunes Search request failed: HTTP 500",
         "Last.fm search failed: Last.fm request failed: HTTP 500",
     ]);
+});
+
+test("createMetadataLookups corrects tags from ListenBrainz and MusicBrainz", () => {
+    const configured = createMetadataLookups(
+        {
+            verbose: false,
+            musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
+        },
+        instantClock,
+        createRecordingLogger()
+    );
+    const unconfigured = createMetadataLookups(
+        { verbose: false },
+        instantClock,
+        createRecordingLogger()
+    );
+
+    assert.equal(configured.corrector.canCorrect(), true);
+    assert.equal(unconfigured.corrector.canCorrect(), false);
 });

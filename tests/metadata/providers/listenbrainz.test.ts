@@ -93,9 +93,7 @@ function mockServices({
     return requested;
 }
 
-function findWithListenBrainz(
-    needs: ProviderNeeds,
-    trackSearch = search,
+function createListenBrainz(
     services: ProviderServices = createProviderServices()
 ) {
     const userAgent = "SoundTag/1.0 (test@example.com)";
@@ -103,7 +101,15 @@ function findWithListenBrainz(
         new ListenBrainzClient({ token: "secret", userAgent }, services),
         new MusicBrainzClient(userAgent, services),
         services
-    ).findMetadata(trackSearch, needs);
+    );
+}
+
+function findWithListenBrainz(
+    needs: ProviderNeeds,
+    trackSearch = search,
+    services?: ProviderServices
+) {
+    return createListenBrainz(services).findMetadata(trackSearch, needs);
 }
 
 test("ListenBrainzProvider fills info, extras and cover of the matched release", async () => {
@@ -292,4 +298,29 @@ test("ListenBrainzProvider keeps the match when the release lookup fails", async
     assert.deepEqual(logger.errors, [
         "MusicBrainz release lookup failed: MusicBrainz request failed: HTTP 500",
     ]);
+});
+
+test("ListenBrainzProvider gives the canonical spelling without a release lookup", async () => {
+    const requested = mockServices();
+
+    const canonical = await createListenBrainz().findCanonical({
+        title: "comfortably numb",
+        artist: "pink floyd",
+        album: "",
+    });
+
+    assert.deepEqual(canonical, {
+        title: "Comfortably Numb",
+        artist: "Pink Floyd",
+        firstReleaseYear: "",
+    });
+    assert.deepEqual(requested, ["api.listenbrainz.org/1/metadata/lookup/"]);
+});
+
+test("ListenBrainzProvider gives no canonical track for another song", async () => {
+    mockServices({
+        match: { ...lookupMatch, recording_name: "Crazy Love" },
+    });
+
+    assert.equal(await createListenBrainz().findCanonical(search), null);
 });

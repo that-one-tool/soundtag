@@ -198,3 +198,60 @@ test("MusicBrainzProvider logs failures to the injected logger", async () => {
         "MusicBrainz search failed: MusicBrainz request failed: HTTP 500",
     ]);
 });
+
+test("MusicBrainzProvider gives the canonical spelling and first release year", async () => {
+    const requested = mockMusicBrainz([
+        {
+            title: "Dancing Queen",
+            "artist-credit": [{ name: "ABBA" }],
+            "first-release-date": "1976-08-16",
+            releases: [{ id: "gold", title: "Gold", date: "1992" }],
+        },
+    ]);
+
+    const canonical = await createProvider().findCanonical({
+        title: "dancing queen",
+        artist: "Abba",
+        album: "Gold",
+    });
+
+    assert.deepEqual(canonical, {
+        title: "Dancing Queen",
+        artist: "ABBA",
+        firstReleaseYear: "1976",
+    });
+    assert.deepEqual(requested, ["musicbrainz.org"]);
+});
+
+test("MusicBrainzProvider gives no release year as the first release year", async () => {
+    mockMusicBrainz([
+        { ...searchedRecording, releases: [{ id: "gold", date: "1992" }] },
+    ]);
+
+    const canonical = await createProvider().findCanonical(search);
+
+    assert.equal(canonical?.firstReleaseYear, "");
+});
+
+test("MusicBrainzProvider gives no canonical track for another song", async () => {
+    mockMusicBrainz([
+        {
+            title: "Title (Karaoke Version)",
+            "artist-credit": [{ name: "Artist" }],
+        },
+    ]);
+
+    assert.equal(await createProvider().findCanonical(search), null);
+});
+
+test("MusicBrainzProvider needs an artist to give a canonical track", async () => {
+    const requested = mockMusicBrainz([searchedRecording]);
+
+    const canonical = await createProvider().findCanonical({
+        ...search,
+        artist: "",
+    });
+
+    assert.equal(canonical, null);
+    assert.deepEqual(requested, []);
+});

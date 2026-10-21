@@ -20,7 +20,12 @@ import {
     emptyInfo,
 } from "../helpers/metadata-chain.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
-import type { TrackSearch } from "../../src/metadata/types.js";
+import { TrackCorrector } from "../../src/metadata/track-corrector.js";
+import type {
+    CanonicalTrack,
+    TrackExtras,
+    TrackSearch,
+} from "../../src/metadata/types.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 restoreFetchAfterEach();
@@ -624,6 +629,7 @@ test("processTrack returns the tags it read from a skipped track", async () => {
     assert.deepEqual(result, {
         status: "SKIPPED",
         tags: await getTagStore(source).read(source),
+        corrections: [],
     });
 });
 
@@ -663,7 +669,11 @@ test("processTrack still reports a tagged track whose tags cannot be read back",
         metadataChain: createTestChain(),
     });
 
-    assert.deepEqual(result, { status: "TAGGED", tags: null });
+    assert.deepEqual(result, {
+        status: "TAGGED",
+        tags: null,
+        corrections: [],
+    });
     assert.deepEqual(logger.errors, [
         "Could not read the written tags: unreadable",
     ]);
@@ -785,4 +795,287 @@ test("processTrack searches once when the file name gives the same search", asyn
 
     assert.equal(status, "SKIPPED");
     assert.equal(searches.length, 1);
+});
+
+function createFakeCorrector(canonical: CanonicalTrack | null) {
+    const searches: TrackSearch[] = [];
+    const corrector = new TrackCorrector([
+        {
+            name: "Fake",
+            findCanonical: async (search) => {
+                searches.push(search);
+                return canonical;
+            },
+        },
+    ]);
+    return { corrector, searches };
+}
+
+const dancingQueen: CanonicalTrack = {
+    title: "Dancing Queen",
+    artist: "ABBA",
+    firstReleaseYear: "1976",
+};
+
+async function createCompilationTrack(
+    extras: TrackExtras = { genre: "Pop" }
+): Promise<string> {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "track.mp3");
+    await fs.writeFile(source, "audio bytes");
+    await getTagStore(source).write(source, {
+        info: {
+            title: "dancing queen",
+            artist: "Abba",
+            album: "Gold",
+            year: "2002",
+        },
+        extras,
+        coverData: Buffer.from("cover"),
+    });
+    return source;
+}
+
+function createNoLookupChain(): MetadataChain {
+    return new MetadataChain(
+        [
+            {
+                name: "Unexpected",
+                findMetadata: async () => {
+                    throw new Error("no lookup expected");
+                },
+            },
+        ],
+        [],
+        createProviderServices()
+    );
+}
+
+test("processTrack corrects a properly tagged file in fix mode", async () => {
+    const source = await createCompilationTrack();
+    const { corrector, searches } = createFakeCorrector(dancingQueen);
+    const logger = createRecordingLogger();
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger,
+        metadataChain: createNoLookupChain(),
+        corrector,
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.deepEqual(result.tags?.info, {
+        title: "Dancing Queen",
+        artist: "ABBA",
+        album: "Gold",
+        year: "1976",
+    });
+    assert.equal(result.tags?.extras.genre, "Pop");
+    assert.deepEqual(result.corrections, [
+        { field: "title", from: "dancing queen", to: "Dancing Queen" },
+        { field: "artist", from: "Abba", to: "ABBA" },
+        { field: "year", from: "2002", to: "1976" },
+    ]);
+    assert.deepEqual(searches, [
+        { title: "dancing queen", artist: "Abba", album: "Gold" },
+    ]);
+    assert.ok(logger.infos.includes('Corrected year: "2002" → "1976"'));
+});
+
+test("processTrack skips a properly tagged file with nothing to correct", async () => {
+    const source = await createCompilationTrack();
+    const { corrector } = createFakeCorrector(null);
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createNoLookupChain(),
+        corrector,
+    });
+
+    assert.equal(result.status, "SKIPPED");
+    assert.deepEqual(result.corrections, []);
+    assert.ok(output.logs.includes("Already properly tagged. Skipping."));
+});
+
+test("processTrack searches with the corrected tags and fills the gaps", async () => {
+    const source = await createCompilationTrack({});
+    const { corrector } = createFakeCorrector(dancingQueen);
+    const searches: TrackSearch[] = [];
+    const genreChain = new MetadataChain(
+        [
+            {
+                name: "Fake",
+                findMetadata: async (search) => {
+                    searches.push(search);
+                    return {
+                        info: { ...emptyInfo, title: "Dancing Queen" },
+                        extras: { genre: "Disco" },
+                        coverData: null,
+                    };
+                },
+            },
+        ],
+        [],
+        createProviderServices()
+    );
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: genreChain,
+        corrector,
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.equal(searches[0].title, "Dancing Queen");
+    assert.equal(result.tags?.info.year, "1976");
+    assert.equal(result.tags?.extras.genre, "Disco");
+});
+
+test("processTrack writes the corrections when the services find nothing else", async () => {
+    const source = await createCompilationTrack({});
+    const { corrector } = createFakeCorrector(dancingQueen);
+    const nothingChain = new MetadataChain(
+        [{ name: "Fake", findMetadata: async () => null }],
+        [],
+        createProviderServices()
+    );
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: nothingChain,
+        corrector,
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.equal(result.tags?.info.title, "Dancing Queen");
+    assert.equal(
+        output.logs.some((line) => line.startsWith("Track not found")),
+        false
+    );
+});
+
+test("processTrack corrects nothing outside fix mode", async () => {
+    const source = await createCompilationTrack();
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createNoLookupChain(),
+    });
+
+    assert.equal(result.status, "SKIPPED");
+    assert.deepEqual(result.corrections, []);
+});
+
+test("processTrack keeps multi-value fields of a FLAC it only corrects", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "track.flac");
+    await fs.copyFile(
+        path.join(process.cwd(), "tests/fixtures/silent.flac"),
+        source
+    );
+    const file = TagLibFile.createFromPath(source);
+    try {
+        file.tag.title = "dancing queen";
+        file.tag.performers = ["ABBA", "Guest"];
+        file.tag.genres = ["Pop", "Disco"];
+        file.tag.albumArtists = ["ABBA", "Various"];
+        file.save();
+    } finally {
+        file.dispose();
+    }
+    const { corrector } = createFakeCorrector({
+        ...dancingQueen,
+        firstReleaseYear: "",
+    });
+    const nothingChain = new MetadataChain(
+        [{ name: "Fake", findMetadata: async () => null }],
+        [],
+        createProviderServices()
+    );
+
+    const result = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: nothingChain,
+        corrector,
+    });
+
+    assert.equal(result.status, "TAGGED");
+    const written = TagLibFile.createFromPath(source);
+    try {
+        assert.equal(written.tag.title, "Dancing Queen");
+        assert.deepEqual(written.tag.performers, ["ABBA", "Guest"]);
+        assert.deepEqual(written.tag.genres, ["Pop", "Disco"]);
+        assert.deepEqual(written.tag.albumArtists, ["ABBA", "Various"]);
+    } finally {
+        written.dispose();
+    }
+});
+
+test("processTrack writes the corrections when the services add nothing new", async () => {
+    const source = await createCompilationTrack({});
+    const { corrector } = createFakeCorrector(dancingQueen);
+    const sameChain = new MetadataChain(
+        [
+            {
+                name: "Fake",
+                findMetadata: async () => ({
+                    info: { ...emptyInfo, title: "Dancing Queen" },
+                    extras: {},
+                    coverData: null,
+                }),
+            },
+        ],
+        [],
+        createProviderServices()
+    );
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: sameChain,
+        corrector,
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.equal(result.tags?.info.year, "1976");
+});
+
+test("processTrack writes the corrections when the match has no title or artist", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "track.mp3");
+    await fs.writeFile(source, "audio bytes");
+    const { corrector } = createFakeCorrector(dancingQueen);
+    const untitledChain = new MetadataChain(
+        [
+            {
+                name: "Fake",
+                findMetadata: async () => ({
+                    info: { ...emptyInfo, album: "Album only" },
+                    extras: {},
+                    coverData: null,
+                }),
+            },
+        ],
+        [],
+        createProviderServices()
+    );
+
+    const result = await processTrack(source, {
+        sourceRoot: directory,
+        logger: consoleLogger,
+        metadataChain: untitledChain,
+        corrector,
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.equal(result.tags?.info.year, "1976");
+    assert.deepEqual(
+        result.corrections.map(({ field }) => field),
+        ["year"]
+    );
 });

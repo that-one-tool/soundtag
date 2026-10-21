@@ -56,6 +56,24 @@ export interface CoverProvider {
     findCover(search: TrackSearch): Promise<Buffer | null>;
 }
 
+// The spelling and first release year a service gives for the searched song.
+export interface CanonicalTrack {
+    title: string;
+    artist: string;
+    firstReleaseYear: string;
+}
+
+export interface CanonicalSource {
+    readonly name: string;
+    findCanonical(search: TrackSearch): Promise<CanonicalTrack | null>;
+}
+
+export interface TagCorrection {
+    field: keyof TrackInfo;
+    from: string;
+    to: string;
+}
+
 export interface ProviderServices {
     clock: Clock;
     logger: Logger;

@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import type { QueueState, TagTarget } from "./types.js";
+import type { QueueState, TagJobSettings, TagTarget } from "./types.js";
 
 function describePending(state: QueueState): string {
     return state.pending.length > 0 ? ` · ${state.pending.length} queued` : "";
@@ -21,14 +21,29 @@ export function describeRenamingChoice(enabled: boolean): string {
     return `renaming ${enabled ? "on" : "off"}`;
 }
 
+export function describeFixingChoice(enabled: boolean): string {
+    return `fixing ${enabled ? "on" : "off"}`;
+}
+
+function listSubfolderChoice(target: TagTarget): string[] {
+    return target.kind === "folder"
+        ? [describeSubfolderChoice(target.recursive)]
+        : [];
+}
+
+// Only choices that differ from the defaults are worth naming.
+function listSettingChoices({ renameFiles, fixTags }: TagJobSettings) {
+    return [
+        ...(renameFiles ? [] : [describeRenamingChoice(false)]),
+        ...(fixTags ? [describeFixingChoice(true)] : []),
+    ];
+}
+
 function listTargetChoices(target: TagTarget): string[] {
-    const choices =
-        target.kind === "folder"
-            ? [describeSubfolderChoice(target.recursive)]
-            : [];
-    return target.settings.renameFiles
-        ? choices
-        : [...choices, describeRenamingChoice(false)];
+    return [
+        ...listSubfolderChoice(target),
+        ...listSettingChoices(target.settings),
+    ];
 }
 
 function describeTargetChoices(target: TagTarget): string {

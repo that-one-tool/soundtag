@@ -32,7 +32,10 @@ import {
     waitForFrame,
     waitForInput,
 } from "../../helpers/ink.js";
-import { createControlledServices, RENAMING_ON } from "../../helpers/tui.js";
+import {
+    createControlledServices,
+    DEFAULT_JOB_SETTINGS,
+} from "../../helpers/tui.js";
 import { useTemporaryDirectories } from "../../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories("soundtag-app-test-");
@@ -135,7 +138,7 @@ test("App queues the hovered file or folder for tagging", async () => {
         kind: "folder",
         path: path.join(directory, "Album"),
         recursive: true,
-        settings: RENAMING_ON,
+        settings: DEFAULT_JOB_SETTINGS,
     });
 });
 
@@ -192,7 +195,7 @@ test("App marks queued entries and their folders with a dot", async () => {
         kind: "folder",
         path: album,
         recursive: true,
-        settings: RENAMING_ON,
+        settings: DEFAULT_JOB_SETTINGS,
     });
 
     await waitFor(() => findFrameLine(lastFrame, "Album/").includes("●"));
@@ -202,7 +205,7 @@ test("App marks queued entries and their folders with a dot", async () => {
     services.queue.enqueue({
         kind: "file",
         path: path.join(directory, "song.mp3"),
-        settings: RENAMING_ON,
+        settings: DEFAULT_JOB_SETTINGS,
     });
     await waitFor(() => findFrameLine(lastFrame, "song.mp3").includes("●"));
 });
@@ -542,7 +545,7 @@ test("App tags the folder being browsed with a", async () => {
         kind: "folder",
         path: directory,
         recursive: true,
-        settings: RENAMING_ON,
+        settings: DEFAULT_JOB_SETTINGS,
     });
 });
 
@@ -574,19 +577,19 @@ test("App keeps the subfolder choice of each queued folder", async () => {
                 kind: "folder",
                 path: directory,
                 recursive: true,
-                settings: RENAMING_ON,
+                settings: DEFAULT_JOB_SETTINGS,
             },
             {
                 kind: "folder",
                 path: path.join(directory, "Album"),
                 recursive: true,
-                settings: RENAMING_ON,
+                settings: DEFAULT_JOB_SETTINGS,
             },
             {
                 kind: "folder",
                 path: path.join(directory, "Live"),
                 recursive: false,
-                settings: RENAMING_ON,
+                settings: DEFAULT_JOB_SETTINGS,
             },
         ]
     );
@@ -609,8 +612,30 @@ test("App keeps the renaming choice of each queued target", async () => {
     await waitFor(() => jobs.length === 2);
 
     assert.deepEqual(
-        jobs.map(({ target }) => target.settings),
-        [{ renameFiles: true }, { renameFiles: false }]
+        jobs.map(({ target }) => target.settings.renameFiles),
+        [true, false]
+    );
+});
+
+test("App keeps the fixing choice of each queued target", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, jobs } = await renderApp(directory);
+    stdin.write("a");
+    await waitFor(() => jobs.length === 1);
+
+    stdin.write("f");
+    await waitForFrame(lastFrame, "fixing on");
+    stdin.write(KEYS.down);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Black Sabbath");
+    stdin.write("t");
+    await waitForFrame(lastFrame, "1 queued");
+    jobs[0].finish(true);
+    await waitFor(() => jobs.length === 2);
+
+    assert.deepEqual(
+        jobs.map(({ target }) => target.settings.fixTags),
+        [false, true]
     );
 });
 
@@ -621,7 +646,7 @@ test("App ignores tag keys while quitting", async () => {
         kind: "folder",
         path: path.join(directory, "Album"),
         recursive: true,
-        settings: RENAMING_ON,
+        settings: DEFAULT_JOB_SETTINGS,
     });
     stdin.write("q");
     await waitForFrame(lastFrame, "quitting after the current file");

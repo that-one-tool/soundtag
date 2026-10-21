@@ -560,3 +560,26 @@ for (const format of ["mp3", "flac"] as const) {
         assert.deepEqual(await readExtras(source), allExtras);
     });
 }
+
+test("tag stores keep the other performers when writing a TagLib artist", async () => {
+    const source = await copyFixture("flac");
+    const file = TagLibFile.createFromPath(source);
+    try {
+        file.tag.performers = [" ", "daft punk", "Pharrell Williams"];
+        file.save();
+    } finally {
+        file.dispose();
+    }
+
+    await writeTags(source, { ...completeInfo, artist: "Daft Punk" }, null);
+
+    const written = TagLibFile.createFromPath(source);
+    try {
+        assert.deepEqual(written.tag.performers, [
+            "Daft Punk",
+            "Pharrell Williams",
+        ]);
+    } finally {
+        written.dispose();
+    }
+});

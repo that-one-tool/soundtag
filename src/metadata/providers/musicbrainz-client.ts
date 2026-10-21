@@ -99,11 +99,15 @@ export class MusicBrainzClient {
         );
     }
 
+    // Fix mode searches before the chain, with the same terms unless it corrects them.
     async searchRecordings(
         search: TrackSearch
     ): Promise<MusicBrainzRecording[]> {
         const url = buildRecordingSearchUrl(search);
-        const data = await this.requestJson<MusicBrainzSearchResponse>(url);
+        const data = await this.services.cache.getOrLoad(
+            `musicbrainz:search:${url}`,
+            () => this.requestJson<MusicBrainzSearchResponse>(url)
+        );
         return data.recordings ?? [];
     }
 

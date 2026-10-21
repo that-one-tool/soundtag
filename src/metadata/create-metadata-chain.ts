@@ -7,6 +7,7 @@ import { ListenBrainzClient } from "./providers/listenbrainz-client.js";
 import { ListenBrainzProvider } from "./providers/listenbrainz.js";
 import { trimOrEmpty } from "./track-metadata.js";
 import { MetadataChain } from "./metadata-chain.js";
+import { TrackCorrector } from "./track-corrector.js";
 import { MusicBrainzClient } from "./providers/musicbrainz-client.js";
 import { MusicBrainzProvider } from "./providers/musicbrainz.js";
 import { BatchCache } from "../shared/batch-cache.js";
@@ -14,6 +15,7 @@ import { ImageCache } from "../shared/image-cache.js";
 import type { Logger } from "../shared/logger.js";
 import type { Clock } from "../shared/rate-limiter.js";
 import type {
+    CanonicalSource,
     CoverProvider,
     MetadataProvider,
     ProviderServices,
@@ -27,6 +29,13 @@ export interface MetadataChainConfig {
     listenBrainzToken?: string;
     youtubeApiKey?: string;
 }
+
+export interface MetadataLookups {
+    chain: MetadataChain;
+    corrector: TrackCorrector;
+}
+
+type BrainzProvider = MetadataProvider & CanonicalSource;
 
 interface ProviderKeys {
     lastFmApiKey: string;
@@ -76,7 +85,7 @@ function createListenBrainzProviders(
     keys: ProviderKeys,
     musicBrainz: MusicBrainzClient,
     services: ProviderServices
-): MetadataProvider[] {
+): BrainzProvider[] {
     const { listenBrainzToken: token, musicBrainzUserAgent: userAgent } = keys;
 
     if (!token || !userAgent) {
@@ -91,7 +100,7 @@ function createMusicBrainzProviders(
     keys: ProviderKeys,
     musicBrainz: MusicBrainzClient,
     services: ProviderServices
-): MetadataProvider[] {
+): BrainzProvider[] {
     return keys.musicBrainzUserAgent
         ? [new MusicBrainzProvider(musicBrainz, services)]
         : [];
@@ -117,13 +126,10 @@ function createYouTubeCoverProviders(
 }
 
 // MusicBrainz searches and ListenBrainz release lookups share one rate limit.
-function createProviders(
-    config: MetadataChainConfig,
-    deezer: DeezerClient,
+function createBrainzProviders(
+    keys: ProviderKeys,
     services: ProviderServices
-): MetadataProvider[] {
-    const keys = getProviderKeys(config);
-    warnAboutMissingKeys(keys, services.logger);
+): BrainzProvider[] {
     const musicBrainz = new MusicBrainzClient(
         keys.musicBrainzUserAgent,
         services
@@ -131,6 +137,16 @@ function createProviders(
     return [
         ...createListenBrainzProviders(keys, musicBrainz, services),
         ...createMusicBrainzProviders(keys, musicBrainz, services),
+    ];
+}
+
+function createOtherProviders(
+    config: MetadataChainConfig,
+    deezer: DeezerClient,
+    services: ProviderServices
+): MetadataProvider[] {
+    const keys = getProviderKeys(config);
+    return [
         new DeezerProvider(deezer, services),
         new ItunesProvider(services),
         ...createLastFmProviders(keys, config, services),
@@ -148,21 +164,29 @@ function createCoverProviders(
     ];
 }
 
-export function createMetadataChain(
-    config: MetadataChainConfig,
-    clock: Clock,
-    logger: Logger
-): MetadataChain {
-    const services = {
+function createServices(clock: Clock, logger: Logger): ProviderServices {
+    return {
         clock,
         logger,
         images: new ImageCache(),
         cache: new BatchCache(),
     };
+}
+
+export function createMetadataLookups(
+    config: MetadataChainConfig,
+    clock: Clock,
+    logger: Logger
+): MetadataLookups {
+    const services = createServices(clock, logger);
+    const keys = getProviderKeys(config);
+    warnAboutMissingKeys(keys, logger);
+    const brainz = createBrainzProviders(keys, services);
     const deezer = new DeezerClient(services);
-    return new MetadataChain(
-        createProviders(config, deezer, services),
+    const chain = new MetadataChain(
+        [...brainz, ...createOtherProviders(config, deezer, services)],
         createCoverProviders(config, deezer, services),
         services
     );
+    return { chain, corrector: new TrackCorrector(brainz) };
 }

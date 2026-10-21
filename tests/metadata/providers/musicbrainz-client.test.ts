@@ -152,3 +152,15 @@ test("MusicBrainzClient builds Cover Art Archive requests with its User-Agent", 
     );
     assert.deepEqual(request.headers, { "User-Agent": userAgent });
 });
+
+test("MusicBrainzClient searches each recording once per batch", async () => {
+    const { urls } = mockMusicBrainzResponses([recordings, recordings]);
+    const client = createClient();
+
+    await client.searchRecordings(search);
+    const found = await client.searchRecordings({ ...search });
+    await client.searchRecordings({ ...search, title: "Other" });
+
+    assert.equal(found[0].title, "Retried title");
+    assert.equal(urls.length, 2);
+});

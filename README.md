@@ -134,6 +134,7 @@ to). Inside tmux, screen or Zellij the kitty protocol is not detected. Set
 | `D` (Shift+d)          | Remove all tags and the cover of the file under the cursor |
 | `r`                    | Include or exclude subfolders in folder runs               |
 | `n`                    | Turn file and folder renaming on or off for the next runs  |
+| `f`                    | Turn fix mode (`--fix`) on or off for the next runs        |
 | `s`                    | Stop the current run after the file in progress            |
 | `q`, Ctrl+C            | Quit (press again during a run to quit at once)            |
 | Tab                    | Switch between the browser and the log pane                |
@@ -158,7 +159,8 @@ yellow for `SKIPPED`, red for `FAILED`. A folder shows the worst status of the
 files inside it. Folder runs include subfolders unless `--no-recursive` was
 passed; `r` switches this for the folders queued next. Likewise, runs rename
 files and folders unless `--no-rename` was passed; `n` switches this for the
-files and folders queued next. The status bar shows both choices. A file or
+files and folders queued next. The status bar shows these choices and whether
+fix mode is on. A file or
 folder that is already queued or running is not queued again, even with a
 different choice; the log says so. A file renamed by
 an earlier run before its own queued run starts is skipped. Quitting during a
@@ -227,6 +229,24 @@ file and folder names (in the browser, `n` switches this):
 soundtag /path/to/music --no-rename
 ```
 
+Pass `--fix` to also correct existing tags, not only fill empty ones (in the
+browser, `f` switches this for the files and folders queued next):
+
+```sh
+soundtag /path/to/music --fix
+```
+
+Fix mode looks up every file, even fully tagged ones, on ListenBrainz and
+MusicBrainz, so it needs `MUSICBRAINZ_USER_AGENT` (and `LISTENBRAINZ_TOKEN`
+for ListenBrainz); without the User-Agent, runs only fill missing tags. It respells the title and artist when the service names the same
+song differently: case, accents, punctuation, one typo, or featured artists
+written another way (`Beyonce ft Shakira` becomes `Beyoncé feat. Shakira`). A
+different word, note or artist is never changed. It also replaces the year
+with the song's first release year from MusicBrainz when that is earlier, such
+as the year of a compilation or reissue. Each correction is logged as
+`field: "old" → "new"`, the corrected tags are used for the search that fills
+the remaining gaps, and renaming follows the corrected tags.
+
 Pass `-v` or `--verbose` to log the Last.fm `track.getInfo` request URL:
 
 ```sh
@@ -278,8 +298,9 @@ large lossless files therefore need temporary free space comparable to the
 file size and can require substantial additional disk or NAS I/O.
 
 With a source folder argument, a summary is printed at the end of the run:
-the number of tagged, skipped and failed files, then each failed file and each
-rename (`old → new`), with paths relative to the source folder. SoundTag writes
+the number of tagged, skipped and failed files, then each failed file, each
+rename (`old → new`) and, with `--fix`, each corrected file with its changes,
+with paths relative to the source folder. SoundTag writes
 no report file; `soundtag_output.json` files left by older versions can be
 deleted.
 

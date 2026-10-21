@@ -11,8 +11,10 @@ import {
     resolveSourceRoot,
     type ConfigSources,
 } from "./config.js";
-import { createMetadataChain } from "../metadata/create-metadata-chain.js";
-import type { MetadataChain } from "../metadata/metadata-chain.js";
+import {
+    createMetadataLookups,
+    type MetadataLookups,
+} from "../metadata/create-metadata-chain.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { TuiOutcome } from "../tui/types.js";
 import type { BrowserLauncher } from "./browser-launcher.js";
@@ -38,7 +40,7 @@ interface TaggingRun {
 
 interface TaggingSession {
     settings: TaggingSettings;
-    metadataChain: MetadataChain;
+    lookups: MetadataLookups;
 }
 
 type SourceRootResolver = () => Promise<string>;
@@ -57,7 +59,7 @@ function printBanner(): void {
     console.log("                SOUNDTAG");
     console.log(`${SEPARATOR}\n`);
     console.log(
-        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--no-rename]"
+        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--no-rename] [--fix]"
     );
 }
 
@@ -78,6 +80,7 @@ function printSummary(stats: ProcessingStats, run: TaggingRun): void {
     printUnprocessedCount(stats, stopped);
     printSection("Failed:", getFailedFiles(run.report));
     printSection("Renamed:", getRenames(run.report));
+    printSection("Corrected:", getCorrections(run.report));
     console.log(SEPARATOR);
 }
 
@@ -93,6 +96,12 @@ function getFailedFiles({ files }: ProcessingReport): string[] {
 
 function getRenames({ renamed = {} }: ProcessingReport): string[] {
     return Object.entries(renamed).map(([from, to]) => `${from} → ${to}`);
+}
+
+function getCorrections({ corrected = {} }: ProcessingReport): string[] {
+    return Object.entries(corrected).map(
+        ([file, corrections]) => `${file}: ${corrections.join(", ")}`
+    );
 }
 
 function printSection(title: string, lines: string[]): void {
@@ -118,13 +127,14 @@ function printProcessingStart(fileCount: number): void {
 function createBatchRun(
     config: AppConfig,
     run: TaggingRun,
-    metadataChain: MetadataChain
+    { chain, corrector }: MetadataLookups
 ): BatchRun {
     return {
         context: {
             sourceRoot: config.sourceRoot,
-            metadataChain,
+            metadataChain: chain,
             logger: consoleLogger,
+            corrector: config.fixTags ? corrector : undefined,
         },
         report: run.report,
         stopSignal: run.stopSignal,
@@ -135,7 +145,7 @@ function createBatchRun(
 async function tagLibrary(
     config: AppConfig,
     stopSignal: AbortSignal,
-    metadataChain: MetadataChain
+    lookups: MetadataLookups
 ): Promise<void> {
     printRunSettings(config);
     const audioFiles = await findLibraryFiles(config);
@@ -150,7 +160,7 @@ async function tagLibrary(
         report: createReport(audioFiles, config.sourceRoot),
         stopSignal,
     };
-    await processBatch(audioFiles, createBatchRun(config, run, metadataChain));
+    await processBatch(audioFiles, createBatchRun(config, run, lookups));
     printSummary(countStatuses(run.report), run);
 }
 
@@ -171,7 +181,7 @@ async function runTagging(
     try {
         const sourceRoot = await resolveSource();
         const config = { ...session.settings, sourceRoot };
-        await tagLibrary(config, stopSignal, session.metadataChain);
+        await tagLibrary(config, stopSignal, session.lookups);
         return getCompletionExitCode(stopSignal);
     } catch (error) {
         return reportFailure(error);
@@ -215,11 +225,7 @@ function isBrowsingWithoutTerminal(environment: AppEnvironment): boolean {
 function createSession(settings: TaggingSettings): TaggingSession {
     return {
         settings,
-        metadataChain: createMetadataChain(
-            settings,
-            systemClock,
-            consoleLogger
-        ),
+        lookups: createMetadataLookups(settings, systemClock, consoleLogger),
     };
 }
 

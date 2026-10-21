@@ -18,6 +18,10 @@ const disableRenaming: OptionHandler = (options) => {
     options.renameFiles = false;
 };
 
+const enableTagFixing: OptionHandler = (options) => {
+    options.fixTags = true;
+};
+
 const OPTION_HANDLERS = new Map<string, OptionHandler>([
     ["--recursive", enableRecursion],
     ["-r", enableRecursion],
@@ -25,6 +29,7 @@ const OPTION_HANDLERS = new Map<string, OptionHandler>([
     ["--verbose", enableVerboseOutput],
     ["-v", enableVerboseOutput],
     ["--no-rename", disableRenaming],
+    ["--fix", enableTagFixing],
 ]);
 
 function setSourcePath(options: CommandLineOptions, sourcePath: string): void {
@@ -54,6 +59,7 @@ export function parseArguments(args: string[]): CommandLineOptions {
         recursive: true,
         verbose: false,
         renameFiles: true,
+        fixTags: false,
     };
 
     for (const arg of args) {

@@ -25,12 +25,18 @@ import type { StoredTags, TagStore } from "./types.js";
 
 type FieldWriter = (tag: Tag, value: string) => void;
 
+// Only the first filled performer is read, so it alone is replaced.
+function replaceLeadPerformer(performers: string[], artist: string) {
+    const others = performers.filter((performer) => performer.trim());
+    return [artist, ...others.slice(1)];
+}
+
 const FIELD_WRITERS: Record<keyof TrackInfo, FieldWriter> = {
     title: (tag, value) => {
         tag.title = value;
     },
     artist: (tag, value) => {
-        tag.performers = [value];
+        tag.performers = replaceLeadPerformer(tag.performers, value);
     },
     album: (tag, value) => {
         tag.album = value;

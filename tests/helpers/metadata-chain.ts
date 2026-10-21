@@ -2,7 +2,7 @@ import { BatchCache } from "../../src/shared/batch-cache.js";
 import { ImageCache } from "../../src/shared/image-cache.js";
 import { consoleLogger } from "../../src/shared/logger.js";
 import {
-    createMetadataChain,
+    createMetadataLookups,
     type MetadataChainConfig,
 } from "../../src/metadata/create-metadata-chain.js";
 import type { MetadataChain } from "../../src/metadata/metadata-chain.js";
@@ -35,11 +35,11 @@ export const emptyTags: ExistingTags = {
 export function createTestChain(
     config: Partial<MetadataChainConfig> = {}
 ): MetadataChain {
-    return createMetadataChain(
+    return createMetadataLookups(
         { lastFmApiKey: "test-key", verbose: false, ...config },
         instantClock,
         consoleLogger
-    );
+    ).chain;
 }
 
 export function findTrackMetadata(

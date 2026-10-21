@@ -2,6 +2,8 @@ import { getErrorMessage } from "../../shared/errors.js";
 import { isSameRelease, isSameTrack } from "../track-matching.js";
 import { extractYear, valueOrEmpty } from "../track-metadata.js";
 import type {
+    CanonicalSource,
+    CanonicalTrack,
     MetadataProvider,
     ProviderNeeds,
     ProviderServices,
@@ -83,6 +85,14 @@ function getRecordingInfo(
     };
 }
 
+function getCanonicalTrack(recording: MusicBrainzRecording): CanonicalTrack {
+    return {
+        title: recording.title ?? "",
+        artist: getMusicBrainzArtist(recording["artist-credit"]),
+        firstReleaseYear: extractYear(recording["first-release-date"]),
+    };
+}
+
 function isSearchedRecording(
     recording: MusicBrainzRecording,
     search: TrackSearch
@@ -105,7 +115,7 @@ function keepSearchedRecording(
     return isSearchedRecording(recording, search) ? recording : null;
 }
 
-export class MusicBrainzProvider implements MetadataProvider {
+export class MusicBrainzProvider implements MetadataProvider, CanonicalSource {
     readonly name = "MusicBrainz";
 
     constructor(
@@ -129,6 +139,16 @@ export class MusicBrainzProvider implements MetadataProvider {
             extras: {},
             coverData: needsCover ? await this.downloadCover(releases) : null,
         };
+    }
+
+    // Any song of that title would match without an artist.
+    async findCanonical(search: TrackSearch): Promise<CanonicalTrack | null> {
+        if (!search.artist) {
+            return null;
+        }
+
+        const recording = await this.searchRecording(search);
+        return recording && getCanonicalTrack(recording);
     }
 
     private async searchRecording(

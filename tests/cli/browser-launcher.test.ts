@@ -30,6 +30,7 @@ function createOptions(startDirectory: string): TuiOptions {
         verbose: false,
         recursive: true,
         renameFiles: true,
+        fixTags: false,
         musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
     };
 }

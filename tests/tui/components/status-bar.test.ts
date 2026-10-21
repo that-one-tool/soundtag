@@ -19,13 +19,14 @@ const WIDE_TERMINAL = 160;
 
 function renderStatusBar(
     subfoldersIncluded: boolean,
-    renamingEnabled = true
+    { renamingEnabled = true, fixingEnabled = false } = {}
 ): string {
     const statusBar = createElement(StatusBar, {
         queueState,
         quitting: false,
         subfoldersIncluded,
         renamingEnabled,
+        fixingEnabled,
     });
     const wideRow = createElement(Box, { width: WIDE_TERMINAL }, statusBar);
     return render(wideRow).lastFrame() ?? "";
@@ -34,10 +35,10 @@ function renderStatusBar(
 test("StatusBar shows the queue state and the key hints", () => {
     const frame = renderStatusBar(true);
 
-    assert.match(frame, /Idle · subfolders on · renaming on/);
+    assert.match(frame, /Idle · subfolders on · renaming on · fixing off/);
     assert.match(
         frame,
-        /t tag {2}a all {2}e name {2}D clear {2}r subs {2}n names {2}s stop {2}q quit/
+        /t tag {2}a all {2}e name {2}D clear {2}r subs {2}n names {2}f fix {2}s stop {2}q quit/
     );
 });
 
@@ -46,5 +47,15 @@ test("StatusBar shows when subfolders are excluded", () => {
 });
 
 test("StatusBar shows when renaming is off", () => {
-    assert.match(renderStatusBar(true, false), /subfolders on · renaming off/);
+    assert.match(
+        renderStatusBar(true, { renamingEnabled: false }),
+        /subfolders on · renaming off/
+    );
+});
+
+test("StatusBar shows when fixing is on", () => {
+    assert.match(
+        renderStatusBar(true, { fixingEnabled: true }),
+        /renaming on · fixing on/
+    );
 });

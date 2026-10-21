@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+    isSameCredit,
     isSameName,
     isSameRelease,
     isSameTrack,
+    isSameWording,
 } from "../../src/metadata/track-matching.js";
 
 test("isSameName ignores case, accents, punctuation and noise brackets", () => {
@@ -237,4 +239,28 @@ test("isSameName keeps notes whose word only starts like a noise word", () => {
     assert.equal(isSameName("Title (Stereolab Remix)", "Title"), false);
     assert.equal(isSameName("Title (Monolith Sessions)", "Title"), false);
     assert.ok(isSameName("Title (Remastered)", "Title"));
+});
+
+test("isSameWording ignores case, accents, punctuation and one typo", () => {
+    assert.ok(isSameWording("All", "all"));
+    assert.ok(isSameWording("One-Way Serial", "one way serial"));
+    assert.ok(isSameWording("Lever l'ancre", "Lever L'ancre"));
+    assert.ok(isSameWording("Stairway to Heaven", "Stairway to Heavn"));
+});
+
+test("isSameWording keeps notes that only isSameName ignores", () => {
+    assert.equal(isSameWording("Song", "Song (feat. Jay-Z)"), false);
+    assert.equal(isSameWording("Song", "Song (Remastered 2009)"), false);
+    assert.equal(isSameWording(undefined, "Song"), false);
+});
+
+test("isSameCredit needs the same artists on both sides", () => {
+    assert.ok(isSameCredit("Beyoncé feat. Shakira", "Beyonce ft Shakira"));
+    assert.ok(isSameCredit("Shakira & Beyoncé", "Beyonce, Shakira"));
+    assert.ok(isSameCredit("The Doors", "Doors"));
+    assert.equal(isSameCredit("Beyoncé", "Beyonce ft Shakira"), false);
+    assert.equal(isSameCredit("Beyoncé feat. Shakira", "Beyonce"), false);
+    assert.equal(isSameCredit("Bob Marley", "Marley Bob"), false);
+    assert.equal(isSameCredit("Shakira & Shakira", "Shakira & Beyonce"), false);
+    assert.equal(isSameCredit(undefined, "Shakira"), false);
 });

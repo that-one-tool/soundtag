@@ -73,7 +73,7 @@ export class ListenBrainzClient {
 
     constructor(
         private readonly credentials: ListenBrainzCredentials,
-        services: ProviderServices
+        private readonly services: ProviderServices
     ) {
         this.schedule = createRateLimiter(
             LISTENBRAINZ_REQUEST_INTERVAL,
@@ -81,14 +81,22 @@ export class ListenBrainzClient {
         );
     }
 
+    // Fix mode looks up before the chain, with the same terms unless it corrects them.
     async lookUp(search: TrackSearch): Promise<ListenBrainzMatch | null> {
         const url = buildLookupUrl(search);
-        const payload = await this.schedule(async () =>
+        const payload = await this.services.cache.getOrLoad(
+            `listenbrainz:lookup:${url}`,
+            () => this.request(url)
+        );
+        return getMatch(payload);
+    }
+
+    private request(url: URL): Promise<ListenBrainzMatch> {
+        return this.schedule(async () =>
             readLookupResponse(
                 await fetchWithTimeout(url, { headers: this.getHeaders() })
             )
         );
-        return getMatch(payload);
     }
 
     private getHeaders(): Record<string, string> {

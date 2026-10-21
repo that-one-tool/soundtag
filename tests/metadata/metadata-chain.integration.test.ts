@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createMetadataChain } from "../../src/metadata/create-metadata-chain.js";
+import { createMetadataLookups } from "../../src/metadata/create-metadata-chain.js";
 import { createFakeClock } from "../helpers/clock.js";
 import { withoutDeezerMatches } from "../helpers/deezer.js";
 import { createRecordingLogger } from "../helpers/logger.js";
@@ -1345,11 +1345,11 @@ test("ListenBrainz release lookups and MusicBrainz searches share one rate limit
     });
     const clock = createFakeClock();
 
-    await createMetadataChain(
+    await createMetadataLookups(
         { verbose: false, ...listenBrainzConfig },
         clock,
         createRecordingLogger()
-    ).find({ ...numbSearch, album: "" }, emptyTags);
+    ).chain.find({ ...numbSearch, album: "" }, emptyTags);
 
     assert.deepEqual(clock.sleeps, [3000]);
 });

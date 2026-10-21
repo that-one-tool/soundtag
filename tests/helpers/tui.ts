@@ -12,7 +12,10 @@ import { TrackStatusStore } from "../../src/tui/track-status-store.js";
 import type { TuiServices } from "../../src/tui/tui-services.js";
 import type { TagJobSettings, TagTarget } from "../../src/tui/types.js";
 
-export const RENAMING_ON: TagJobSettings = { renameFiles: true };
+export const DEFAULT_JOB_SETTINGS: TagJobSettings = {
+    renameFiles: true,
+    fixTags: false,
+};
 
 export interface ControlledJob {
     target: TagTarget;
@@ -44,6 +47,7 @@ export function createControlledServices(): {
             pathMoves,
             subfolders: new ToggleSetting(true),
             renaming: new ToggleSetting(true),
+            fixing: new ToggleSetting(false),
             detailsCache: createDetailsCache(),
             coverCache: createCoverCache("blocks"),
             coverOverlay: new CoverOverlay(() => {}),

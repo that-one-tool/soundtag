@@ -50,6 +50,7 @@ export type EntryDot = TrackStatus | "QUEUED";
 
 export interface TagJobSettings {
     renameFiles: boolean;
+    fixTags: boolean;
 }
 
 export type TagTarget =

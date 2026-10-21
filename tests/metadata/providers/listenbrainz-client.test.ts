@@ -85,7 +85,22 @@ test("ListenBrainzClient spaces its requests one second apart", async () => {
     mockListenBrainz({});
     const client = createClient({ clock });
 
-    await Promise.all([client.lookUp(search), client.lookUp(search)]);
+    await Promise.all([
+        client.lookUp(search),
+        client.lookUp({ ...search, title: "Other" }),
+    ]);
 
     assert.deepEqual(clock.sleeps, [1000]);
+});
+
+test("ListenBrainzClient looks up each search once per batch", async () => {
+    const requests = mockListenBrainz({ recording_mbid: "id" });
+    const client = createClient();
+
+    await client.lookUp(search);
+    const match = await client.lookUp({ ...search });
+    await client.lookUp({ ...search, title: "Other" });
+
+    assert.deepEqual(match, { recording_mbid: "id" });
+    assert.equal(requests.length, 2);
 });

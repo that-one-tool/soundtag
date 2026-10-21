@@ -8,6 +8,7 @@ test("parseArguments keeps the recursive default and reads a source path", () =>
         recursive: true,
         verbose: false,
         renameFiles: true,
+        fixTags: false,
     });
 });
 
@@ -19,6 +20,7 @@ test("parseArguments supports scan and verbose options", () => {
             recursive: false,
             verbose: true,
             renameFiles: false,
+            fixTags: false,
         }
     );
     assert.equal(
@@ -45,5 +47,10 @@ test("parseArguments accepts the long and short option aliases", () => {
         recursive: true,
         verbose: true,
         renameFiles: true,
+        fixTags: false,
     });
+});
+
+test("parseArguments turns fix mode on with --fix", () => {
+    assert.equal(parseArguments(["./music", "--fix"]).fixTags, true);
 });

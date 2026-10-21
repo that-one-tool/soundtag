@@ -39,6 +39,7 @@ export function loadSessionConfig(sources: ConfigSources): SessionConfig {
             recursive: options.recursive,
             verbose: options.verbose,
             renameFiles: options.renameFiles,
+            fixTags: options.fixTags,
             musicBrainzUserAgent: sources.env.MUSICBRAINZ_USER_AGENT,
             youtubeApiKey: sources.env.YOUTUBE_API_KEY,
             listenBrainzToken: sources.env.LISTENBRAINZ_TOKEN,

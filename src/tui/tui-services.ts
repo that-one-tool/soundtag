@@ -1,5 +1,5 @@
 import {
-    createMetadataChain,
+    createMetadataLookups,
     type MetadataChainConfig,
 } from "../metadata/create-metadata-chain.js";
 import { systemClock } from "../shared/rate-limiter.js";
@@ -23,6 +23,7 @@ export interface TaggingOptions extends MetadataChainConfig {
     coverMode?: CoverMode;
     recursive: boolean;
     renameFiles: boolean;
+    fixTags: boolean;
     startDirectory: string;
 }
 
@@ -34,6 +35,7 @@ export interface TuiServices {
     pathMoves: PathMoves;
     subfolders: ToggleSetting;
     renaming: ToggleSetting;
+    fixing: ToggleSetting;
     detailsCache: VersionedCache<EntryDetails>;
     coverCache: VersionedCache<CoverLookup>;
     renamer: EntryRenamer;
@@ -70,8 +72,10 @@ function createJobRunner(
     services: Pick<TuiServices, "statusStore" | "redoneFiles" | "pathMoves">
 ) {
     const { statusStore, redoneFiles, pathMoves } = services;
+    const lookups = createMetadataLookups(options, systemClock, logBuffer);
     const runJob = createTagJobRunner({
-        metadataChain: createMetadataChain(options, systemClock, logBuffer),
+        metadataChain: lookups.chain,
+        corrector: lookups.corrector,
         logger: logBuffer,
         libraryRoot: options.startDirectory,
         onTrackProcessed: (result) => {
@@ -123,6 +127,7 @@ export function createTuiServices(
         tagClearer: createTagClearer(jobServices),
         subfolders: new ToggleSetting(options.recursive),
         renaming: new ToggleSetting(options.renameFiles),
+        fixing: new ToggleSetting(options.fixTags),
         detailsCache: createDetailsCache(),
         coverCache: createCoverCache(display.mode),
         coverOverlay: new CoverOverlay(display.writeToTerminal),

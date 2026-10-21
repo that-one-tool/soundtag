@@ -1,3 +1,4 @@
+import type { TagCorrection } from "../metadata/types.js";
 import type { StoredTags } from "../tags/types.js";
 
 export interface ProcessingStats {
@@ -14,14 +15,19 @@ export type TrackStatus = Exclude<FileStatus, "READ">;
 export interface ProcessingReport {
     files: Record<string, FileStatus>;
     renamed?: Record<string, string>;
+    corrected?: Record<string, string[]>;
 }
 
-export interface TrackResult {
+export interface TrackOutcome {
     status: TrackStatus;
     tags: StoredTags | null;
 }
 
-export interface ProcessingTrack extends TrackResult {
+export interface TrackResult extends TrackOutcome {
+    corrections: TagCorrection[];
+}
+
+export interface ProcessingTrack extends TrackOutcome {
     source: string;
 }
 

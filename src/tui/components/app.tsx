@@ -53,13 +53,21 @@ function useBrowsing(startDirectory: string, services: TuiServices) {
     return { browser, dispatch, hovered, details, statuses, redoneFiles };
 }
 
-function useStatus({ queue, subfolders, renaming, coverOverlay }: TuiServices) {
+function useSettingChoices({ subfolders, renaming, fixing }: TuiServices) {
+    return {
+        subfoldersIncluded: useStore(subfolders),
+        renamingEnabled: useStore(renaming),
+        fixingEnabled: useStore(fixing),
+    };
+}
+
+function useStatus(services: TuiServices) {
+    const { queue, coverOverlay } = services;
     const queueState = useStore(queue);
-    const subfoldersIncluded = useStore(subfolders);
-    const renamingEnabled = useStore(renaming);
+    const choices = useSettingChoices(services);
     const { quitting, requestQuit } = useQuit(queue, queueState, coverOverlay);
     return {
-        status: { queueState, quitting, subfoldersIncluded, renamingEnabled },
+        status: { queueState, quitting, ...choices },
         requestQuit,
     };
 }

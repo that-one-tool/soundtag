@@ -14,6 +14,8 @@ import {
     type CoverSharing,
 } from "./folder-covers.js";
 import { processTrack, type ProcessingContext } from "./processing.js";
+import { describeCorrection } from "../metadata/track-corrections.js";
+import type { TagCorrection } from "../metadata/types.js";
 import { isRenamable, renameTrack } from "./rename.js";
 import type { StoredTags } from "../tags/types.js";
 import type {
@@ -124,11 +126,24 @@ async function processFile(
 ): Promise<void> {
     const relativePath = path.relative(run.context.sourceRoot, source);
     logTrackHeader(`[${position}] ${relativePath}`, source, run.context.logger);
-    const track = { source, ...(await processTrack(source, run.context)) };
+    const { corrections, ...result } = await processTrack(source, run.context);
+    const track = { source, ...result };
     run.report.files[relativePath] = track.status;
+    recordCorrections(relativePath, corrections, run.report);
     const destination = await renameProcessedFile(track, run);
     run.folderNames.markProcessed(source);
     announceTrack({ ...track, destination }, run);
+}
+
+function recordCorrections(
+    relativePath: string,
+    corrections: TagCorrection[],
+    report: ProcessingReport
+): void {
+    if (corrections.length > 0) {
+        const corrected = (report.corrected ??= {});
+        corrected[relativePath] = corrections.map(describeCorrection);
+    }
 }
 
 function announceTrack(track: BatchTrack, run: ActiveBatch): void {
@@ -316,12 +331,24 @@ async function renameAlbumFoldersIfAllowed(run: ActiveBatch): Promise<void> {
     }
 }
 
+function getFixingContext(context: ProcessingContext): ProcessingContext {
+    if (!context.corrector || context.corrector.canCorrect()) {
+        return context;
+    }
+
+    context.logger.info(
+        "Fixing tags requires MUSICBRAINZ_USER_AGENT; only missing tags are filled."
+    );
+    return { ...context, corrector: undefined };
+}
+
 export async function processBatch(
     files: string[],
     run: BatchRun
 ): Promise<void> {
     const folderNames = new FolderNameCache(files);
-    const batch: ActiveBatch = { ...run, folderNames, processed: [] };
+    const context = getFixingContext(run.context);
+    const batch: ActiveBatch = { ...run, context, folderNames, processed: [] };
 
     try {
         await processFiles(files, batch);

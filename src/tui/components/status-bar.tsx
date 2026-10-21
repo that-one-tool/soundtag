@@ -1,5 +1,6 @@
 import { Box, Text } from "ink";
 import {
+    describeFixingChoice,
     describeQueue,
     describeRenamingChoice,
     describeSubfolderChoice,
@@ -19,6 +20,7 @@ const KEY_HINTS: Hint[] = [
     ["D", "clear"],
     ["r", "subs"],
     ["n", "names"],
+    ["f", "fix"],
     ["s", "stop"],
     ["q", "quit"],
     ["⇥", "log"],
@@ -45,22 +47,23 @@ export interface StatusBarProps {
     quitting: boolean;
     subfoldersIncluded: boolean;
     renamingEnabled: boolean;
+    fixingEnabled: boolean;
 }
 
-export function StatusBar({
-    queueState,
-    quitting,
-    subfoldersIncluded,
-    renamingEnabled,
-}: StatusBarProps) {
+function describeStatus(props: StatusBarProps): string {
+    return [
+        describeQueue(props.queueState, props.quitting),
+        describeSubfolderChoice(props.subfoldersIncluded),
+        describeRenamingChoice(props.renamingEnabled),
+        describeFixingChoice(props.fixingEnabled),
+    ].join(" · ");
+}
+
+export function StatusBar(props: StatusBarProps) {
     return (
         <Box justifyContent="space-between" gap={2} paddingX={1}>
             <Box flexShrink={0}>
-                <Text color={ACCENT}>
-                    {describeQueue(queueState, quitting)}
-                    {` · ${describeSubfolderChoice(subfoldersIncluded)}`}
-                    {` · ${describeRenamingChoice(renamingEnabled)}`}
-                </Text>
+                <Text color={ACCENT}>{describeStatus(props)}</Text>
             </Box>
             <KeyHints />
         </Box>

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { isEntryTargeted } from "../../src/tui/tag-target.js";
 import type { BrowserEntry, TagTarget } from "../../src/tui/types.js";
-import { RENAMING_ON } from "../helpers/tui.js";
+import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const root = path.resolve("music");
 const rock = path.join(root, "Rock");
@@ -26,19 +26,19 @@ function file(filePath: string): BrowserEntry {
 const fileTarget: TagTarget = {
     kind: "file",
     path: song,
-    settings: RENAMING_ON,
+    settings: DEFAULT_JOB_SETTINGS,
 };
 const flatFolder: TagTarget = {
     kind: "folder",
     path: rock,
     recursive: false,
-    settings: RENAMING_ON,
+    settings: DEFAULT_JOB_SETTINGS,
 };
 const deepFolder: TagTarget = {
     kind: "folder",
     path: rock,
     recursive: true,
-    settings: RENAMING_ON,
+    settings: DEFAULT_JOB_SETTINGS,
 };
 
 test("isEntryTargeted matches a file target only on its own path", () => {
