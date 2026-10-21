@@ -11,11 +11,8 @@ const tsxLoader = path.join(projectRoot, "node_modules/tsx/dist/loader.mjs");
 
 const createTemporaryDirectory = useTemporaryDirectories("soundtag-cli-test-");
 
-const INTERRUPT = Symbol("interrupt");
-
 interface CliRunOptions {
     environment?: NodeJS.ProcessEnv;
-    answers?: (string | typeof INTERRUPT)[];
 }
 
 function runCli(
@@ -25,7 +22,6 @@ function runCli(
         environment = {
             MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
         },
-        answers = [],
     }: CliRunOptions = {}
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
@@ -51,37 +47,17 @@ function runCli(
                 stdio: ["pipe", "pipe", "pipe"],
             }
         );
-        const pendingAnswers = [...answers];
         let stdout = "";
         let stderr = "";
 
         child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
             stdout += chunk;
-
-            if (stdout.endsWith(": ") && pendingAnswers.length > 0) {
-                const answer = pendingAnswers.shift();
-
-                if (answer === INTERRUPT) {
-                    child.kill("SIGINT");
-                    return;
-                }
-
-                child.stdin.write(`${answer}\n`);
-            }
-
-            if (pendingAnswers.length === 0) {
-                child.stdin.end();
-            }
         });
         child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
             stderr += chunk;
         });
         child.once("error", reject);
-        child.once("spawn", () => {
-            if (pendingAnswers.length === 0) {
-                child.stdin.end();
-            }
-        });
+        child.once("spawn", () => child.stdin.end());
         child.once("close", (exitCode) =>
             resolve({ exitCode, stdout, stderr })
         );
@@ -185,19 +161,17 @@ test("CLI warns at startup when MusicBrainz is not configured", async () => {
     );
 });
 
-test("CLI needs a terminal to browse folders and does not prompt first", async () => {
+test("CLI needs a terminal to browse folders", async () => {
     const workingDirectory = await createTemporaryDirectory();
 
-    const { exitCode, stdout, stderr } = await runCli(workingDirectory, [], {
+    const { exitCode, stderr } = await runCli(workingDirectory, [], {
         environment: {
             LASTFM_API_KEY: undefined,
             MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
         },
-        answers: ["prompted-key"],
     });
 
     assert.equal(exitCode, 1);
-    assert.doesNotMatch(stdout, /Enter your Last\.fm API key: /);
     assert.equal(
         stderr,
         "Error: Browsing folders needs an interactive terminal; pass a source folder instead.\n"
@@ -220,32 +194,19 @@ test("CLI reads the API key from the user config .env", async () => {
     });
 
     assert.equal(exitCode, 0);
-    assert.doesNotMatch(stdout, /Enter your Last\.fm API key: /);
+    assert.doesNotMatch(stdout, /Last\.fm lookup requires LASTFM_API_KEY\./);
 });
 
-test("CLI fails cleanly when input ends during a prompt", async () => {
+test("CLI runs without a Last.fm key", async () => {
     const workingDirectory = await createTemporaryDirectory();
 
-    const { exitCode, stderr } = await runCli(workingDirectory, ["."], {
-        environment: { LASTFM_API_KEY: undefined },
+    const { exitCode, stdout } = await runCli(workingDirectory, ["."], {
+        environment: {
+            LASTFM_API_KEY: undefined,
+            MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
+        },
     });
 
-    assert.equal(exitCode, 1);
-    assert.match(stderr, /^Error: Input ended before an answer was given\.$/m);
-    assert.doesNotMatch(stderr, /unsettled top-level await/);
-});
-
-test("CLI stops with exit code 130 when interrupted at a prompt", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-
-    const { exitCode, stdout, stderr } = await runCli(workingDirectory, ["."], {
-        environment: { LASTFM_API_KEY: undefined },
-        answers: [INTERRUPT],
-    });
-
-    assert.equal(exitCode, 130);
-    assert.equal(stderr, "");
-    assert.match(stdout, /Interrupted\./);
-    assert.doesNotMatch(stdout, /Press Ctrl\+C again/);
-    assert.doesNotMatch(stdout, /Done!/);
+    assert.equal(exitCode, 0);
+    assert.match(stdout, /Last\.fm lookup requires LASTFM_API_KEY\./);
 });

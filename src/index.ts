@@ -7,7 +7,7 @@ import {
     runTuiLazily,
 } from "./cli/browser-launcher.js";
 import { loadEnvFiles } from "./cli/env-file.js";
-import { openTerminalSession } from "./cli/terminal.js";
+import { openStopSession } from "./cli/stop-session.js";
 import { consoleLogger } from "./shared/logger.js";
 
 await loadEnvFiles({
@@ -16,13 +16,12 @@ await loadEnvFiles({
     env: process.env,
     warn: consoleLogger.error,
 });
-const session = openTerminalSession();
+const session = openStopSession();
 
 try {
     process.exitCode = await runApp({
         argv: process.argv.slice(2),
         env: process.env,
-        ask: session.ask,
         workingDirectory: process.cwd(),
         renewStopSignal: session.renewStopSignal,
         canBrowse: isInteractiveTerminal(process),

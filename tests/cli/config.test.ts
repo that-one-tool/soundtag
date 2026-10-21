@@ -2,45 +2,25 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { test } from "node:test";
-import {
-    loadSessionConfig,
-    resolveSourceRoot,
-    type Ask,
-} from "../../src/cli/config.js";
+import { loadSessionConfig, resolveSourceRoot } from "../../src/cli/config.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-config-test-"
 );
 
-function createAsk(answers: Record<string, string>): {
-    ask: Ask;
-    questions: string[];
-} {
-    const questions: string[] = [];
-    return {
-        questions,
-        ask: async (question) => {
-            questions.push(question);
-            return answers[question] ?? "";
-        },
-    };
-}
-
-test("loadSessionConfig reads arguments and environment without prompting", async () => {
+test("loadSessionConfig reads arguments and environment", async () => {
     const workingDirectory = await createTemporaryDirectory();
-    const { ask, questions } = createAsk({});
 
-    const config = await loadSessionConfig({
+    const config = loadSessionConfig({
         argv: ["music", "--no-recursive", "-v", "--no-rename"],
         env: {
-            LASTFM_API_KEY: " lastfm-key ",
+            LASTFM_API_KEY: "lastfm-key",
             MUSICBRAINZ_USER_AGENT: "SoundTag/1.0",
             YOUTUBE_API_KEY: "youtube-key",
             LISTENBRAINZ_TOKEN: "listenbrainz-token",
             SOUNDTAG_COVER: "blocks",
         },
-        ask,
         workingDirectory,
     });
 
@@ -57,44 +37,29 @@ test("loadSessionConfig reads arguments and environment without prompting", asyn
             coverMode: "blocks",
         },
     });
-    assert.deepEqual(questions, []);
 });
 
-test("loadSessionConfig prompts only for a missing API key", async () => {
+test("loadSessionConfig runs without any API key", async () => {
     const workingDirectory = await createTemporaryDirectory();
-    const { ask, questions } = createAsk({
-        "Enter your Last.fm API key: ": "prompted-key",
-    });
 
-    const config = await loadSessionConfig({
-        argv: [],
-        env: {},
-        ask,
-        workingDirectory,
-    });
+    const config = loadSessionConfig({ argv: [], env: {}, workingDirectory });
 
-    assert.equal(config.settings.lastFmApiKey, "prompted-key");
+    assert.equal(config.settings.lastFmApiKey, undefined);
     assert.equal(config.settings.recursive, true);
     assert.equal(config.sourcePath, undefined);
-    assert.deepEqual(questions, ["Enter your Last.fm API key: "]);
 });
 
-test("loadSessionConfig rejects a missing API key or an unknown option", async () => {
+test("loadSessionConfig rejects an unknown option or cover mode", async () => {
     const workingDirectory = await createTemporaryDirectory();
-    const { ask } = createAsk({});
-    const load = (argv: string[], env: NodeJS.ProcessEnv) =>
-        loadSessionConfig({ argv, env, ask, workingDirectory });
+    const load = (argv: string[], env: NodeJS.ProcessEnv) => () =>
+        loadSessionConfig({ argv, env, workingDirectory });
 
-    await assert.rejects(
-        load([], { LASTFM_API_KEY: " " }),
-        /^Error: A Last\.fm API key is required\.$/
-    );
-    await assert.rejects(
-        load(["--unknown"], { LASTFM_API_KEY: "key" }),
+    assert.throws(
+        load(["--unknown"], {}),
         /^Error: Unknown option: --unknown$/
     );
-    await assert.rejects(
-        load([], { LASTFM_API_KEY: "key", SOUNDTAG_COVER: "sixel" }),
+    assert.throws(
+        load([], { SOUNDTAG_COVER: "sixel" }),
         /^Error: SOUNDTAG_COVER must be kitty, blocks or none\.$/
     );
 });

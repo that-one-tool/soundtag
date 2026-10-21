@@ -4,35 +4,10 @@ import { isDirectory } from "../library/file.js";
 import { parseCoverMode } from "../tui/cover-mode.js";
 import type { SessionConfig } from "./types.js";
 
-export type Ask = (question: string) => Promise<string>;
-
 export interface ConfigSources {
     argv: string[];
     env: NodeJS.ProcessEnv;
-    ask: Ask;
     workingDirectory: string;
-}
-
-async function resolveRequiredValue(
-    value: string | undefined,
-    askValue: () => Promise<string>,
-    missingMessage: string
-): Promise<string> {
-    const resolved = (value ?? (await askValue())).trim();
-
-    if (!resolved) {
-        throw new Error(missingMessage);
-    }
-
-    return resolved;
-}
-
-function resolveApiKey({ env, ask }: ConfigSources): Promise<string> {
-    return resolveRequiredValue(
-        env.LASTFM_API_KEY,
-        () => ask("Enter your Last.fm API key: "),
-        "A Last.fm API key is required."
-    );
 }
 
 export async function resolveSourceRoot(
@@ -54,15 +29,13 @@ export async function resolveSourceRoot(
     return sourceRoot;
 }
 
-export async function loadSessionConfig(
-    sources: ConfigSources
-): Promise<SessionConfig> {
+export function loadSessionConfig(sources: ConfigSources): SessionConfig {
     const options = parseArguments(sources.argv);
 
     return {
         sourcePath: options.sourcePath,
         settings: {
-            lastFmApiKey: await resolveApiKey(sources),
+            lastFmApiKey: sources.env.LASTFM_API_KEY,
             recursive: options.recursive,
             verbose: options.verbose,
             renameFiles: options.renameFiles,

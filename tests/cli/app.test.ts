@@ -6,7 +6,6 @@ import { test } from "node:test";
 import { runApp, type AppEnvironment } from "../../src/cli/app.js";
 import type { TuiOptions } from "../../src/tui/run-tui.js";
 import type { TuiOutcome } from "../../src/tui/types.js";
-import { InputCancelledError } from "../../src/shared/errors.js";
 import { captureConsole } from "../helpers/console.js";
 import { assertNoReport } from "../helpers/no-report.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
@@ -52,7 +51,6 @@ function runAppIn(
     return runApp({
         argv,
         env: environment,
-        ask: async () => "",
         workingDirectory,
         renewStopSignal: () => stopSignal,
         ...withoutBrowser,
@@ -140,27 +138,6 @@ test("runApp exits with 130 when stopped", async () => {
     assert.ok(!output.logs.includes("PROCESSING COMPLETE"));
 });
 
-test("runApp exits with 130 without an error when stopped at a prompt", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    const stop = new AbortController();
-
-    const exitCode = await runApp({
-        argv: [],
-        env: {},
-        ask: async () => {
-            stop.abort();
-            throw new InputCancelledError();
-        },
-        workingDirectory,
-        renewStopSignal: () => stop.signal,
-        canBrowse: true,
-        openBrowser: withoutBrowser.openBrowser,
-    });
-
-    assert.equal(exitCode, 130);
-    assert.deepEqual(output.errors, []);
-});
-
 test("runApp still reports real errors after a stop was requested", async () => {
     const workingDirectory = await createTemporaryDirectory();
 
@@ -181,7 +158,6 @@ function browseWith(
     return runApp({
         argv: ["--no-recursive", "--no-rename"],
         env: environment,
-        ask: async () => "",
         workingDirectory,
         renewStopSignal: () => new AbortController().signal,
         canBrowse: true,
@@ -235,7 +211,6 @@ test("runApp needs an interactive terminal to browse folders", async () => {
     const exitCode = await runApp({
         argv: [],
         env: {},
-        ask: async () => assert.fail("No prompt without a terminal."),
         workingDirectory,
         renewStopSignal: () => new AbortController().signal,
         ...withoutBrowser,

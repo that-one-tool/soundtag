@@ -1,7 +1,7 @@
 import type { CoverMode } from "../tui/cover-mode.js";
 
 export interface TaggingSettings {
-    lastFmApiKey: string;
+    lastFmApiKey?: string;
     recursive: boolean;
     verbose: boolean;
     renameFiles: boolean;

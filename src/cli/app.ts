@@ -13,7 +13,7 @@ import {
 } from "./config.js";
 import { createMetadataChain } from "../metadata/create-metadata-chain.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
-import { getErrorMessage, InputCancelledError } from "../shared/errors.js";
+import { getErrorMessage } from "../shared/errors.js";
 import type { TuiOutcome } from "../tui/types.js";
 import type { BrowserLauncher } from "./browser-launcher.js";
 import { EXIT_FAILURE, EXIT_INTERRUPTED, EXIT_SUCCESS } from "./exit-codes.js";
@@ -158,11 +158,7 @@ function getCompletionExitCode(stopSignal: AbortSignal): number {
     return stopSignal.aborted ? EXIT_INTERRUPTED : EXIT_SUCCESS;
 }
 
-function getFailureExitCode(error: unknown, stopSignal: AbortSignal): number {
-    if (error instanceof InputCancelledError && stopSignal.aborted) {
-        return EXIT_INTERRUPTED;
-    }
-
+function reportFailure(error: unknown): number {
     console.error(`Error: ${getErrorMessage(error)}`);
     return EXIT_FAILURE;
 }
@@ -178,7 +174,7 @@ async function runTagging(
         await tagLibrary(config, stopSignal, session.metadataChain);
         return getCompletionExitCode(stopSignal);
     } catch (error) {
-        return getFailureExitCode(error, stopSignal);
+        return reportFailure(error);
     }
 }
 
@@ -252,9 +248,9 @@ export async function runApp(environment: AppEnvironment): Promise<number> {
     const stopSignal = environment.renewStopSignal();
 
     try {
-        const sessionConfig = await loadSessionConfig(environment);
+        const sessionConfig = loadSessionConfig(environment);
         return await runSession(sessionConfig, environment, stopSignal);
     } catch (error) {
-        return getFailureExitCode(error, stopSignal);
+        return reportFailure(error);
     }
 }

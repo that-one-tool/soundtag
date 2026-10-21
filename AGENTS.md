@@ -26,8 +26,8 @@ npm run build      # compile to dist/
 
 | Folder                    | Responsibility                                                                                                                                                                                                                                  |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/index.ts`            | Entry point and `soundtag` bin: loads `.env` and wires the terminal session and browser launcher to `runApp`.                                                                                                                                   |
-| `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, terminal prompts and Ctrl+C handling, banner, summary, exit codes, and the lazy launch of the TUI.                                                                              |
+| `src/index.ts`            | Entry point and `soundtag` bin: loads `.env` and wires the stop session and browser launcher to `runApp`.                                                                                                                                       |
+| `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, Ctrl+C handling, banner, summary, exit codes, and the lazy launch of the TUI.                                                                                                   |
 | `src/tui/`                | Ink terminal UI: folder browser reducer, metadata panel, log pane, background `TaggingQueue`, session status dots. React components live in `components/` and hooks in `hooks/`.                                                                |
 | `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file and returns its status and tags; `renameTrack` then renames it from those tags; `renameAlbumFolder` renames single-album folders at the end. |
 | `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, renames with a per-batch folder name cache, track filenames, and search terms derived from filenames and folders.                                                                      |
@@ -49,7 +49,7 @@ graph free of cycles.
   Only the keys below are taken, the first file wins key by key, and variables
   already set in the shell win over both. A new key must be added to
   `SOUNDTAG_KEYS`:
-  - `LASTFM_API_KEY` is required (prompted when missing).
+  - `LASTFM_API_KEY` enables the last-resort Last.fm lookup.
   - `MUSICBRAINZ_USER_AGENT` enables MusicBrainz, and ListenBrainz with
     `LISTENBRAINZ_TOKEN` (a ListenBrainz user token).
   - `YOUTUBE_API_KEY` enables the YouTube cover fallback.
@@ -125,9 +125,9 @@ Not enforced by tooling, but expected:
     `createControlledServices()` for TUI services with a hand-driven queue
 - Audio fixtures live in `tests/fixtures/`. Copy a fixture into a temporary
   directory before writing tags to it.
-- `tests/index.test.ts` spawns the real CLI (smoke tests, prompts, Ctrl+C).
+- `tests/index.test.ts` spawns the real CLI (smoke tests).
   Its stdin is piped, so it never reaches the TUI. Prefer in-process tests
-  through `runApp`, `loadConfig` and the like.
+  through `runApp`, `loadSessionConfig` and the like.
 - Render components with `ink-testing-library`. Test files stay `.ts` and use
   `createElement`, because tsx only applies the `jsx` setting to files that
   `tsconfig.json` includes (`src/`).
@@ -146,8 +146,8 @@ Not enforced by tooling, but expected:
 - The TUI is loaded with a dynamic `import()` (`runTuiLazily`) so scripted runs
   never load React and Ink. Run it from `dist/` or from the repo root: tsx
   picks up the `tsconfig.json` of the working directory for JSX.
-- Ink owns stdin in raw mode, so the readline session is closed before the TUI
-  starts and Ctrl+C reaches the UI as a key press, not a `SIGINT`.
+- Ink owns stdin in raw mode, so the `SIGINT` listener of the stop session is
+  removed before the TUI starts and Ctrl+C reaches the UI as a key press.
 - Node ≥ 24 is required, and `@types/node` is pinned to v24 so the typecheck
   rejects newer APIs.
 - Files are rewritten through a hidden temporary copy (`.<name>.<uuid>.<ext>`).
@@ -160,5 +160,3 @@ Not enforced by tooling, but expected:
   read endpoints; it allows 50 requests per 5 s) and iTunes 4 s apart.
   Deezer reports errors as HTTP 200 with an `error` object.
   Cover image downloads are not rate-limited.
-- With piped stdin, readline drops lines that arrive before `question()` is
-  called. The CLI test helper answers each prompt only once it appears.

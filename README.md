@@ -7,9 +7,9 @@ updates files in place with audio tags and cover art when a match is found.
 ## Requirements
 
 - Node.js 24 or later
-- A Last.fm API key
 - A MusicBrainz User-Agent string to enable the MusicBrainz lookups
 - A ListenBrainz user token, recommended for the most accurate matches
+- Optionally, a Last.fm API key for the last-resort lookup
 
 ## Setup
 
@@ -93,8 +93,6 @@ last resort, it can use a YouTube video thumbnail. This requires a
 YouTube Data API key with access to `search.list`; set `YOUTUBE_API_KEY` to
 enable it. The thumbnail may be a video still rather than the track's album
 art, and YouTube API quota limits apply.
-
-The Last.fm API key can also be entered when prompted at startup.
 
 ## Usage
 
@@ -184,7 +182,7 @@ embedded artwork compatibility can vary between players.
 With a source folder argument, press Ctrl+C to stop a run: SoundTag finishes
 the file it is working on, prints the summary (with the number of files not
 processed), and exits with code 130. Press Ctrl+C a second time to quit
-immediately. Ctrl+C at a prompt exits with code 130.
+immediately.
 
 When you quit the browser, SoundTag exits with code 1 if any run failed (a
 file failed), otherwise 0. Stopped runs do not count as failures. Without an
