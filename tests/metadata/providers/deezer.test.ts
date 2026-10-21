@@ -77,7 +77,7 @@ test("DeezerProvider fills info, release extras and the largest cover", async ()
             title: "One More Time",
             artist: "Daft Punk",
             album: "Discovery",
-            year: "2001",
+            year: "",
         },
         extras: {
             genre: "Electro",

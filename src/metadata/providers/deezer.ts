@@ -1,7 +1,6 @@
 import { getErrorMessage } from "../../shared/errors.js";
 import { isSameRelease, isSameTrack } from "../track-matching.js";
 import {
-    extractYear,
     optionalCount,
     optionalText,
     removeUnknownValues,
@@ -26,7 +25,6 @@ import {
 } from "./deezer-client.js";
 
 interface DeezerDetails {
-    year: string;
     extras: TrackExtras;
     isRelease: boolean;
 }
@@ -37,7 +35,7 @@ interface DetailsRequest {
     isRelease: boolean;
 }
 
-const NO_DETAILS = { year: "", extras: {} };
+const NO_DETAILS = { extras: {} };
 
 function isSearchedTrack(track: DeezerTrack, search: TrackSearch): boolean {
     return isSameTrack(
@@ -71,15 +69,13 @@ function getAlbumTitle(track: DeezerTrack): string {
     return valueOrEmpty(track.album?.title);
 }
 
-function getTrackInfo(
-    track: DeezerTrack,
-    { year, isRelease }: DeezerDetails
-): TrackInfo {
+// Deezer dates are often those of a reissue, so the year is left to others.
+function getTrackInfo(track: DeezerTrack, isRelease: boolean): TrackInfo {
     return {
         title: valueOrEmpty(track.title),
         artist: valueOrEmpty(track.artist?.name),
         album: isRelease ? getAlbumTitle(track) : "",
-        year,
+        year: "",
     };
 }
 
@@ -146,7 +142,7 @@ function isReleaseOfTrack(
 
 function getGenreDetails(album: DeezerAlbum): DeezerDetails {
     const extras = removeUnknownValues({ genre: getGenre(album) });
-    return { year: "", extras, isRelease: false };
+    return { extras, isRelease: false };
 }
 
 export class DeezerProvider implements MetadataProvider {
@@ -169,7 +165,7 @@ export class DeezerProvider implements MetadataProvider {
 
         const details = await this.findDetails(track, search, needs.details);
         return {
-            info: getTrackInfo(track, details),
+            info: getTrackInfo(track, details.isRelease),
             extras: details.extras,
             coverData: await this.findCover(
                 track,
@@ -244,11 +240,7 @@ export class DeezerProvider implements MetadataProvider {
             albumArtist: getAlbumArtist(album),
             ...getPositionExtras(tracks, trackId),
         };
-        return {
-            year: extractYear(album.release_date),
-            extras: removeUnknownValues(extras),
-            isRelease: true,
-        };
+        return { extras: removeUnknownValues(extras), isRelease: true };
     }
 
     private findCover(

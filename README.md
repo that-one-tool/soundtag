@@ -53,7 +53,7 @@ letters and digits, unless it changes a number, a Roman numeral or a plural.
 From ListenBrainz, Deezer and iTunes, the album, track and disc numbers and
 counts, album artist and cover are only taken when the result is on the track's
 album (or no album is known) and that album is by the track's artist or by
-various artists; so is the year from ListenBrainz and Deezer. A cover band's
+various artists; so is the year from ListenBrainz. A cover band's
 record that credits the original artist is therefore not taken as the track's
 album.
 
@@ -73,15 +73,15 @@ album.
    MusicBrainz allows one request per second; SoundTag spaces its requests,
    release lookups included, three seconds apart.
 3. **Deezer** needs no key or account. Among its results, it prefers the
-   searched song on the track's album, and gives the genre, the year (possibly
-   that of a reissue), the track and disc numbers and counts, the album artist
-   and the 1000×1000 artwork. Its album requests are made once per album and
-   batch, only while details are missing, and its requests are spaced half a
-   second apart.
+   searched song on the track's album, and gives the genre, the track and disc
+   numbers and counts, the album artist and the 1000×1000 artwork. Its release
+   dates are often those of a reissue, so SoundTag takes no year from Deezer.
+   Its album requests are made once per album and batch, only while details are
+   missing, and its requests are spaced half a second apart.
 4. **iTunes**, through
    [Apple's Search API](https://performance-partners.apple.com/search-api),
-   gives the same details and artwork. Its searches are spaced at least four
-   seconds apart to stay within the 20-requests-per-minute limit.
+   gives the year and the same details and artwork. Its searches are spaced at
+   least four seconds apart to stay within the 20-requests-per-minute limit.
 5. **Last.fm** is the last resort for the title, artist, album, year and cover.
    It makes up to two requests per track (a search, then the track details),
    spaced two seconds apart.
@@ -259,8 +259,8 @@ that gets a cover this way is reported as tagged, and is renamed only when it
 also has a title, artist and year.
 Because the file is not considered fully tagged until year, genre and cover
 art are present, later runs can retry to fill those gaps. SoundTag prefers the
-year the song was first released, from MusicBrainz, and otherwise takes the
-year of the matched song from Deezer, iTunes or Last.fm. Each
+year the song was first released, from ListenBrainz or MusicBrainz, and
+otherwise takes the year of the matched song from iTunes or Last.fm. Each
 file is processed sequentially using a temporary copy before replacement;
 large lossless files therefore need temporary free space comparable to the
 file size and can require substantial additional disk or NAS I/O.

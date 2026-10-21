@@ -31,7 +31,6 @@ export interface DeezerTrack {
 }
 
 export interface DeezerAlbum extends DeezerAlbumSummary {
-    release_date?: string;
     genres?: { data?: DeezerNamed[] };
 }
 

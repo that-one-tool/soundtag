@@ -1192,7 +1192,7 @@ const deezerDiscovery: Record<string, object> = {
     },
 };
 
-test("findTrackMetadata completes a track with Deezer and skips iTunes and Last.fm", async () => {
+test("findTrackMetadata fills a track with Deezer and leaves the year to later providers", async () => {
     const requests: URL[] = [];
     mockLastFmThenDeezer(requests);
 
@@ -1203,7 +1203,7 @@ test("findTrackMetadata completes a track with Deezer and skips iTunes and Last.
             title: "One More Time",
             artist: "Daft Punk",
             album: "Discovery",
-            year: "2001",
+            year: "",
         },
         extras: {
             genre: "Electro",
@@ -1222,23 +1222,10 @@ test("findTrackMetadata completes a track with Deezer and skips iTunes and Last.
             "api.deezer.com/album/7",
             "api.deezer.com/album/7/tracks",
             "cdn.deezer.test/xl.jpg",
+            "itunes.apple.com/search",
+            "ws.audioscrobbler.com/2.0/",
+            "ws.audioscrobbler.com/2.0/",
         ]
-    );
-});
-
-test("findTrackMetadata takes the Deezer year when MusicBrainz finds none", async () => {
-    const requests: URL[] = [];
-    mockLastFmThenDeezer(requests);
-
-    const metadata = await findTrackMetadata(
-        { title: "One More Time" },
-        { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
-    );
-
-    assert.equal(metadata?.info.year, "2001");
-    assert.ok(requests.some(({ hostname }) => hostname === "musicbrainz.org"));
-    assert.ok(
-        requests.every(({ hostname }) => hostname !== "itunes.apple.com")
     );
 });
 
@@ -1365,4 +1352,27 @@ test("ListenBrainz release lookups and MusicBrainz searches share one rate limit
     ).find({ ...numbSearch, album: "" }, emptyTags);
 
     assert.deepEqual(clock.sleeps, [3000]);
+});
+
+test("findTrackMetadata takes the year from iTunes after Deezer", async () => {
+    mockLastFmThenDeezer([]);
+    const deezerAndLastFm = globalThis.fetch;
+    globalThis.fetch = async (input, init) =>
+        new URL(input.toString()).hostname === "itunes.apple.com"
+            ? Response.json({
+                  results: [
+                      {
+                          trackName: "One More Time",
+                          artistName: "Daft Punk",
+                          collectionName: "Discovery",
+                          releaseDate: "2001-03-12T08:00:00Z",
+                      },
+                  ],
+              })
+            : deezerAndLastFm(input, init);
+
+    const metadata = await findTrackMetadata({ title: "One More Time" });
+
+    assert.equal(metadata?.info.year, "2001");
+    assert.equal(metadata?.extras.trackNumber, 1);
 });
