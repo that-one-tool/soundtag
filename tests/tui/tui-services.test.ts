@@ -8,6 +8,7 @@ import type { PathMove } from "../../src/shared/paths.js";
 import type { BrowserEntry } from "../../src/tui/types.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
+import { RENAMING_ON } from "../helpers/tui.js";
 
 restoreFetchAfterEach();
 const createTemporaryDirectory = useTemporaryDirectories(
@@ -28,7 +29,11 @@ test("createTuiServices routes job results to the status store and logs", async 
         startDirectory: directory,
     });
 
-    services.queue.enqueue({ kind: "file", path: source });
+    services.queue.enqueue({
+        kind: "file",
+        path: source,
+        settings: RENAMING_ON,
+    });
     await services.queue.whenIdle();
 
     assert.equal(services.statusStore.getSnapshot().get(source), "SKIPPED");
@@ -67,7 +72,11 @@ test("createTuiServices marks files as redone only once their new status is reco
     );
     services.redoneFiles.subscribe(() => seen.push(`redone:${isRedone()}`));
 
-    services.queue.enqueue({ kind: "file", path: source });
+    services.queue.enqueue({
+        kind: "file",
+        path: source,
+        settings: RENAMING_ON,
+    });
     await services.queue.whenIdle();
 
     assert.deepEqual(seen, ["SKIPPED:false", "redone:true", "redone:false"]);
@@ -88,6 +97,7 @@ test("createTuiServices forgets redone files when a job fails", async () => {
         kind: "folder",
         path: path.join(directory, "missing"),
         recursive: true,
+        settings: RENAMING_ON,
     });
     await services.queue.whenIdle();
 
@@ -120,7 +130,12 @@ test("createTuiServices logs tag clears and checks them against the queue", asyn
         path: path.join(folder, "song.mp3"),
         kind: "file",
     };
-    services.queue.enqueue({ kind: "folder", path: folder, recursive: false });
+    services.queue.enqueue({
+        kind: "folder",
+        path: folder,
+        recursive: false,
+        settings: RENAMING_ON,
+    });
 
     await services.tagClearer.request(song);
     await services.queue.whenIdle();
@@ -158,8 +173,17 @@ test("createTuiServices moves statuses and queued targets of a renamed album fol
     const moves: PathMove[] = [];
     services.pathMoves.subscribe((move) => moves.push(move));
 
-    services.queue.enqueue({ kind: "folder", path: album, recursive: false });
-    services.queue.enqueue({ kind: "file", path: source });
+    services.queue.enqueue({
+        kind: "folder",
+        path: album,
+        recursive: false,
+        settings: RENAMING_ON,
+    });
+    services.queue.enqueue({
+        kind: "file",
+        path: source,
+        settings: RENAMING_ON,
+    });
     await services.queue.whenIdle();
 
     const renamed = path.join(directory, "Artist - Album");
@@ -202,4 +226,16 @@ test("createTuiServices draws no covers by default", async () => {
     assert.deepEqual(await services.coverCache.read(entry), {
         kind: "missing",
     });
+});
+
+test("createTuiServices starts the renaming choice from the options", () => {
+    const services = createTuiServices({
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: true,
+        renameFiles: false,
+        startDirectory: process.cwd(),
+    });
+
+    assert.equal(services.renaming.getSnapshot(), false);
 });

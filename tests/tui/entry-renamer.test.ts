@@ -10,6 +10,7 @@ import { TaggingQueue } from "../../src/tui/tagging-queue.js";
 import type { BrowserEntry } from "../../src/tui/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
+import { RENAMING_ON } from "../helpers/tui.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-entry-renamer-test-"
@@ -83,7 +84,7 @@ test("EntryRenamer refuses invalid names", async () => {
 test("EntryRenamer refuses entries the tagging queue works on", async () => {
     const song = await createSong();
     const { renamer, queue, logger, moves } = createRenamer();
-    queue.enqueue({ kind: "file", path: song.path });
+    queue.enqueue({ kind: "file", path: song.path, settings: RENAMING_ON });
 
     await renameTo(renamer, song, "new");
 
@@ -123,8 +124,12 @@ test("EntryRenamer refuses a folder holding a queued file", async () => {
     const song = await createSong();
     const folder = path.dirname(song.path);
     const { renamer, queue, logger } = createRenamer();
-    queue.enqueue({ kind: "file", path: path.join(folder, "other.mp3") });
-    queue.enqueue({ kind: "file", path: song.path });
+    queue.enqueue({
+        kind: "file",
+        path: path.join(folder, "other.mp3"),
+        settings: RENAMING_ON,
+    });
+    queue.enqueue({ kind: "file", path: song.path, settings: RENAMING_ON });
     const entry: BrowserEntry = {
         name: path.basename(folder),
         path: folder,
@@ -142,7 +147,7 @@ test("EntryRenamer starts a draft only for an entry the queue leaves alone", asy
     const { renamer, queue, logger } = createRenamer();
 
     assert.equal(renamer.startDraft(song)?.field.text, "old");
-    queue.enqueue({ kind: "file", path: song.path });
+    queue.enqueue({ kind: "file", path: song.path, settings: RENAMING_ON });
 
     assert.equal(renamer.startDraft(song), null);
     assert.equal(renamer.startDraft(undefined), null);

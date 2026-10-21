@@ -53,12 +53,13 @@ function useBrowsing(startDirectory: string, services: TuiServices) {
     return { browser, dispatch, hovered, details, statuses, redoneFiles };
 }
 
-function useStatus({ queue, subfolders, coverOverlay }: TuiServices) {
+function useStatus({ queue, subfolders, renaming, coverOverlay }: TuiServices) {
     const queueState = useStore(queue);
     const subfoldersIncluded = useStore(subfolders);
+    const renamingEnabled = useStore(renaming);
     const { quitting, requestQuit } = useQuit(queue, queueState, coverOverlay);
     return {
-        status: { queueState, quitting, subfoldersIncluded },
+        status: { queueState, quitting, subfoldersIncluded, renamingEnabled },
         requestQuit,
     };
 }

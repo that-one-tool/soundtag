@@ -13,7 +13,7 @@ import {
     waitFor,
     waitForInput,
 } from "../helpers/ink.js";
-import { createControlledServices } from "../helpers/tui.js";
+import { createControlledServices, RENAMING_ON } from "../helpers/tui.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
@@ -51,6 +51,7 @@ test("renderTui reports a failure when a job failed", async () => {
         kind: "folder",
         path: directory,
         recursive: true,
+        settings: RENAMING_ON,
     });
     jobs[0].finish(false);
     await services.queue.whenIdle();
@@ -66,6 +67,7 @@ test("renderTui waits for the current file before quitting", async () => {
         kind: "folder",
         path: directory,
         recursive: true,
+        settings: RENAMING_ON,
     });
     let settled = false;
     void outcome.then(() => (settled = true));
@@ -85,6 +87,7 @@ test("renderTui forces the quit when asked twice during a run", async () => {
         kind: "folder",
         path: directory,
         recursive: true,
+        settings: RENAMING_ON,
     });
 
     stdin.write("q");

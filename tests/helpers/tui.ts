@@ -6,11 +6,13 @@ import { LogBuffer } from "../../src/tui/log-buffer.js";
 import { PathMoves } from "../../src/tui/path-moves.js";
 import { TaggingQueue } from "../../src/tui/tagging-queue.js";
 import { TagClearer } from "../../src/tui/tag-clearer.js";
-import { SubfolderSetting } from "../../src/tui/subfolder-setting.js";
+import { ToggleSetting } from "../../src/tui/toggle-setting.js";
 import { RedoneFiles } from "../../src/tui/redone-files.js";
 import { TrackStatusStore } from "../../src/tui/track-status-store.js";
 import type { TuiServices } from "../../src/tui/tui-services.js";
-import type { TagTarget } from "../../src/tui/types.js";
+import type { TagJobSettings, TagTarget } from "../../src/tui/types.js";
+
+export const RENAMING_ON: TagJobSettings = { renameFiles: true };
 
 export interface ControlledJob {
     target: TagTarget;
@@ -40,7 +42,8 @@ export function createControlledServices(): {
             statusStore,
             redoneFiles: new RedoneFiles(),
             pathMoves,
-            subfolders: new SubfolderSetting(true),
+            subfolders: new ToggleSetting(true),
+            renaming: new ToggleSetting(true),
             detailsCache: createDetailsCache(),
             coverCache: createCoverCache("blocks"),
             coverOverlay: new CoverOverlay(() => {}),

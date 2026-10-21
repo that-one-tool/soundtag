@@ -39,6 +39,10 @@ export class TagClearer {
         return this.clearing;
     }
 
+    isArmed(): boolean {
+        return this.armed !== null;
+    }
+
     disarm(): void {
         this.armed = null;
     }

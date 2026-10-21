@@ -11,6 +11,7 @@ export type KeyAction =
     | "tagFolder"
     | "stop"
     | "toggleSubfolders"
+    | "toggleRenaming"
     | "rename"
     | "clearTags"
     | "confirmClear"
@@ -30,6 +31,7 @@ const KEY_BINDINGS: [KeyMatcher, KeyAction][] = [
     [(input) => input === "a", "tagFolder"],
     [(input) => input === "s", "stop"],
     [(input) => input === "r", "toggleSubfolders"],
+    [(input) => input === "n", "toggleRenaming"],
     [(input) => input === "e", "rename"],
     [(input) => input === "D", "clearTags"],
     [(input) => input.toLowerCase() === "y", "confirmClear"],

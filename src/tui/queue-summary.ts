@@ -17,16 +17,27 @@ export function describeSubfolderChoice(included: boolean): string {
     return `subfolders ${included ? "on" : "off"}`;
 }
 
-function describeTargetSubfolders(target: TagTarget): string {
-    if (target.kind === "file") {
-        return "";
-    }
+export function describeRenamingChoice(enabled: boolean): string {
+    return `renaming ${enabled ? "on" : "off"}`;
+}
 
-    return ` (${describeSubfolderChoice(target.recursive)})`;
+function listTargetChoices(target: TagTarget): string[] {
+    const choices =
+        target.kind === "folder"
+            ? [describeSubfolderChoice(target.recursive)]
+            : [];
+    return target.settings.renameFiles
+        ? choices
+        : [...choices, describeRenamingChoice(false)];
+}
+
+function describeTargetChoices(target: TagTarget): string {
+    const choices = listTargetChoices(target);
+    return choices.length > 0 ? ` (${choices.join(", ")})` : "";
 }
 
 export function describeTarget(target: TagTarget): string {
-    return `${path.basename(target.path)}${describeTargetSubfolders(target)}`;
+    return `${path.basename(target.path)}${describeTargetChoices(target)}`;
 }
 
 export function describeQueue(state: QueueState, quitting: boolean): string {

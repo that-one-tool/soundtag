@@ -12,12 +12,11 @@ import type { ProcessedTrack, ProcessingReport } from "../processing/types.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
 import type { PathMove } from "../shared/paths.js";
-import type { TagJobRunner, TagTarget } from "./types.js";
+import type { TagJobRunner, TagJobSettings, TagTarget } from "./types.js";
 
 export interface TagJobDependencies {
     metadataChain: MetadataChain;
     logger: Logger;
-    renameFiles: boolean;
     libraryRoot: string;
     onTrackProcessed: (result: ProcessedTrack) => void;
     onFolderRenamed: (move: PathMove) => void;
@@ -63,9 +62,14 @@ function findTargetFiles(
     return findFolderFiles(target.path, target.recursive);
 }
 
+interface TagRun {
+    stopSignal: AbortSignal;
+    settings: TagJobSettings;
+}
+
 async function runBatch(
     { sourceRoot, files }: TargetFiles,
-    stopSignal: AbortSignal,
+    { stopSignal, settings }: TagRun,
     dependencies: TagJobDependencies
 ): Promise<ProcessingReport> {
     const { metadataChain, logger, ...batchSettings } = dependencies;
@@ -75,6 +79,7 @@ async function runBatch(
         context: { sourceRoot, metadataChain, logger },
         report,
         stopSignal,
+        renameFiles: settings.renameFiles,
         ...batchSettings,
     });
     return report;
@@ -82,20 +87,20 @@ async function runBatch(
 
 async function tagFiles(
     targetFiles: TargetFiles,
-    stopSignal: AbortSignal,
+    run: TagRun,
     dependencies: TagJobDependencies
 ): Promise<boolean> {
-    const report = await runBatch(targetFiles, stopSignal, dependencies);
+    const report = await runBatch(targetFiles, run, dependencies);
     return countStatuses(report).errors === 0;
 }
 
 async function tagFoundFiles(
     targetFiles: TargetFiles,
-    stopSignal: AbortSignal,
+    run: TagRun,
     dependencies: TagJobDependencies
 ): Promise<boolean> {
     if (targetFiles.files.length > 0) {
-        return tagFiles(targetFiles, stopSignal, dependencies);
+        return tagFiles(targetFiles, run, dependencies);
     }
 
     dependencies.logger.info(
@@ -111,7 +116,8 @@ async function runTagJob(
 ): Promise<boolean> {
     try {
         const targetFiles = await findTargetFiles(target, dependencies.logger);
-        return await tagFoundFiles(targetFiles, stopSignal, dependencies);
+        const run = { stopSignal, settings: target.settings };
+        return await tagFoundFiles(targetFiles, run, dependencies);
     } catch (error) {
         dependencies.logger.error(`Error: ${getErrorMessage(error)}`);
         return false;

@@ -133,6 +133,7 @@ to). Inside tmux, screen or Zellij the kitty protocol is not detected. Set
 | `e`                    | Rename the file or folder under the cursor                 |
 | `D` (Shift+d)          | Remove all tags and the cover of the file under the cursor |
 | `r`                    | Include or exclude subfolders in folder runs               |
+| `n`                    | Turn file and folder renaming on or off for the next runs  |
 | `s`                    | Stop the current run after the file in progress            |
 | `q`, Ctrl+C            | Quit (press again during a run to quit at once)            |
 | Tab                    | Switch between the browser and the log pane                |
@@ -155,9 +156,11 @@ presses are queued and run one after another, and are ignored once you quit.
 Once processed in this session, files get a colored dot: green for `TAGGED`,
 yellow for `SKIPPED`, red for `FAILED`. A folder shows the worst status of the
 files inside it. Folder runs include subfolders unless `--no-recursive` was
-passed; `r` switches this for the folders queued next, and the status bar shows
-the current choice. A file or folder that is already queued or running is not
-queued again, even with a different choice; the log says so. A file renamed by
+passed; `r` switches this for the folders queued next. Likewise, runs rename
+files and folders unless `--no-rename` was passed; `n` switches this for the
+files and folders queued next. The status bar shows both choices. A file or
+folder that is already queued or running is not queued again, even with a
+different choice; the log says so. A file renamed by
 an earlier run before its own queued run starts is skipped. Quitting during a
 run waits for the file in progress; quitting again exits immediately with
 code 130. Symlinked folders are listed too. The browser needs an interactive
@@ -218,7 +221,7 @@ folder of a multi-disc album also gets its disc number. The source folder and
 its parents keep their names; in the browser, this is the folder it started
 in. Runs of spaces in generated names are collapsed, so files whose tags hold
 such spaces are renamed once. Use `--no-rename` to keep
-file and folder names:
+file and folder names (in the browser, `n` switches this):
 
 ```sh
 soundtag /path/to/music --no-rename

@@ -32,7 +32,7 @@ import {
     waitForFrame,
     waitForInput,
 } from "../../helpers/ink.js";
-import { createControlledServices } from "../../helpers/tui.js";
+import { createControlledServices, RENAMING_ON } from "../../helpers/tui.js";
 import { useTemporaryDirectories } from "../../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories("soundtag-app-test-");
@@ -135,6 +135,7 @@ test("App queues the hovered file or folder for tagging", async () => {
         kind: "folder",
         path: path.join(directory, "Album"),
         recursive: true,
+        settings: RENAMING_ON,
     });
 });
 
@@ -187,7 +188,12 @@ test("App marks queued entries and their folders with a dot", async () => {
     const { lastFrame, services } = await renderApp(directory);
     const album = path.join(directory, "Album");
 
-    services.queue.enqueue({ kind: "folder", path: album, recursive: true });
+    services.queue.enqueue({
+        kind: "folder",
+        path: album,
+        recursive: true,
+        settings: RENAMING_ON,
+    });
 
     await waitFor(() => findFrameLine(lastFrame, "Album/").includes("●"));
     assert.doesNotMatch(findFrameLine(lastFrame, "song.mp3"), /●/);
@@ -196,6 +202,7 @@ test("App marks queued entries and their folders with a dot", async () => {
     services.queue.enqueue({
         kind: "file",
         path: path.join(directory, "song.mp3"),
+        settings: RENAMING_ON,
     });
     await waitFor(() => findFrameLine(lastFrame, "song.mp3").includes("●"));
 });
@@ -416,6 +423,22 @@ test("App cancels a tag clear on any other key", async () => {
     assert.equal(countLines(services, "Cleared"), 0);
 });
 
+test("App takes n as a no to a pending clear, not a renaming switch", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, services } = await hoverSong(directory);
+    const song = path.join(directory, "song.mp3");
+
+    stdin.write("D");
+    await waitForFrame(lastFrame, "Press y");
+    stdin.write("n");
+    stdin.write("y");
+    await delay(50);
+
+    assert.equal(services.renaming.getSnapshot(), true);
+    const tags = await getTagStore(song).read(song);
+    assert.equal(tags.info.artist, "Black Sabbath");
+});
+
 test("App queues nothing while tags are being cleared", async () => {
     const directory = await createLibrary();
     const { services, jobs } = createControlledServices();
@@ -424,6 +447,7 @@ test("App queues nothing while tags are being cleared", async () => {
         subscribe: () => () => {},
         getSnapshot: () => 0,
         isClearing: () => clearing,
+        isArmed: () => false,
         disarm: () => {},
         request: () => {},
         confirm: async () => {},
@@ -518,6 +542,7 @@ test("App tags the folder being browsed with a", async () => {
         kind: "folder",
         path: directory,
         recursive: true,
+        settings: RENAMING_ON,
     });
 });
 
@@ -545,18 +570,47 @@ test("App keeps the subfolder choice of each queued folder", async () => {
     assert.deepEqual(
         jobs.map(({ target }) => target),
         [
-            { kind: "folder", path: directory, recursive: true },
+            {
+                kind: "folder",
+                path: directory,
+                recursive: true,
+                settings: RENAMING_ON,
+            },
             {
                 kind: "folder",
                 path: path.join(directory, "Album"),
                 recursive: true,
+                settings: RENAMING_ON,
             },
             {
                 kind: "folder",
                 path: path.join(directory, "Live"),
                 recursive: false,
+                settings: RENAMING_ON,
             },
         ]
+    );
+});
+
+test("App keeps the renaming choice of each queued target", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, jobs } = await renderApp(directory);
+    stdin.write("a");
+    await waitFor(() => jobs.length === 1);
+
+    stdin.write("n");
+    await waitForFrame(lastFrame, "renaming off");
+    stdin.write(KEYS.down);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Black Sabbath");
+    stdin.write("t");
+    await waitForFrame(lastFrame, "1 queued");
+    jobs[0].finish(true);
+    await waitFor(() => jobs.length === 2);
+
+    assert.deepEqual(
+        jobs.map(({ target }) => target.settings),
+        [{ renameFiles: true }, { renameFiles: false }]
     );
 });
 
@@ -567,6 +621,7 @@ test("App ignores tag keys while quitting", async () => {
         kind: "folder",
         path: path.join(directory, "Album"),
         recursive: true,
+        settings: RENAMING_ON,
     });
     stdin.write("q");
     await waitForFrame(lastFrame, "quitting after the current file");

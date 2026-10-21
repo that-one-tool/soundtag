@@ -9,6 +9,7 @@ import { TrackStatusStore } from "../../src/tui/track-status-store.js";
 import type { BrowserEntry } from "../../src/tui/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
+import { RENAMING_ON } from "../helpers/tui.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-tag-clearer-test-"
@@ -110,6 +111,18 @@ test("TagClearer ignores a confirmation once disarmed", async () => {
     assert.equal(await readTitle(song), "Title");
 });
 
+test("TagClearer tells whether a request waits for confirmation", async () => {
+    const song = await createTaggedSong();
+    const { clearer } = createClearer();
+    assert.equal(clearer.isArmed(), false);
+
+    clearer.request(song);
+    assert.equal(clearer.isArmed(), true);
+    clearer.disarm();
+
+    assert.equal(clearer.isArmed(), false);
+});
+
 test("TagClearer clears the file requested last", async () => {
     const song = await createTaggedSong();
     const other = await createTaggedSong();
@@ -153,7 +166,7 @@ test("TagClearer refuses folders and missing entries", async () => {
 test("TagClearer refuses files the tagging queue works on", async () => {
     const song = await createTaggedSong();
     const { clearer, queue, logger } = createClearer();
-    queue.enqueue({ kind: "file", path: song.path });
+    queue.enqueue({ kind: "file", path: song.path, settings: RENAMING_ON });
 
     clearer.request(song);
     await clearer.confirm(song);

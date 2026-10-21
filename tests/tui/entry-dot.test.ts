@@ -8,13 +8,19 @@ import type {
     QueueState,
     TagTarget,
 } from "../../src/tui/types.js";
+import { RENAMING_ON } from "../helpers/tui.js";
 
 const root = path.resolve("music");
 const rock = path.join(root, "Rock");
 const live = path.join(rock, "Live");
 const song = path.join(rock, "song.mp3");
 const other = path.join(rock, "other.mp3");
-const rockTarget: TagTarget = { kind: "folder", path: rock, recursive: true };
+const rockTarget: TagTarget = {
+    kind: "folder",
+    path: rock,
+    recursive: true,
+    settings: RENAMING_ON,
+};
 
 function file(filePath: string): BrowserEntry {
     return { name: path.basename(filePath), path: filePath, kind: "file" };
@@ -76,7 +82,11 @@ test("getEntryDot marks old statuses of the running job as queued", () => {
 });
 
 test("getEntryDot lets a pending target win over a redone status", () => {
-    const pendingSong: TagTarget = { kind: "file", path: song };
+    const pendingSong: TagTarget = {
+        kind: "file",
+        path: song,
+        settings: RENAMING_ON,
+    };
     const sources = makeSources(
         { running: rockTarget, pending: [pendingSong] },
         [song]
@@ -86,7 +96,12 @@ test("getEntryDot lets a pending target win over a redone status", () => {
 });
 
 test("getEntryDot leaves subfolders of a flat running folder alone", () => {
-    const flat: TagTarget = { kind: "folder", path: rock, recursive: false };
+    const flat: TagTarget = {
+        kind: "folder",
+        path: rock,
+        recursive: false,
+        settings: RENAMING_ON,
+    };
     const sources = makeSources({ running: flat });
 
     assert.equal(getEntryDot(sources, folder(live)), undefined);
@@ -99,7 +114,7 @@ test("getEntryDot leaves subfolders of a flat running folder alone", () => {
 test("getEntryDot keeps the status of entries outside the queue", () => {
     const elsewhere = path.join(root, "Jazz", "a.mp3");
     const sources = makeSources({
-        pending: [{ kind: "file", path: elsewhere }],
+        pending: [{ kind: "file", path: elsewhere, settings: RENAMING_ON }],
     });
 
     assert.equal(getEntryDot(sources, file(song)), "TAGGED");

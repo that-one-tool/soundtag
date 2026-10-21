@@ -1,6 +1,6 @@
 import { Listeners } from "./listeners.js";
 
-export class SubfolderSetting {
+export class ToggleSetting {
     private readonly listeners = new Listeners();
 
     constructor(private included: boolean) {}

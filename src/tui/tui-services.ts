@@ -11,10 +11,10 @@ import { EntryRenamer } from "./entry-renamer.js";
 import { LogBuffer } from "./log-buffer.js";
 import { PathMoves } from "./path-moves.js";
 import { RedoneFiles } from "./redone-files.js";
-import { SubfolderSetting } from "./subfolder-setting.js";
 import { createTagJobRunner } from "./tag-job.js";
 import { TagClearer } from "./tag-clearer.js";
 import { TaggingQueue } from "./tagging-queue.js";
+import { ToggleSetting } from "./toggle-setting.js";
 import { TrackStatusStore } from "./track-status-store.js";
 import type { CoverLookup, EntryDetails, TagJobRunner } from "./types.js";
 import type { VersionedCache } from "./versioned-cache.js";
@@ -32,7 +32,8 @@ export interface TuiServices {
     statusStore: TrackStatusStore;
     redoneFiles: RedoneFiles;
     pathMoves: PathMoves;
-    subfolders: SubfolderSetting;
+    subfolders: ToggleSetting;
+    renaming: ToggleSetting;
     detailsCache: VersionedCache<EntryDetails>;
     coverCache: VersionedCache<CoverLookup>;
     renamer: EntryRenamer;
@@ -72,7 +73,6 @@ function createJobRunner(
     const runJob = createTagJobRunner({
         metadataChain: createMetadataChain(options, systemClock, logBuffer),
         logger: logBuffer,
-        renameFiles: options.renameFiles,
         libraryRoot: options.startDirectory,
         onTrackProcessed: (result) => {
             statusStore.record(result);
@@ -121,7 +121,8 @@ export function createTuiServices(
         ...jobServices,
         renamer: createRenamer(jobServices),
         tagClearer: createTagClearer(jobServices),
-        subfolders: new SubfolderSetting(options.recursive),
+        subfolders: new ToggleSetting(options.recursive),
+        renaming: new ToggleSetting(options.renameFiles),
         detailsCache: createDetailsCache(),
         coverCache: createCoverCache(display.mode),
         coverOverlay: new CoverOverlay(display.writeToTerminal),

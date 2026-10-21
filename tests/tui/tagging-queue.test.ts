@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { TaggingQueue } from "../../src/tui/tagging-queue.js";
 import type { TagTarget } from "../../src/tui/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
+import { RENAMING_ON } from "../helpers/tui.js";
 
 interface ControlledJob {
     target: TagTarget;
@@ -27,8 +28,13 @@ const album: TagTarget = {
     kind: "folder",
     path: "/music/Album",
     recursive: true,
+    settings: RENAMING_ON,
 };
-const single: TagTarget = { kind: "file", path: "/music/single.mp3" };
+const single: TagTarget = {
+    kind: "file",
+    path: "/music/single.mp3",
+    settings: RENAMING_ON,
+};
 
 test("TaggingQueue runs targets one at a time in order", async () => {
     const { queue, jobs } = createControlledQueue();
@@ -142,8 +148,16 @@ test("TaggingQueue notifies subscribers on every change", async () => {
 
 test("TaggingQueue moves the queued targets inside a renamed folder", () => {
     const { queue } = createControlledQueue();
-    const inside: TagTarget = { kind: "file", path: "/music/Album/a.mp3" };
-    const other: TagTarget = { kind: "file", path: "/music/Albums/a.mp3" };
+    const inside: TagTarget = {
+        kind: "file",
+        path: "/music/Album/a.mp3",
+        settings: RENAMING_ON,
+    };
+    const other: TagTarget = {
+        kind: "file",
+        path: "/music/Albums/a.mp3",
+        settings: RENAMING_ON,
+    };
     queue.enqueue(album);
     queue.enqueue(getDiscTarget());
     queue.enqueue(inside);
@@ -158,15 +172,25 @@ test("TaggingQueue moves the queued targets inside a renamed folder", () => {
         path: "/music/A - B",
     });
     assert.deepEqual(queue.getSnapshot().pending, [
-        { kind: "folder", path: "/music/A - B/CD1", recursive: false },
-        { kind: "file", path: "/music/A - B/a.mp3" },
+        {
+            kind: "folder",
+            path: "/music/A - B/CD1",
+            recursive: false,
+            settings: RENAMING_ON,
+        },
+        { kind: "file", path: "/music/A - B/a.mp3", settings: RENAMING_ON },
         other,
     ]);
     assert.equal(notifications, 1);
 });
 
 function getDiscTarget(): TagTarget {
-    return { kind: "folder", path: "/music/Album/CD1", recursive: false };
+    return {
+        kind: "folder",
+        path: "/music/Album/CD1",
+        recursive: false,
+        settings: RENAMING_ON,
+    };
 }
 
 test("TaggingQueue moves nothing while idle", () => {
@@ -193,7 +217,11 @@ test("TaggingQueue is busy with paths inside or around its targets", () => {
 // A file job may rename its siblings' folder once it is done.
 test("TaggingQueue is busy with the folder of a queued file", () => {
     const { queue } = createControlledQueue();
-    queue.enqueue({ kind: "file", path: "/music/Album/a.mp3" });
+    queue.enqueue({
+        kind: "file",
+        path: "/music/Album/a.mp3",
+        settings: RENAMING_ON,
+    });
 
     assert.equal(queue.isBusyWith("/music/Album/b.mp3"), true);
     assert.equal(queue.isBusyWith("/music/Album/CD1"), true);
