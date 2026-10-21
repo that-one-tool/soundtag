@@ -1,14 +1,5 @@
 import { getErrorMessage } from "../../shared/errors.js";
-import {
-    fetchWithTimeout,
-    getRetryAfterDelay,
-    readJsonResponse,
-    type ImageRequest,
-} from "../../shared/http.js";
-import {
-    createRateLimiter,
-    type RateLimiter,
-} from "../../shared/rate-limiter.js";
+import { isSameRelease, isSameTrack } from "../track-matching.js";
 import { extractYear, valueOrEmpty } from "../track-metadata.js";
 import type {
     MetadataProvider,
@@ -18,53 +9,12 @@ import type {
     TrackMetadata,
     TrackSearch,
 } from "../types.js";
-
-const MUSICBRAINZ_BASE = "https://musicbrainz.org/ws/2/";
-const COVER_ART_ARCHIVE_BASE = "https://coverartarchive.org/release/";
-const MUSICBRAINZ_REQUEST_INTERVAL = 3_000;
-const SERVICE_UNAVAILABLE = 503;
-const DEFAULT_RETRY_DELAY = 3_000;
-const MAX_RETRY_DELAY = 10_000;
-
-interface MusicBrainzRelease {
-    id?: string;
-    title?: string;
-    date?: string;
-}
-
-interface MusicBrainzArtistCredit {
-    name?: string;
-    artist?: { name?: string };
-    joinphrase?: string;
-}
-
-interface MusicBrainzRecording {
-    title?: string;
-    "artist-credit"?: MusicBrainzArtistCredit[];
-    "first-release-date"?: string;
-    releases?: MusicBrainzRelease[];
-}
-
-interface MusicBrainzSearchResponse {
-    recordings?: MusicBrainzRecording[];
-}
-
-function buildSearchTerm(field: string, value: string): string {
-    return `${field}:"${value.replaceAll('"', '\\"')}"`;
-}
-
-function buildRecordingSearchUrl({ title, artist, album }: TrackSearch): URL {
-    const terms = [
-        buildSearchTerm("recording", title),
-        ...(artist ? [buildSearchTerm("artist", artist)] : []),
-        ...(album ? [buildSearchTerm("release", album)] : []),
-    ];
-    const url = new URL("recording", MUSICBRAINZ_BASE);
-    url.searchParams.set("query", terms.join(" AND "));
-    url.searchParams.set("fmt", "json");
-    url.searchParams.set("limit", "1");
-    return url;
-}
+import type {
+    MusicBrainzArtistCredit,
+    MusicBrainzClient,
+    MusicBrainzRecording,
+    MusicBrainzRelease,
+} from "./musicbrainz-client.js";
 
 function getCreditName({ name, artist }: MusicBrainzArtistCredit): string {
     return name ?? valueOrEmpty(artist?.name);
@@ -77,63 +27,91 @@ function getMusicBrainzArtist(credits: MusicBrainzArtistCredit[] = []): string {
         .trim();
 }
 
-function getFirstRelease(recording: MusicBrainzRecording): MusicBrainzRelease {
-    return recording.releases?.[0] ?? {};
+function getCreditedReleases(
+    recording: MusicBrainzRecording
+): MusicBrainzRelease[] {
+    const trackArtist = getMusicBrainzArtist(recording["artist-credit"]);
+    return (recording.releases ?? []).filter((release) =>
+        isSameRelease(
+            {
+                albumArtist: getMusicBrainzArtist(release["artist-credit"]),
+                trackArtist,
+            },
+            ""
+        )
+    );
+}
+
+// A recording only released by another artist is a mis-credited cover.
+function isReleasedByArtist(recording: MusicBrainzRecording): boolean {
+    const hasReleases = (recording.releases ?? []).length > 0;
+    return !hasReleases || getCreditedReleases(recording).length > 0;
+}
+
+function getSearchedReleases(
+    recording: MusicBrainzRecording,
+    searchedAlbum: string
+): MusicBrainzRelease[] {
+    return getCreditedReleases(recording).filter((release) =>
+        isSameRelease({ album: release.title }, searchedAlbum)
+    );
+}
+
+function getFirstRelease(releases: MusicBrainzRelease[]): MusicBrainzRelease {
+    return releases[0] ?? {};
 }
 
 function getRecordingYear(
     recording: MusicBrainzRecording,
-    firstRelease: MusicBrainzRelease
+    release: MusicBrainzRelease
 ): string {
     return (
         extractYear(recording["first-release-date"]) ||
-        extractYear(firstRelease.date)
+        extractYear(release.date)
     );
 }
 
-function getRecordingInfo(recording: MusicBrainzRecording): TrackInfo {
-    const firstRelease = getFirstRelease(recording);
-
+function getRecordingInfo(
+    recording: MusicBrainzRecording,
+    release: MusicBrainzRelease
+): TrackInfo {
     return {
         title: recording.title ?? "",
         artist: getMusicBrainzArtist(recording["artist-credit"]),
-        album: firstRelease.title ?? "",
-        year: getRecordingYear(recording, firstRelease),
+        album: release.title ?? "",
+        year: getRecordingYear(recording, release),
     };
 }
 
-function getFirstRecording(
-    data: MusicBrainzSearchResponse
+function isSearchedRecording(
+    recording: MusicBrainzRecording,
+    search: TrackSearch
+): boolean {
+    const found = {
+        title: recording.title,
+        artist: getMusicBrainzArtist(recording["artist-credit"]),
+    };
+    return isSameTrack(found, search) && isReleasedByArtist(recording);
+}
+
+function keepSearchedRecording(
+    recording: MusicBrainzRecording | undefined,
+    search: TrackSearch
 ): MusicBrainzRecording | null {
-    return data.recordings?.[0] ?? null;
-}
+    if (!recording) {
+        return null;
+    }
 
-function getCoverArtRequest(
-    releaseId: string,
-    userAgent: string
-): ImageRequest {
-    return {
-        url: new URL(
-            `${encodeURIComponent(releaseId)}/front-500`,
-            COVER_ART_ARCHIVE_BASE
-        ),
-        headers: { "User-Agent": userAgent },
-    };
+    return isSearchedRecording(recording, search) ? recording : null;
 }
 
 export class MusicBrainzProvider implements MetadataProvider {
     readonly name = "MusicBrainz";
-    private readonly schedule: RateLimiter;
 
     constructor(
-        private readonly userAgent: string,
+        private readonly client: MusicBrainzClient,
         private readonly services: ProviderServices
-    ) {
-        this.schedule = createRateLimiter(
-            MUSICBRAINZ_REQUEST_INTERVAL,
-            services.clock
-        );
-    }
+    ) {}
 
     async findMetadata(
         search: TrackSearch,
@@ -145,12 +123,11 @@ export class MusicBrainzProvider implements MetadataProvider {
             return null;
         }
 
+        const releases = getSearchedReleases(recording, search.album);
         return {
-            info: getRecordingInfo(recording),
+            info: getRecordingInfo(recording, getFirstRelease(releases)),
             extras: {},
-            coverData: needsCover
-                ? await this.downloadCover(recording.releases)
-                : null,
+            coverData: needsCover ? await this.downloadCover(releases) : null,
         };
     }
 
@@ -158,14 +135,8 @@ export class MusicBrainzProvider implements MetadataProvider {
         search: TrackSearch
     ): Promise<MusicBrainzRecording | null> {
         try {
-            const response = await this.fetchWithRetry(
-                buildRecordingSearchUrl(search)
-            );
-            const data = await readJsonResponse<MusicBrainzSearchResponse>(
-                response,
-                "MusicBrainz"
-            );
-            return getFirstRecording(data);
+            const [recording] = await this.client.searchRecordings(search);
+            return keepSearchedRecording(recording, search);
         } catch (error) {
             this.services.logger.error(
                 `MusicBrainz search failed: ${getErrorMessage(error)}`
@@ -174,32 +145,12 @@ export class MusicBrainzProvider implements MetadataProvider {
         }
     }
 
-    private async fetchWithRetry(url: URL): Promise<Response> {
-        const response = await this.scheduleFetch(url);
-
-        if (response.status !== SERVICE_UNAVAILABLE) {
-            return response;
-        }
-
-        await response.body?.cancel();
-        await this.services.clock.sleep(
-            getRetryAfterDelay(response, DEFAULT_RETRY_DELAY, MAX_RETRY_DELAY)
-        );
-        return this.scheduleFetch(url);
-    }
-
-    private scheduleFetch(url: URL): Promise<Response> {
-        return this.schedule(() =>
-            fetchWithTimeout(url, { headers: { "User-Agent": this.userAgent } })
-        );
-    }
-
     private downloadCover(
-        releases: MusicBrainzRelease[] = []
+        releases: MusicBrainzRelease[]
     ): Promise<Buffer | null> {
         return this.services.images.downloadFirst(
             releases.flatMap(({ id }) =>
-                id ? [getCoverArtRequest(id, this.userAgent)] : []
+                id ? [this.client.getCoverRequest(id)] : []
             )
         );
     }

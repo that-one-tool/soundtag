@@ -14,6 +14,7 @@ export interface EnvFileSources {
 const SOUNDTAG_KEYS = [
     "LASTFM_API_KEY",
     "MUSICBRAINZ_USER_AGENT",
+    "LISTENBRAINZ_TOKEN",
     "YOUTUBE_API_KEY",
     "SOUNDTAG_COVER",
 ];

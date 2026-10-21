@@ -35,7 +35,7 @@ test("createTuiServices routes job results to the status store and logs", async 
     const logText = services.logBuffer.getSnapshot().map((line) => line.text);
     assert.ok(
         logText.includes(
-            "MusicBrainz fallback requires MUSICBRAINZ_USER_AGENT."
+            "MusicBrainz and ListenBrainz require MUSICBRAINZ_USER_AGENT."
         )
     );
     assert.ok(logText.some((text) => text.startsWith("Searching:")));

@@ -60,11 +60,11 @@ function getFirstItunesTrack(data: ItunesSearchResponse): ItunesTrack | null {
     return data.results?.[0] ?? null;
 }
 
-function getItunesTrackInfo(track: ItunesTrack): TrackInfo {
+function getItunesTrackInfo(track: ItunesTrack, isRelease: boolean): TrackInfo {
     return {
         title: valueOrEmpty(track.trackName),
         artist: valueOrEmpty(track.artistName),
-        album: valueOrEmpty(track.collectionName),
+        album: isRelease ? valueOrEmpty(track.collectionName) : "",
         year: extractYear(track.releaseDate),
     };
 }
@@ -84,27 +84,28 @@ function isSearchedTrack(track: ItunesTrack, search: TrackSearch): boolean {
     return isSameTrack(found, search);
 }
 
-// Artwork of a karaoke version or a compilation would be wrong.
-function isSearchedRelease(track: ItunesTrack, search: TrackSearch): boolean {
-    return (
-        isSearchedTrack(track, search) &&
-        isSameRelease(track.collectionName, search.album)
-    );
-}
-
-function getMatchedExtras(
-    track: ItunesTrack,
+function keepSearchedTrack(
+    track: ItunesTrack | null,
     search: TrackSearch
-): TrackExtras {
-    return isSearchedTrack(track, search)
-        ? getItunesExtras(track, search.album)
-        : {};
+): ItunesTrack | null {
+    if (!track) {
+        return null;
+    }
+
+    return isSearchedTrack(track, search) ? track : null;
 }
 
-function getItunesExtras(track: ItunesTrack, album: string): TrackExtras {
-    const releaseExtras = isSameRelease(track.collectionName, album)
-        ? getReleaseExtras(track)
-        : {};
+function isSearchedRelease(track: ItunesTrack, search: TrackSearch): boolean {
+    const release = {
+        album: track.collectionName,
+        albumArtist: track.collectionArtistName,
+        trackArtist: track.artistName,
+    };
+    return isSameRelease(release, search.album);
+}
+
+function getItunesExtras(track: ItunesTrack, isRelease: boolean): TrackExtras {
+    const releaseExtras = isRelease ? getReleaseExtras(track) : {};
     return removeUnknownValues({
         genre: optionalText(track.primaryGenreName),
         ...releaseExtras,
@@ -139,19 +140,19 @@ export class ItunesProvider implements MetadataProvider {
             return null;
         }
 
+        const isRelease = isSearchedRelease(track, search);
         return {
-            info: getItunesTrackInfo(track),
-            extras: getMatchedExtras(track, search),
-            coverData: await this.findArtwork(track, search, needsCover),
+            info: getItunesTrackInfo(track, isRelease),
+            extras: getItunesExtras(track, isRelease),
+            coverData: await this.findArtwork(track, needsCover && isRelease),
         };
     }
 
     private findArtwork(
         track: ItunesTrack,
-        search: TrackSearch,
-        needsCover: boolean
+        isWanted: boolean
     ): Promise<Buffer | null> {
-        return needsCover && isSearchedRelease(track, search)
+        return isWanted
             ? downloadArtwork(this.services.images, track.artworkUrl100)
             : Promise.resolve(null);
     }
@@ -168,7 +169,7 @@ export class ItunesProvider implements MetadataProvider {
                     "iTunes Search"
                 )
             );
-            return getFirstItunesTrack(data);
+            return keepSearchedTrack(getFirstItunesTrack(data), search);
         } catch (error) {
             this.services.logger.error(
                 `iTunes Search failed: ${getErrorMessage(error)}`

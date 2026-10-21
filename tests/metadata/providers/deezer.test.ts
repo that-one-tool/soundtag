@@ -161,9 +161,34 @@ test("DeezerProvider takes only the genre and no cover from another release", as
         search: { ...search, album: "Greatest Hits" },
     });
 
+    assert.equal(metadata?.info.album, "");
     assert.equal(metadata?.info.year, "");
     assert.deepEqual(metadata?.extras, { genre: "Electro" });
     assert.equal(metadata?.coverData, null);
+    assert.deepEqual(requested, [
+        "/search?q=Daft+Punk+One+More+Time&limit=5",
+        "/album/7",
+    ]);
+});
+
+test("DeezerProvider takes only the genre from a release by another artist", async () => {
+    const requested = mockDeezer({
+        ...deezerResponses,
+        "/album/7": { ...foundAlbum, artist: { name: "Tribute Band" } },
+    });
+
+    const metadata = await findWithDeezer(coverNeeds);
+
+    assert.deepEqual(metadata, {
+        info: {
+            title: "One More Time",
+            artist: "Daft Punk",
+            album: "",
+            year: "",
+        },
+        extras: { genre: "Electro" },
+        coverData: null,
+    });
     assert.deepEqual(requested, [
         "/search?q=Daft+Punk+One+More+Time&limit=5",
         "/album/7",

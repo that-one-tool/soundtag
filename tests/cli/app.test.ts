@@ -20,6 +20,7 @@ const withoutBrowser = {
 };
 const environment = {
     LASTFM_API_KEY: "test-key",
+    LISTENBRAINZ_TOKEN: "test-token",
     MUSICBRAINZ_USER_AGENT: "SoundTag/1.0 (test@example.com)",
 };
 
@@ -207,6 +208,7 @@ test("runApp opens the folder browser in the working directory", async () => {
             renameFiles: false,
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
             youtubeApiKey: undefined,
+            listenBrainzToken: "test-token",
             coverMode: undefined,
         },
     ]);

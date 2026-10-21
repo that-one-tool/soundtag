@@ -37,6 +37,7 @@ test("loadSessionConfig reads arguments and environment without prompting", asyn
             LASTFM_API_KEY: " lastfm-key ",
             MUSICBRAINZ_USER_AGENT: "SoundTag/1.0",
             YOUTUBE_API_KEY: "youtube-key",
+            LISTENBRAINZ_TOKEN: "listenbrainz-token",
             SOUNDTAG_COVER: "blocks",
         },
         ask,
@@ -52,6 +53,7 @@ test("loadSessionConfig reads arguments and environment without prompting", asyn
             renameFiles: false,
             musicBrainzUserAgent: "SoundTag/1.0",
             youtubeApiKey: "youtube-key",
+            listenBrainzToken: "listenbrainz-token",
             coverMode: "blocks",
         },
     });

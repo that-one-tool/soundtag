@@ -28,9 +28,16 @@ import {
 interface DeezerDetails {
     year: string;
     extras: TrackExtras;
+    isRelease: boolean;
 }
 
-const NO_DETAILS: DeezerDetails = { year: "", extras: {} };
+interface DetailsRequest {
+    albumId: number;
+    track: DeezerTrack;
+    isRelease: boolean;
+}
+
+const NO_DETAILS = { year: "", extras: {} };
 
 function isSearchedTrack(track: DeezerTrack, search: TrackSearch): boolean {
     return isSameTrack(
@@ -39,9 +46,8 @@ function isSearchedTrack(track: DeezerTrack, search: TrackSearch): boolean {
     );
 }
 
-// Numbers, counts and covers from another release (compilation, single) would be wrong.
 function isSearchedRelease(track: DeezerTrack, search: TrackSearch): boolean {
-    return isSameRelease(track.album?.title, search.album);
+    return isSameRelease({ album: track.album?.title }, search.album);
 }
 
 // Results can start with a karaoke version, or the song on another release.
@@ -61,11 +67,18 @@ function getAlbumId(track: DeezerTrack): number | undefined {
     return track.album?.id;
 }
 
-function getTrackInfo(track: DeezerTrack, year: string): TrackInfo {
+function getAlbumTitle(track: DeezerTrack): string {
+    return valueOrEmpty(track.album?.title);
+}
+
+function getTrackInfo(
+    track: DeezerTrack,
+    { year, isRelease }: DeezerDetails
+): TrackInfo {
     return {
         title: valueOrEmpty(track.title),
         artist: valueOrEmpty(track.artist?.name),
-        album: valueOrEmpty(track.album?.title),
+        album: isRelease ? getAlbumTitle(track) : "",
         year,
     };
 }
@@ -117,6 +130,25 @@ function getPositionExtras(
     };
 }
 
+// The search result has no album artist, so the album confirms the release.
+function isReleaseOfTrack(
+    album: DeezerAlbum,
+    track: DeezerTrack,
+    searchedAlbum: string
+): boolean {
+    const release = {
+        album: album.title,
+        albumArtist: album.artist?.name,
+        trackArtist: track.artist?.name,
+    };
+    return isSameRelease(release, searchedAlbum);
+}
+
+function getGenreDetails(album: DeezerAlbum): DeezerDetails {
+    const extras = removeUnknownValues({ genre: getGenre(album) });
+    return { year: "", extras, isRelease: false };
+}
+
 export class DeezerProvider implements MetadataProvider {
     readonly name = "Deezer";
 
@@ -135,12 +167,14 @@ export class DeezerProvider implements MetadataProvider {
             return null;
         }
 
-        const isRelease = isSearchedRelease(track, search);
-        const details = await this.findDetails(track, isRelease, needs.details);
+        const details = await this.findDetails(track, search, needs.details);
         return {
-            info: getTrackInfo(track, details.year),
+            info: getTrackInfo(track, details),
             extras: details.extras,
-            coverData: await this.findCover(track, needs.cover && isRelease),
+            coverData: await this.findCover(
+                track,
+                needs.cover && details.isRelease
+            ),
         };
     }
 
@@ -160,48 +194,50 @@ export class DeezerProvider implements MetadataProvider {
 
     private findDetails(
         track: DeezerTrack,
-        isRelease: boolean,
+        search: TrackSearch,
         needsDetails: boolean
     ): Promise<DeezerDetails> {
+        const isRelease = isSearchedRelease(track, search);
         const albumId = getAlbumId(track);
 
         if (!needsDetails || albumId === undefined) {
-            return Promise.resolve(NO_DETAILS);
+            return Promise.resolve({ ...NO_DETAILS, isRelease });
         }
 
-        return this.loadDetails(albumId, track.id, isRelease);
+        return this.loadDetails({ albumId, track, isRelease }, search.album);
     }
 
     private async loadDetails(
-        albumId: number,
-        trackId: number | undefined,
-        isRelease: boolean
+        request: DetailsRequest,
+        searchedAlbum: string
     ): Promise<DeezerDetails> {
         try {
-            return isRelease
-                ? await this.loadReleaseDetails(albumId, trackId)
-                : await this.loadGenre(albumId);
+            return await this.loadAlbumDetails(request, searchedAlbum);
         } catch (error) {
             this.services.logger.error(
                 `Deezer album lookup failed: ${getErrorMessage(error)}`
             );
-            return NO_DETAILS;
+            return { ...NO_DETAILS, isRelease: request.isRelease };
         }
     }
 
-    private async loadGenre(albumId: number): Promise<DeezerDetails> {
+    private async loadAlbumDetails(
+        { albumId, track, isRelease }: DetailsRequest,
+        searchedAlbum: string
+    ): Promise<DeezerDetails> {
         const album = await this.client.getAlbum(albumId);
-        return {
-            year: "",
-            extras: removeUnknownValues({ genre: getGenre(album) }),
-        };
+        const isConfirmed =
+            isRelease && isReleaseOfTrack(album, track, searchedAlbum);
+        return isConfirmed
+            ? this.loadReleaseDetails(album, albumId, track.id)
+            : getGenreDetails(album);
     }
 
     private async loadReleaseDetails(
+        album: DeezerAlbum,
         albumId: number,
         trackId: number | undefined
     ): Promise<DeezerDetails> {
-        const album = await this.client.getAlbum(albumId);
         const tracks = await this.client.getAlbumTracks(albumId);
         const extras = {
             genre: getGenre(album),
@@ -211,6 +247,7 @@ export class DeezerProvider implements MetadataProvider {
         return {
             year: extractYear(album.release_date),
             extras: removeUnknownValues(extras),
+            isRelease: true,
         };
     }
 

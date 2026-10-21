@@ -1,151 +1,198 @@
-import { consoleLogger } from "../../../src/shared/logger.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { MusicBrainzClient } from "../../../src/metadata/providers/musicbrainz-client.js";
 import { MusicBrainzProvider } from "../../../src/metadata/providers/musicbrainz.js";
+import type { ProviderServices } from "../../../src/metadata/types.js";
 import { createFakeClock } from "../../helpers/clock.js";
-import { captureConsole } from "../../helpers/console.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
 import { createRecordingLogger } from "../../helpers/logger.js";
 import {
+    coverNeeds,
     createProviderServices,
     detailNeeds,
 } from "../../helpers/metadata-chain.js";
 
 restoreFetchAfterEach();
-captureConsole();
-const userAgent = "SoundTag/1.0 (test@example.com)";
 const search = { title: "Title", artist: "Artist", album: "" };
 
-function mockMusicBrainzResponses(responses: (() => Response)[]): Response[] {
-    const sent: Response[] = [];
-    globalThis.fetch = async () => {
-        const response = responses[sent.length]();
-        sent.push(response);
-        return response;
+function createProvider(services: Partial<ProviderServices> = {}) {
+    const providerServices = createProviderServices({
+        clock: createFakeClock(),
+        logger: createRecordingLogger(),
+        ...services,
+    });
+    return new MusicBrainzProvider(
+        new MusicBrainzClient(
+            "SoundTag/1.0 (test@example.com)",
+            providerServices
+        ),
+        providerServices
+    );
+}
+
+const searchedRecording = {
+    title: "Title",
+    "artist-credit": [{ name: "Artist" }],
+};
+
+function mockMusicBrainz(recordings: object[], requested: string[] = []) {
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+        requested.push(url.hostname);
+        return url.hostname === "musicbrainz.org"
+            ? Response.json({ recordings })
+            : new Response("cover", {
+                  headers: { "content-type": "image/jpeg" },
+              });
     };
-    return sent;
+    return requested;
 }
 
-function unavailable(retryAfter: string): () => Response {
-    return () =>
-        new Response("busy", {
-            status: 503,
-            headers: { "retry-after": retryAfter },
-        });
-}
-
-const recording = () =>
-    Response.json({ recordings: [{ title: "Retried title" }] });
-
-test("MusicBrainzProvider retries once after the Retry-After delay", async () => {
-    const clock = createFakeClock();
-    const sent = mockMusicBrainzResponses([unavailable("5"), recording]);
-
-    const metadata = await new MusicBrainzProvider(
-        userAgent,
-        createProviderServices({ clock, logger: consoleLogger })
-    ).findMetadata(search, detailNeeds);
-
-    assert.equal(metadata?.info.title, "Retried title");
-    assert.equal(sent.length, 2);
-    assert.equal(sent[0].bodyUsed, true);
-    assert.deepEqual(clock.sleeps, [5000]);
-});
-
-test("MusicBrainzProvider waits three seconds without a Retry-After header", async () => {
-    const clock = createFakeClock();
-    mockMusicBrainzResponses([
-        () => new Response("busy", { status: 503 }),
-        recording,
+test("MusicBrainzProvider takes info from the first recording", async () => {
+    mockMusicBrainz([
+        {
+            title: "Found",
+            "artist-credit": [
+                { name: "A", joinphrase: " & " },
+                { artist: { name: "B" } },
+            ],
+            "first-release-date": "1979-11-30",
+            releases: [{ id: "release", title: "Album", date: "1984" }],
+        },
     ]);
 
-    await new MusicBrainzProvider(
-        userAgent,
-        createProviderServices({ clock, logger: consoleLogger })
-    ).findMetadata(search, detailNeeds);
-
-    assert.deepEqual(clock.sleeps, [3000]);
-});
-
-test("MusicBrainzProvider rate-limits the retry", async () => {
-    const clock = createFakeClock();
-    mockMusicBrainzResponses([unavailable("0"), recording]);
-
-    await new MusicBrainzProvider(
-        userAgent,
-        createProviderServices({ clock, logger: consoleLogger })
-    ).findMetadata(search, detailNeeds);
-
-    assert.deepEqual(clock.sleeps, [0, 3000]);
-});
-
-test("MusicBrainzProvider gives up after a second unavailable response", async () => {
-    const sent = mockMusicBrainzResponses([
-        unavailable("0"),
-        unavailable("0"),
-        recording,
-    ]);
-
-    assert.equal(
-        await new MusicBrainzProvider(
-            userAgent,
-            createProviderServices({
-                clock: createFakeClock(),
-                logger: consoleLogger,
-            })
-        ).findMetadata(search, detailNeeds),
-        null
+    const metadata = await createProvider().findMetadata(
+        { title: "Found", artist: "A & B", album: "" },
+        detailNeeds
     );
-    assert.equal(sent.length, 2);
+
+    assert.deepEqual(metadata?.info, {
+        title: "Found",
+        artist: "A & B",
+        album: "Album",
+        year: "1979",
+    });
 });
 
-test("MusicBrainzProvider does not retry other HTTP errors", async () => {
-    const sent = mockMusicBrainzResponses([
-        () => new Response(null, { status: 500 }),
-        recording,
+test("MusicBrainzProvider downloads the first release cover", async () => {
+    const requested = mockMusicBrainz([
+        { ...searchedRecording, releases: [{ id: "release" }] },
     ]);
 
-    assert.equal(
-        await new MusicBrainzProvider(
-            userAgent,
-            createProviderServices({
-                clock: createFakeClock(),
-                logger: consoleLogger,
-            })
-        ).findMetadata(search, detailNeeds),
-        null
-    );
-    assert.equal(sent.length, 1);
+    const metadata = await createProvider().findMetadata(search, coverNeeds);
+
+    assert.deepEqual(metadata?.coverData, Buffer.from("cover"));
+    assert.deepEqual(requested, ["musicbrainz.org", "coverartarchive.org"]);
 });
 
 test("MusicBrainzProvider skips the cover download when no cover is needed", async () => {
-    const sent = mockMusicBrainzResponses([
-        () =>
-            Response.json({
-                recordings: [{ title: "Title", releases: [{ id: "release" }] }],
-            }),
+    const requested = mockMusicBrainz([
+        { ...searchedRecording, releases: [{ id: "release" }] },
     ]);
 
-    const metadata = await new MusicBrainzProvider(
-        userAgent,
-        createProviderServices({
-            clock: createFakeClock(),
-            logger: consoleLogger,
-        })
-    ).findMetadata(search, detailNeeds);
+    const metadata = await createProvider().findMetadata(search, detailNeeds);
 
     assert.equal(metadata?.coverData, null);
-    assert.equal(sent.length, 1);
+    assert.deepEqual(requested, ["musicbrainz.org"]);
+});
+
+test("MusicBrainzProvider returns null for another song", async () => {
+    mockMusicBrainz([
+        {
+            title: "Title (Karaoke Version)",
+            "artist-credit": [{ name: "Artist" }],
+        },
+    ]);
+
+    assert.equal(await createProvider().findMetadata(search, coverNeeds), null);
+});
+
+test("MusicBrainzProvider rejects a recording released only by another artist", async () => {
+    mockMusicBrainz([
+        {
+            ...searchedRecording,
+            releases: [
+                {
+                    id: "cover-ep",
+                    title: "Undercover, Vol. 2",
+                    "artist-credit": [{ name: "Tribute Band" }],
+                },
+            ],
+        },
+    ]);
+
+    assert.equal(await createProvider().findMetadata(search, coverNeeds), null);
+});
+
+test("MusicBrainzProvider takes the album and cover of the searched release", async () => {
+    const requested: string[] = [];
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+        requested.push(`${url.hostname}${url.pathname}`);
+        return url.hostname === "musicbrainz.org"
+            ? Response.json({
+                  recordings: [
+                      {
+                          ...searchedRecording,
+                          releases: [
+                              { id: "single", title: "Title" },
+                              {
+                                  id: "tribute",
+                                  title: "Album",
+                                  "artist-credit": [{ name: "Tribute Band" }],
+                              },
+                              {
+                                  id: "album",
+                                  title: "Album",
+                                  "artist-credit": [{ name: "Artist" }],
+                              },
+                          ],
+                      },
+                  ],
+              })
+            : new Response("cover", {
+                  headers: { "content-type": "image/jpeg" },
+              });
+    };
+
+    const metadata = await createProvider().findMetadata(
+        { ...search, album: "Album" },
+        coverNeeds
+    );
+
+    assert.equal(metadata?.info.album, "Album");
+    assert.deepEqual(requested, [
+        "musicbrainz.org/ws/2/recording",
+        "coverartarchive.org/release/album/front-500",
+    ]);
+});
+
+test("MusicBrainzProvider leaves out the album and cover of another release", async () => {
+    const requested = mockMusicBrainz([
+        { ...searchedRecording, releases: [{ id: "single", title: "Title" }] },
+    ]);
+
+    const metadata = await createProvider().findMetadata(
+        { ...search, album: "Album" },
+        coverNeeds
+    );
+
+    assert.equal(metadata?.info.album, "");
+    assert.equal(metadata?.coverData, null);
+    assert.deepEqual(requested, ["musicbrainz.org"]);
+});
+
+test("MusicBrainzProvider returns null when nothing is found", async () => {
+    mockMusicBrainz([]);
+
+    assert.equal(await createProvider().findMetadata(search, coverNeeds), null);
 });
 
 test("MusicBrainzProvider logs failures to the injected logger", async () => {
     const logger = createRecordingLogger();
-    mockMusicBrainzResponses([() => new Response(null, { status: 500 })]);
+    globalThis.fetch = async () => new Response(null, { status: 500 });
 
-    await new MusicBrainzProvider(
-        userAgent,
-        createProviderServices({ clock: createFakeClock(), logger })
-    ).findMetadata(search, detailNeeds);
+    await createProvider({ logger }).findMetadata(search, detailNeeds);
 
     assert.deepEqual(logger.errors, [
         "MusicBrainz search failed: MusicBrainz request failed: HTTP 500",

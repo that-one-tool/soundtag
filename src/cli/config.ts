@@ -68,6 +68,7 @@ export async function loadSessionConfig(
             renameFiles: options.renameFiles,
             musicBrainzUserAgent: sources.env.MUSICBRAINZ_USER_AGENT,
             youtubeApiKey: sources.env.YOUTUBE_API_KEY,
+            listenBrainzToken: sources.env.LISTENBRAINZ_TOKEN,
             coverMode: parseCoverMode(sources.env.SOUNDTAG_COVER),
         },
     };

@@ -44,7 +44,7 @@ test("loadEnvFiles reads both files and the local value wins", async () => {
     );
     const configFile = await writeEnvFile(
         getDefaultConfigDirectory(sources),
-        "LASTFM_API_KEY=global\nYOUTUBE_API_KEY=youtube\nSOUNDTAG_COVER=kitty"
+        "LASTFM_API_KEY=global\nYOUTUBE_API_KEY=youtube\nSOUNDTAG_COVER=kitty\nLISTENBRAINZ_TOKEN=token"
     );
 
     assert.deepEqual(await loadEnvFiles(sources), [localFile, configFile]);
@@ -52,6 +52,7 @@ test("loadEnvFiles reads both files and the local value wins", async () => {
         LASTFM_API_KEY: "local",
         YOUTUBE_API_KEY: "youtube",
         SOUNDTAG_COVER: "kitty",
+        LISTENBRAINZ_TOKEN: "token",
     });
 });
 

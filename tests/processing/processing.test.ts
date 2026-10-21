@@ -14,7 +14,12 @@ import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { captureConsole } from "../helpers/console.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { consoleLogger } from "../../src/shared/logger.js";
-import { createTestChain, emptyInfo } from "../helpers/metadata-chain.js";
+import {
+    createProviderServices,
+    createTestChain,
+    emptyInfo,
+} from "../helpers/metadata-chain.js";
+import { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 restoreFetchAfterEach();
@@ -152,9 +157,9 @@ test("processTrack combines embedded tags with artist and album folder context",
             return Response.json({
                 results: [
                     {
-                        trackName: "API title",
-                        artistName: "API artist",
-                        collectionName: "API album",
+                        trackName: "Embedded title",
+                        artistName: "Tagged artist",
+                        collectionName: "Folder Album",
                         releaseDate: "2020-01-01",
                     },
                 ],
@@ -200,7 +205,7 @@ test("processTrack combines embedded tags with artist and album folder context",
     const tags = await NodeID3.Promise.read(source);
     assert.equal(tags.title, "Embedded title");
     assert.equal(tags.artist, "Tagged artist");
-    assert.equal(tags.album, "API album");
+    assert.equal(tags.album, "Folder Album");
     assert.equal(tags.year, "2020");
     assert.equal(status, "TAGGED");
 });
@@ -327,17 +332,27 @@ test("processTrack skips matches without a title and artist", async () => {
     const directory = await createTemporaryDirectory();
     const source = path.join(directory, "Untitled.mp3");
     await fs.writeFile(source, "audio bytes");
-    globalThis.fetch = async (input) =>
-        new URL(input.toString()).hostname === "itunes.apple.com"
-            ? Response.json({ results: [{ collectionName: "Album only" }] })
-            : Response.json({ results: { trackmatches: { track: [] } } });
+    const albumOnlyChain = new MetadataChain(
+        [
+            {
+                name: "Fake",
+                findMetadata: async () => ({
+                    info: { ...emptyInfo, album: "Album only" },
+                    extras: {},
+                    coverData: null,
+                }),
+            },
+        ],
+        [],
+        createProviderServices()
+    );
 
     assert.equal(
         (
             await processTrack(source, {
                 sourceRoot: directory,
                 logger: consoleLogger,
-                metadataChain: createTestChain(),
+                metadataChain: albumOnlyChain,
             })
         ).status,
         "SKIPPED"
@@ -449,6 +464,7 @@ test("processTrack logs to the context logger", async () => {
         sourceRoot: directory,
         metadataChain: createTestChain({
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
+            listenBrainzToken: "test-token",
         }),
         logger,
     });
@@ -570,7 +586,9 @@ test("processTrack leaves a file unchanged when the services add nothing new", a
     const before = await fs.readFile(source);
     globalThis.fetch = async (input) =>
         new URL(input.toString()).hostname === "itunes.apple.com"
-            ? Response.json({ results: [{ trackName: "Other" }] })
+            ? Response.json({
+                  results: [{ trackName: "Title", artistName: "Artist" }],
+              })
             : Response.json({ results: { trackmatches: { track: [] } } });
 
     const { status } = await processTrack(source, {

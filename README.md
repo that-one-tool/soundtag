@@ -1,14 +1,15 @@
 # SoundTag
 
 SoundTag scans a folder of MP3, OGG, FLAC, and WAV files, looks up track
-metadata with Last.fm, and updates files in place with audio tags and cover art
-when a match is found.
+metadata with ListenBrainz, MusicBrainz, Deezer, iTunes and Last.fm, and
+updates files in place with audio tags and cover art when a match is found.
 
 ## Requirements
 
 - Node.js 24 or later
 - A Last.fm API key
-- A MusicBrainz User-Agent string to enable the MusicBrainz fallback lookup
+- A MusicBrainz User-Agent string to enable the MusicBrainz lookups
+- A ListenBrainz user token, recommended for the most accurate matches
 
 ## Setup
 
@@ -30,43 +31,62 @@ Provide your API keys in a `.env` file. SoundTag reads `.env` from the folder
 you run it in and from `~/.config/soundtag/.env` (or
 `$XDG_CONFIG_HOME/soundtag/.env`). A key in the local file wins over the same
 key in the config file, and variables already set in your shell win over both.
-Only the four keys below are read from these files; other variables are
+Only the five keys below are read from these files; other variables are
 ignored:
 
 ```env
 LASTFM_API_KEY=your_lastfm_api_key
 MUSICBRAINZ_USER_AGENT=SoundTag/1.0.0 (your-contact-information)
+LISTENBRAINZ_TOKEN=your_listenbrainz_user_token
 YOUTUBE_API_KEY=your_youtube_data_api_key
 # Optional: kitty, blocks or none (detected from the terminal by default)
 # SOUNDTAG_COVER=kitty
 ```
 
-Last.fm API requests (up to two per track: a search, then the track details)
-are spaced two seconds apart; cover image downloads are not.
+SoundTag asks the services below in order, and stops once the title, artist,
+album, year, genre, track number and cover are all known. A result is only used
+when it is the searched song: the same title and, when known, an artist shared
+by both credits ("Daft Punk" matches "Daft Punk feat. Pharrell Williams"). Case,
+accents, punctuation, featured artists and remaster notes are ignored. One typo
+is tolerated inside a word of five letters or more, in names of at least nine
+letters and digits, unless it changes a number, a Roman numeral or a plural.
+From ListenBrainz, Deezer and iTunes, the album, track and disc numbers and
+counts, album artist and cover are only taken when the result is on the track's
+album (or no album is known) and that album is by the track's artist or by
+various artists; so is the year from ListenBrainz and Deezer. A cover band's
+record that credits the original artist is therefore not taken as the track's
+album.
 
-MusicBrainz does not require an API key. It requires a meaningful User-Agent
-string and limits requests to one per second; SoundTag spaces them three
-seconds apart. Set `MUSICBRAINZ_USER_AGENT` to
-identify your SoundTag installation and provide contact information. The
-MusicBrainz fallback is used when Last.fm misses track metadata or cover
-art; cover images are retrieved from the Cover Art Archive. If metadata is
-still incomplete, SoundTag searches Deezer through its public API, which needs
-no key or account. A Deezer result is only used when it has the same title and
-artist, preferring the one on the track's album. It provides the song details,
-the genre and, when its release matches the track's album (or no album is
-known), the year, the track and disc numbers and counts, the album artist and
-the 1000×1000 album artwork. The year may be that of a reissue. The
-details come from album requests made once per album in each batch, and only
-while the year or one of these details is still missing. Deezer requests are
-spaced half a second apart.
-SoundTag then searches the iTunes Store using
-[Apple's Search API](https://performance-partners.apple.com/search-api) and
-uses its song details and artwork as a final fallback. iTunes provides the
-same extras and artwork under the same conditions, but its year is taken from
-its first result even when that is another song. Since only Deezer and iTunes
-provide the genre and track number, a track missing them is looked up on every
-service until one of them does. iTunes searches are spaced at least four
-seconds apart to stay within the 20-requests-per-minute limit.
+1. **ListenBrainz** maps the artist and title to a MusicBrainz recording, and
+   corrects typos in fields the file does not have yet. It needs a known artist, a user token (copy it from
+   [your ListenBrainz settings](https://listenbrainz.org/settings/) into
+   `LISTENBRAINZ_TOKEN`) and `MUSICBRAINZ_USER_AGENT`. It gives the album, the
+   album artist, the most-voted genre and the Cover Art Archive cover. While
+   details are missing, one MusicBrainz release lookup per album and batch adds
+   the year the song was first released and the track and disc numbers and
+   counts.
+   ListenBrainz requests are spaced one second apart.
+2. **MusicBrainz** search finds the recording, its year of first release and
+   the Cover Art Archive cover, including for tracks with no known artist. It
+   needs no API key, but a meaningful User-Agent: set `MUSICBRAINZ_USER_AGENT`
+   to identify your SoundTag installation and provide contact information.
+   MusicBrainz allows one request per second; SoundTag spaces its requests,
+   release lookups included, three seconds apart.
+3. **Deezer** needs no key or account. Among its results, it prefers the
+   searched song on the track's album, and gives the genre, the year (possibly
+   that of a reissue), the track and disc numbers and counts, the album artist
+   and the 1000×1000 artwork. Its album requests are made once per album and
+   batch, only while details are missing, and its requests are spaced half a
+   second apart.
+4. **iTunes**, through
+   [Apple's Search API](https://performance-partners.apple.com/search-api),
+   gives the same details and artwork. Its searches are spaced at least four
+   seconds apart to stay within the 20-requests-per-minute limit.
+5. **Last.fm** is the last resort for the title, artist, album, year and cover.
+   It makes up to two requests per track (a search, then the track details),
+   spaced two seconds apart.
+
+Cover image downloads are not rate-limited.
 If no provider returns artwork for a track matched by the metadata services,
 SoundTag searches Deezer for the album's cover when the album is known. As a
 last resort, it can use a YouTube video thumbnail. This requires a
@@ -209,7 +229,7 @@ soundtag /path/to/music -v
 ```
 
 For filenames in the common `Artist - Title.<extension>` format, SoundTag
-searches Last.fm using the title and artist separately. It also removes
+searches with the title and artist separately. It also removes
 leading track or disc-track numbers and recognizes spaced hyphens, en dashes,
 and em dashes as separators. If no reliable artist/title split is present, it
 uses the cleaned filename as the title query. Existing embedded tags are used
@@ -240,9 +260,9 @@ case), even when the services did not find the track itself. A skipped track
 that gets a cover this way is reported as tagged, and is renamed only when it
 also has a title, artist and year.
 Because the file is not considered fully tagged until year, genre and cover
-art are present, later runs can retry to fill those gaps. SoundTag gets the year from
-Last.fm or, when needed, from the MusicBrainz recording or release date, or the
-Deezer album release date. Each
+art are present, later runs can retry to fill those gaps. SoundTag prefers the
+year the song was first released, from MusicBrainz, and otherwise takes the
+year of the matched song from Deezer, iTunes or Last.fm. Each
 file is processed sequentially using a temporary copy before replacement;
 large lossless files therefore need temporary free space comparable to the
 file size and can require substantial additional disk or NAS I/O.

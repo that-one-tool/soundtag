@@ -42,6 +42,7 @@ function runCli(
                 env: {
                     ...process.env,
                     LASTFM_API_KEY: "test-key",
+                    LISTENBRAINZ_TOKEN: "test-token",
                     MUSICBRAINZ_USER_AGENT: undefined,
                     YOUTUBE_API_KEY: undefined,
                     XDG_CONFIG_HOME: workingDirectory,
@@ -180,7 +181,7 @@ test("CLI warns at startup when MusicBrainz is not configured", async () => {
     assert.equal(exitCode, 0);
     assert.equal(
         stderr,
-        "MusicBrainz fallback requires MUSICBRAINZ_USER_AGENT.\n"
+        "MusicBrainz and ListenBrainz require MUSICBRAINZ_USER_AGENT.\n"
     );
 });
 

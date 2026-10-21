@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createMetadataChain } from "../../src/metadata/create-metadata-chain.js";
+import { createFakeClock } from "../helpers/clock.js";
 import { withoutDeezerMatches } from "../helpers/deezer.js";
+import { createRecordingLogger } from "../helpers/logger.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import {
     createTestChain,
@@ -85,15 +88,19 @@ test("findTrackMetadata gets track info and downloads medium cover art", async (
         extras: {},
         coverData: image,
     });
+    const [itunesRequest, ...lastFmRequests] = requests;
     assert.equal(requests.length, 4);
-    assert.equal(requests[3].hostname, "itunes.apple.com");
-    assert.equal(requests[0].searchParams.get("track"), "search query");
-    assert.equal(requests[0].searchParams.get("method"), "track.search");
-    assert.equal(requests[1].searchParams.get("method"), "track.getInfo");
-    assert.equal(requests[1].searchParams.get("artist"), "Matched artist");
-    assert.equal(requests[1].searchParams.get("track"), "Matched title");
-    assert.equal(requests[1].searchParams.get("autocorrect"), "1");
-    assert.equal(requests[2].href, "https://images.example/medium.jpg");
+    assert.equal(itunesRequest.hostname, "itunes.apple.com");
+    assert.equal(lastFmRequests[0].searchParams.get("track"), "search query");
+    assert.equal(lastFmRequests[0].searchParams.get("method"), "track.search");
+    assert.equal(lastFmRequests[1].searchParams.get("method"), "track.getInfo");
+    assert.equal(
+        lastFmRequests[1].searchParams.get("artist"),
+        "Matched artist"
+    );
+    assert.equal(lastFmRequests[1].searchParams.get("track"), "Matched title");
+    assert.equal(lastFmRequests[1].searchParams.get("autocorrect"), "1");
+    assert.equal(lastFmRequests[2].href, "https://images.example/medium.jpg");
     const trackInfoLog = output.find((line) =>
         line.startsWith("Last.fm track.getInfo URL:")
     );
@@ -180,7 +187,9 @@ test("findTrackMetadata constrains the search by artist and removes a repeated a
 
     await findTrackMetadata({ title: "Tubthumping", artist: "Chumbawamba" });
 
-    const [infoRequest, searchRequest] = requests;
+    const [infoRequest, searchRequest] = requests.filter(
+        (url) => url.hostname === "ws.audioscrobbler.com"
+    );
     assert.equal(infoRequest.searchParams.get("method"), "track.getInfo");
     assert.equal(infoRequest.searchParams.get("artist"), "Chumbawamba");
     assert.equal(infoRequest.searchParams.get("track"), "Tubthumping");
@@ -194,7 +203,7 @@ test("findTrackMetadata constrains the search by artist and removes a repeated a
     );
 });
 
-test("findTrackMetadata uses MusicBrainz and Cover Art Archive when Last.fm misses data", async () => {
+test("findTrackMetadata uses MusicBrainz and Cover Art Archive for a matching recording", async () => {
     const image = Buffer.from("cover-art");
     const requests: { url: URL; userAgent?: string }[] = [];
 
@@ -227,8 +236,8 @@ test("findTrackMetadata uses MusicBrainz and Cover Art Archive when Last.fm miss
             return Response.json({
                 recordings: [
                     {
-                        title: "Different MusicBrainz title",
-                        "artist-credit": [{ name: "Different artist" }],
+                        title: "Tubthumping",
+                        "artist-credit": [{ name: "Chumbawamba" }],
                         "first-release-date": "1997-10-27",
                         releases: [
                             {
@@ -280,7 +289,7 @@ test("findTrackMetadata uses MusicBrainz and Cover Art Archive when Last.fm miss
     );
 });
 
-test("findTrackMetadata falls back to MusicBrainz when Last.fm has no track", async () => {
+test("findTrackMetadata joins MusicBrainz artist credits", async () => {
     const image = Buffer.from("cover-art");
     let musicBrainzUserAgent = "";
 
@@ -321,7 +330,10 @@ test("findTrackMetadata falls back to MusicBrainz when Last.fm has no track", as
 
     assert.deepEqual(
         await findTrackMetadata(
-            { title: "Tubthumping", artist: "Chumbawamba" },
+            {
+                title: "Fallback title",
+                artist: "First artist & Second artist",
+            },
             { musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)" }
         ),
         {
@@ -350,8 +362,8 @@ test("findTrackMetadata replaces a whitespace-only existing year with a fallback
             return Response.json({
                 recordings: [
                     {
-                        title: "Fallback title",
-                        "artist-credit": [{ name: "Fallback artist" }],
+                        title: "Existing title",
+                        "artist-credit": [{ name: "Existing artist" }],
                         "first-release-date": "1997-01-01",
                         releases: [{ title: "Fallback album" }],
                     },
@@ -376,17 +388,21 @@ test("findTrackMetadata replaces a whitespace-only existing year with a fallback
     assert.equal(metadata?.info.year, "1997");
 });
 
-test("MusicBrainz rate limiting does not delay Last.fm requests", async () => {
-    let resolveFirstMusicBrainzRequest!: () => void;
-    let resolveSecondLastFmInfo!: () => void;
-    const firstMusicBrainzRequest = new Promise<void>((resolve) => {
-        resolveFirstMusicBrainzRequest = resolve;
+test("Last.fm rate limiting does not delay MusicBrainz requests", async () => {
+    let releaseFirstLastFmSearch!: () => void;
+    let resolveSecondMusicBrainzRequest!: () => void;
+    const firstLastFmSearchReleased = new Promise<void>((resolve) => {
+        releaseFirstLastFmSearch = resolve;
     });
-    const secondLastFmInfo = new Promise<void>((resolve) => {
-        resolveSecondLastFmInfo = resolve;
+    const secondMusicBrainzRequest = new Promise<void>((resolve) => {
+        resolveSecondMusicBrainzRequest = resolve;
+    });
+    let firstLastFmSearchStarted!: () => void;
+    const firstLastFmSearch = new Promise<void>((resolve) => {
+        firstLastFmSearchStarted = resolve;
     });
     const musicBrainzRequests: string[] = [];
-    const lastFmInfoRequests: string[] = [];
+    const lastFmSearches: string[] = [];
 
     globalThis.fetch = withoutDeezerMatches(async (input) => {
         const url = new URL(input.toString());
@@ -394,46 +410,26 @@ test("MusicBrainz rate limiting does not delay Last.fm requests", async () => {
         if (url.hostname === "musicbrainz.org") {
             musicBrainzRequests.push(url.href);
 
-            if (musicBrainzRequests.length === 1) {
-                resolveFirstMusicBrainzRequest();
+            if (musicBrainzRequests.length === 2) {
+                resolveSecondMusicBrainzRequest();
             }
 
             return Response.json({ recordings: [] });
-        }
-
-        if (
-            url.hostname === "ws.audioscrobbler.com" &&
-            url.searchParams.get("method") === "track.search"
-        ) {
-            const title = url.searchParams.get("track") ?? "";
-            return Response.json({
-                results: {
-                    trackmatches: {
-                        track: { name: title, artist: "Artist" },
-                    },
-                },
-            });
-        }
-
-        if (
-            url.hostname === "ws.audioscrobbler.com" &&
-            url.searchParams.get("method") === "track.getInfo"
-        ) {
-            const title = url.searchParams.get("track") ?? "";
-            lastFmInfoRequests.push(title);
-
-            if (title === "Second title") {
-                resolveSecondLastFmInfo();
-            }
-
-            return Response.json({ track: {} });
         }
 
         if (url.hostname === "itunes.apple.com") {
             return Response.json({ results: [] });
         }
 
-        throw new Error(`Unexpected request: ${url}`);
+        const title = url.searchParams.get("track") ?? "";
+        lastFmSearches.push(title);
+
+        if (title === "First title") {
+            firstLastFmSearchStarted();
+            await firstLastFmSearchReleased;
+        }
+
+        return Response.json({ results: { trackmatches: { track: [] } } });
     });
 
     const chain = createTestChain({
@@ -443,20 +439,19 @@ test("MusicBrainz rate limiting does not delay Last.fm requests", async () => {
         { title: "First title", artist: "", album: "" },
         emptyTags
     );
-    await firstMusicBrainzRequest;
+    await firstLastFmSearch;
 
     const secondTrack = chain.find(
         { title: "Second title", artist: "", album: "" },
         emptyTags
     );
-    await secondLastFmInfo;
+    await secondMusicBrainzRequest;
 
-    assert.deepEqual(lastFmInfoRequests, ["First title", "Second title"]);
-    assert.equal(musicBrainzRequests.length, 1);
-
+    assert.deepEqual(lastFmSearches, ["First title"]);
+    releaseFirstLastFmSearch();
     await Promise.all([firstTrack, secondTrack]);
 
-    assert.equal(musicBrainzRequests.length, 2);
+    assert.deepEqual(lastFmSearches, ["First title", "Second title"]);
 });
 
 test("findTrackMetadata leaves Last.fm data intact when MusicBrainz has no result", async () => {
@@ -1197,7 +1192,7 @@ const deezerDiscovery: Record<string, object> = {
     },
 };
 
-test("findTrackMetadata completes a Last.fm match with Deezer and skips iTunes", async () => {
+test("findTrackMetadata completes a track with Deezer and skips iTunes and Last.fm", async () => {
     const requests: URL[] = [];
     mockLastFmThenDeezer(requests);
 
@@ -1223,8 +1218,6 @@ test("findTrackMetadata completes a Last.fm match with Deezer and skips iTunes",
     assert.deepEqual(
         requests.map(({ hostname, pathname }) => `${hostname}${pathname}`),
         [
-            "ws.audioscrobbler.com/2.0/",
-            "ws.audioscrobbler.com/2.0/",
             "api.deezer.com/search",
             "api.deezer.com/album/7",
             "api.deezer.com/album/7/tracks",
@@ -1247,4 +1240,129 @@ test("findTrackMetadata takes the Deezer year when MusicBrainz finds none", asyn
     assert.ok(
         requests.every(({ hostname }) => hostname !== "itunes.apple.com")
     );
+});
+
+const listenBrainzConfig = {
+    musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
+    listenBrainzToken: "test-token",
+};
+const numbSearch = { title: "Comfortably Numb", artist: "Pink Floyd" };
+const numbMatch = {
+    recording_mbid: "numb",
+    recording_name: "Comfortably Numb",
+    artist_credit_name: "Pink Floyd",
+    release_mbid: "wall",
+    release_name: "The Wall",
+    metadata: {
+        release: { caa_id: 42, caa_release_mbid: "wall-art" },
+        tag: {
+            recording: [{ tag: "progressive rock", genre_mbid: "genre" }],
+        },
+    },
+};
+const wallRelease = {
+    "release-group": { "first-release-date": "1979-11-30" },
+    media: [
+        {
+            position: 1,
+            "track-count": 13,
+            tracks: [{ position: 6, recording: { id: "numb" } }],
+        },
+    ],
+};
+
+function mockListenBrainzChain(
+    responses: Record<string, unknown>,
+    requests: string[] = []
+): string[] {
+    globalThis.fetch = withoutDeezerMatches(async (input) => {
+        const url = new URL(input.toString());
+        const route = `${url.hostname}${url.pathname}`;
+        requests.push(route);
+        return route in responses
+            ? Response.json(responses[route])
+            : new Response("cover", {
+                  headers: { "content-type": "image/jpeg" },
+              });
+    });
+    return requests;
+}
+
+test("findTrackMetadata completes a track with ListenBrainz and skips later providers", async () => {
+    const requests = mockListenBrainzChain({
+        "api.listenbrainz.org/1/metadata/lookup/": numbMatch,
+        "musicbrainz.org/ws/2/release/wall": wallRelease,
+    });
+
+    const metadata = await findTrackMetadata(numbSearch, listenBrainzConfig);
+
+    assert.deepEqual(metadata, {
+        info: {
+            title: "Comfortably Numb",
+            artist: "Pink Floyd",
+            album: "The Wall",
+            year: "1979",
+        },
+        extras: {
+            genre: "Progressive Rock",
+            trackNumber: 6,
+            trackCount: 13,
+            discNumber: 1,
+            discCount: 1,
+        },
+        coverData: Buffer.from("cover"),
+    });
+    assert.deepEqual(requests, [
+        "api.listenbrainz.org/1/metadata/lookup/",
+        "musicbrainz.org/ws/2/release/wall",
+        "coverartarchive.org/release/wall-art/42-500",
+    ]);
+});
+
+test("findTrackMetadata falls back to MusicBrainz search when ListenBrainz misses", async () => {
+    const requests = mockListenBrainzChain({
+        "api.listenbrainz.org/1/metadata/lookup/": {},
+        "musicbrainz.org/ws/2/recording": {
+            recordings: [
+                {
+                    title: "Comfortably Numb",
+                    "artist-credit": [{ name: "Pink Floyd" }],
+                    "first-release-date": "1979-11-30",
+                    releases: [{ id: "wall", title: "The Wall" }],
+                },
+            ],
+        },
+        "itunes.apple.com/search": { results: [] },
+    });
+
+    const metadata = await findTrackMetadata(numbSearch, listenBrainzConfig);
+
+    assert.equal(metadata?.info.album, "The Wall");
+    assert.equal(metadata?.info.year, "1979");
+    assert.deepEqual(requests.slice(0, 2), [
+        "api.listenbrainz.org/1/metadata/lookup/",
+        "musicbrainz.org/ws/2/recording",
+    ]);
+});
+
+test("ListenBrainz release lookups and MusicBrainz searches share one rate limit", async () => {
+    const { tag: _tag, ...withoutTags } = numbMatch.metadata;
+    mockListenBrainzChain({
+        "api.listenbrainz.org/1/metadata/lookup/": {
+            ...numbMatch,
+            metadata: withoutTags,
+        },
+        "musicbrainz.org/ws/2/release/wall": wallRelease,
+        "musicbrainz.org/ws/2/recording": { recordings: [] },
+        "itunes.apple.com/search": { results: [] },
+    });
+    const clock = createFakeClock();
+
+    await createMetadataChain(
+        { verbose: false, ...listenBrainzConfig },
+        clock,
+        createRecordingLogger()
+    ).find({ ...numbSearch, album: "" }, emptyTags);
+
+    assert.deepEqual(clock.sleeps, [3000]);
 });

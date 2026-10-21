@@ -1,9 +1,9 @@
 # AGENTS.md
 
 SoundTag is a Node.js CLI and terminal UI that scans a music folder, looks up
-missing track metadata (Last.fm, then MusicBrainz, then Deezer, then iTunes,
-with Deezer album search and YouTube as cover-only fallbacks), and rewrites
-tags and cover art in place. User-facing behaviour is documented in
+missing track metadata (ListenBrainz, then MusicBrainz, Deezer, iTunes and
+Last.fm, with Deezer album search and YouTube as cover-only fallbacks), and
+rewrites tags and cover art in place. User-facing behaviour is documented in
 [README.md](README.md).
 
 ## Commands
@@ -50,7 +50,8 @@ graph free of cycles.
   already set in the shell win over both. A new key must be added to
   `SOUNDTAG_KEYS`:
   - `LASTFM_API_KEY` is required (prompted when missing).
-  - `MUSICBRAINZ_USER_AGENT` enables MusicBrainz.
+  - `MUSICBRAINZ_USER_AGENT` enables MusicBrainz, and ListenBrainz with
+    `LISTENBRAINZ_TOKEN` (a ListenBrainz user token).
   - `YOUTUBE_API_KEY` enables the YouTube cover fallback.
   - `SOUNDTAG_COVER` (`kitty`, `blocks` or `none`) overrides how the TUI draws
     covers; otherwise `src/tui/cover-mode.ts` detects it from the terminal.
@@ -67,6 +68,11 @@ graph free of cycles.
   `services.cache`. Skip requests that `needs` says are not wanted: `cover`
   for artwork, `details` while the year and every extra are already known.
   Cover-only fallbacks implement `CoverProvider` and are tried in order.
+  Return `null` unless the result is the searched song (`isSameTrack` in
+  `track-matching.ts`), and take track and disc numbers, album artist and
+  cover only when `isSameRelease` holds. Providers that share a service share its client, and so its rate
+  limit (`MusicBrainzClient` serves MusicBrainz search and the ListenBrainz
+  release lookups).
 - **New audio format:** add it to `AUDIO_FORMATS` in `src/library/file.ts`, then
   map it to a `TagStore` in `src/tags/audio-tags.ts`. The compiler enforces that
   every format has a store.
@@ -147,7 +153,9 @@ Not enforced by tooling, but expected:
 - Files are rewritten through a hidden temporary copy (`.<name>.<uuid>.<ext>`).
   The scan skips hidden files and folders so leftovers are never tagged.
 - MusicBrainz needs `MUSICBRAINZ_USER_AGENT` and allows 1 request/s; SoundTag
-  spaces requests 3 s apart (2 s and 2.5 s still drew 503s). Last.fm API calls are
+  spaces requests 3 s apart (2 s and 2.5 s still drew 503s). ListenBrainz
+  lookups need a user token and an artist, allow about 1 request/s and are spaced
+  1 s apart; no match is `{}` with HTTP 200. Last.fm API calls are
   spaced 2 s apart, Deezer 500 ms apart (no key or OAuth needed for its public
   read endpoints; it allows 50 requests per 5 s) and iTunes 4 s apart.
   Deezer reports errors as HTTP 200 with an `error` object.

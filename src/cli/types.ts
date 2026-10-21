@@ -7,6 +7,7 @@ export interface TaggingSettings {
     renameFiles: boolean;
     musicBrainzUserAgent?: string;
     youtubeApiKey?: string;
+    listenBrainzToken?: string;
     coverMode?: CoverMode;
 }
 

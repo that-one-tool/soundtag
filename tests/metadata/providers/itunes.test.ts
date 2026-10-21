@@ -113,6 +113,32 @@ test("ItunesProvider takes release extras when no album is known", async () => {
     assert.equal((await findItunesExtras(""))?.trackNumber, 6);
 });
 
+test("ItunesProvider keeps only the genre from a release by another artist", async () => {
+    const coverAlbum = {
+        ...itunesRelease,
+        artistName: "AC/DC",
+        collectionArtistName: "Tribute Band",
+    };
+
+    assert.deepEqual(await findItunesExtras("", coverAlbum, "AC/DC"), {
+        genre: "Hard Rock",
+    });
+});
+
+test("ItunesProvider leaves out the album of another release", async () => {
+    globalThis.fetch = async () =>
+        Response.json({ results: [{ ...itunesRelease, artistName: "AC/DC" }] });
+
+    const metadata = await new ItunesProvider(
+        createProviderServices()
+    ).findMetadata(
+        { title: "Title", artist: "AC/DC", album: "Greatest Hits" },
+        detailNeeds
+    );
+
+    assert.equal(metadata?.info.album, "");
+});
+
 test("ItunesProvider keeps only the genre when the album differs", async () => {
     assert.deepEqual(await findItunesExtras("Greatest Hits"), {
         genre: "Hard Rock",
@@ -125,16 +151,16 @@ test("ItunesProvider leaves out extras iTunes does not provide", async () => {
     assert.deepEqual(extras, {});
 });
 
-test("ItunesProvider takes no extras from a different song", async () => {
+test("ItunesProvider ignores a different song", async () => {
     const karaoke = { ...itunesRelease, trackName: "Other song" };
 
-    assert.deepEqual(await findItunesExtras("", karaoke), {});
+    assert.equal(await findItunesExtras("", karaoke), undefined);
 });
 
-test("ItunesProvider takes no extras from a different artist", async () => {
+test("ItunesProvider ignores a different artist", async () => {
     const cover = { ...itunesRelease, artistName: "Karaoke Band" };
 
-    assert.deepEqual(await findItunesExtras("", cover, "AC/DC"), {});
+    assert.equal(await findItunesExtras("", cover, "AC/DC"), undefined);
 });
 
 test("ItunesProvider matches names loosely", async () => {
@@ -149,20 +175,20 @@ test("ItunesProvider matches names loosely", async () => {
     assert.equal(extras?.genre, "Hard Rock");
 });
 
-test("ItunesProvider takes no extras from a karaoke version", async () => {
+test("ItunesProvider ignores a karaoke version", async () => {
     const karaoke = { ...itunesRelease, trackName: "Title (Karaoke Version)" };
 
-    assert.deepEqual(await findItunesExtras("", karaoke), {});
+    assert.equal(await findItunesExtras("", karaoke), undefined);
 });
 
-test("ItunesProvider takes no extras from a live version of the artist", async () => {
+test("ItunesProvider ignores a live version of the artist", async () => {
     const live = {
         ...itunesRelease,
         trackName: "Title (Live)",
         artistName: "AC/DC",
     };
 
-    assert.deepEqual(await findItunesExtras("", live, "AC/DC"), {});
+    assert.equal(await findItunesExtras("", live, "AC/DC"), undefined);
 });
 
 test("ItunesProvider ignores accents and featured artists in names", async () => {
@@ -205,11 +231,11 @@ test("ItunesProvider downloads the artwork of the searched song and release", as
     assert.deepEqual(await cover, Buffer.from("artwork"));
 });
 
-test("ItunesProvider skips the artwork of a different song", async () => {
+test("ItunesProvider downloads no artwork for a different song", async () => {
     const karaoke = { ...releaseWithArtwork, trackName: "Title (Karaoke)" };
     const { cover, requestedHosts } = findItunesCover("", karaoke);
 
-    assert.equal(await cover, null);
+    assert.equal(await cover, undefined);
     assert.deepEqual(requestedHosts, ["itunes.apple.com"]);
 });
 

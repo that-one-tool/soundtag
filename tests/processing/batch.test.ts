@@ -325,7 +325,7 @@ test("processBatch logs to the context logger", async () => {
     await processBatch([source], {
         context: {
             sourceRoot: directory,
-            metadataChain: createTestChain(),
+            metadataChain: new MetadataChain([], [], createProviderServices()),
             logger,
         },
         report: createReport([source], directory),

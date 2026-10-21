@@ -6,12 +6,17 @@ export interface FoundTrack {
     artist?: string;
 }
 
+export interface FoundRelease {
+    album?: string;
+    albumArtist?: string;
+    trackArtist?: string;
+}
+
 function normalizeAlbum(album: string | undefined): string {
     return valueOrEmpty(album).trim().toLowerCase();
 }
 
-// Track and disc numbers from another release (compilation, single) would be wrong.
-export function isSameRelease(
+function isSameAlbum(
     foundAlbum: string | undefined,
     searchedAlbum: string
 ): boolean {
@@ -21,21 +26,126 @@ export function isSameRelease(
     );
 }
 
-// Brackets that name another version (live, karaoke, remix) must still differ.
+// Notes that name another version (live, karaoke, remix) must still differ.
 const NOISE_BRACKET =
     /[([][^)\]]*\b(?:remaster|feat|ft\b|explicit|mono|stereo)[^)\]]*[)\]]/g;
+const NOISE_SUFFIX =
+    /\s[-–—]\s[^-–—]*\b(?:remaster|explicit|mono|stereo)[^-–—]*$/u;
+const FEATURING_SUFFIX = /\s(?:feat\.?|ft\.|featuring)\s.*$/u;
+const WORD_SEPARATOR = /[^\p{L}\p{N}]+/u;
+const ARTIST_SEPARATOR = /\s+(?:feat\.?|ft\.?|featuring|&|x|with)\s+|\s*,\s*/iu;
 
-function normalizeName(name: string | undefined): string {
+// Shorter names are too often different words one letter apart.
+const MIN_TYPO_LENGTH = 9;
+const MIN_TYPO_WORD_LENGTH = 5;
+const NUMBER_WORD = /\d|^[ivxlcdm]+$/;
+
+function getWords(name: string | undefined): string[] {
     return valueOrEmpty(name)
         .toLowerCase()
         .normalize("NFD")
         .replaceAll(/\p{M}/gu, "")
         .replaceAll(NOISE_BRACKET, "")
-        .replaceAll(/[^\p{L}\p{N}]/gu, "");
+        .replace(NOISE_SUFFIX, "")
+        .replace(FEATURING_SUFFIX, "")
+        .split(WORD_SEPARATOR)
+        .filter(Boolean);
+}
+
+function getCommonPrefixLength(first: string, second: string): number {
+    let length = 0;
+    while (length < first.length && first[length] === second[length]) {
+        length++;
+    }
+    return length;
+}
+
+function sortByLength(first: string, second: string): [string, string] {
+    return first.length <= second.length ? [first, second] : [second, first];
+}
+
+function isOneEditApart(shorter: string, longer: string): boolean {
+    const lengthGap = longer.length - shorter.length;
+
+    if (lengthGap > 1) {
+        return false;
+    }
+
+    const prefixLength = getCommonPrefixLength(shorter, longer);
+    return (
+        shorter.slice(prefixLength + 1 - lengthGap) ===
+        longer.slice(prefixLength + 1)
+    );
+}
+
+// A changed number (track 2 vs 12, part I vs II) or plural names another work.
+function isMeaningfulChange(shorter: string, longer: string): boolean {
+    const isPlural = `${shorter}s` === longer;
+    return isPlural || [shorter, longer].some((word) => NUMBER_WORD.test(word));
+}
+
+function isTypoWord(first: string, second: string): boolean {
+    const [shorter, longer] = sortByLength(first, second);
+    return (
+        longer.length >= MIN_TYPO_WORD_LENGTH &&
+        isOneEditApart(shorter, longer) &&
+        !isMeaningfulChange(shorter, longer)
+    );
+}
+
+function getDifferentWordPairs(
+    found: string[],
+    searched: string[]
+): [string, string][] {
+    return found
+        .map((word, index): [string, string] => [word, searched[index]])
+        .filter(([foundWord, searchedWord]) => foundWord !== searchedWord);
+}
+
+function canHoldTypo(found: string[], searched: string[]): boolean {
+    const shortestLength = Math.min(
+        found.join("").length,
+        searched.join("").length
+    );
+    return (
+        found.length === searched.length && shortestLength >= MIN_TYPO_LENGTH
+    );
+}
+
+function isTypo(found: string[], searched: string[]): boolean {
+    const pairs = getDifferentWordPairs(found, searched);
+    return (
+        canHoldTypo(found, searched) &&
+        pairs.length === 1 &&
+        isTypoWord(...pairs[0])
+    );
 }
 
 export function isSameName(found: string | undefined, searched: string) {
-    return normalizeName(found) === normalizeName(searched);
+    const foundWords = getWords(found);
+    const searchedWords = getWords(searched);
+    const isEqual = foundWords.join("") === searchedWords.join("");
+    return isEqual || isTypo(foundWords, searchedWords);
+}
+
+function splitArtists(credit: string | undefined): string[] {
+    return valueOrEmpty(credit)
+        .split(ARTIST_SEPARATOR)
+        .filter((artist) => getWords(artist).length > 0);
+}
+
+// Credits list featured artists in any order: "A feat. B", "B & A", "B, A".
+function hasSharedArtist(found: string | undefined, searched: string) {
+    const foundArtists = splitArtists(found);
+    return splitArtists(searched).some((searchedArtist) =>
+        foundArtists.some((foundArtist) =>
+            isSameName(foundArtist, searchedArtist)
+        )
+    );
+}
+
+function isSameArtist(found: string | undefined, searched: string): boolean {
+    return isSameName(found, searched) || hasSharedArtist(found, searched);
 }
 
 // The first search result can be a karaoke or cover version, whose extras would stick.
@@ -43,6 +153,32 @@ export function isSameTrack(
     found: FoundTrack,
     { title, artist }: TrackSearch
 ): boolean {
-    const isSameArtist = !artist || isSameName(found.artist, artist);
-    return isSameArtist && isSameName(found.title, title);
+    const isSearchedArtist = !artist || isSameArtist(found.artist, artist);
+    return isSearchedArtist && isSameName(found.title, title);
+}
+
+const VARIOUS_ARTISTS = "variousartists";
+
+function isAlbumArtistOf(albumArtist: string, trackArtist: string): boolean {
+    const isVarious = getWords(albumArtist).join("") === VARIOUS_ARTISTS;
+    return isVarious || isSameArtist(albumArtist, trackArtist);
+}
+
+// A cover band's record can list the original artist on its track.
+function isCreditedRelease({ albumArtist, trackArtist }: FoundRelease) {
+    return (
+        !albumArtist ||
+        !trackArtist ||
+        isAlbumArtistOf(albumArtist, trackArtist)
+    );
+}
+
+// Numbers, year and cover from another release (compilation, single) would be wrong.
+export function isSameRelease(
+    release: FoundRelease,
+    searchedAlbum: string
+): boolean {
+    return (
+        isSameAlbum(release.album, searchedAlbum) && isCreditedRelease(release)
+    );
 }
