@@ -10,8 +10,8 @@ import {
     trimOrEmpty,
     valueOrEmpty,
 } from "../metadata/track-metadata.js";
-import type { TrackExtras, TrackMetadata } from "../metadata/types.js";
-import type { StoredTags, TagStore } from "./types.js";
+import type { TrackExtras } from "../metadata/types.js";
+import type { StoredTags, TagStore, TagWrite } from "./types.js";
 
 function buildCoverImage(coverData: Buffer): NodeID3.Tags["image"] {
     return {
@@ -67,13 +67,29 @@ function buildId3Extras(extras: TrackExtras): NodeID3.Tags {
     });
 }
 
+const ID3_FRAMES: Record<keyof TrackExtras, keyof NodeID3.Tags> = {
+    genre: "genre",
+    albumArtist: "performerInfo",
+    trackNumber: "trackNumber",
+    trackCount: "trackNumber",
+    discNumber: "partOfSet",
+    discCount: "partOfSet",
+};
+
+// node-id3 removes the frames it is given empty.
+function buildClearedFrames(cleared: readonly (keyof TrackExtras)[] = []) {
+    return Object.fromEntries(cleared.map((field) => [ID3_FRAMES[field], ""]));
+}
+
 function buildId3Tags({
     info,
     extras,
     coverData,
-}: TrackMetadata): NodeID3.Tags {
+    clearedExtras,
+}: TagWrite): NodeID3.Tags {
     return {
         ...getFilledFields(info),
+        ...buildClearedFrames(clearedExtras),
         ...buildId3Extras(extras),
         ...(coverData ? { image: buildCoverImage(coverData) } : {}),
     };
@@ -108,7 +124,7 @@ export class Id3TagStore implements TagStore {
         return typeof image === "object" ? image.imageBuffer : null;
     }
 
-    async write(source: string, metadata: TrackMetadata): Promise<void> {
+    async write(source: string, metadata: TagWrite): Promise<void> {
         await writeTemporaryCopy(source, source, async (temporary) =>
             updateId3Tags(buildId3Tags(metadata), temporary)
         );

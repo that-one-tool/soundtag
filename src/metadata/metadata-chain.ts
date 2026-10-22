@@ -22,6 +22,12 @@ interface ChainState {
     metadata: TrackMetadata;
     matched: boolean;
     hasExistingCover: boolean;
+    replacesCover: boolean;
+}
+
+export interface FindOptions {
+    // Ask the services for a cover even when the file has one, but no fallback.
+    replaceCover?: boolean;
 }
 
 function nameSong({ title, artist }: TrackInfo): string {
@@ -43,7 +49,18 @@ function describeCandidate(
     return fields ? `${song}: ${fields}` : song;
 }
 
-function needsCover({ metadata, hasExistingCover }: ChainState): boolean {
+function keepsExistingCover(state: ChainState): boolean {
+    return state.hasExistingCover && !state.replacesCover;
+}
+
+function needsCover(state: ChainState): boolean {
+    return !keepsExistingCover(state) && !state.metadata.coverData;
+}
+
+function needsFallbackCover({
+    metadata,
+    hasExistingCover,
+}: ChainState): boolean {
     return !hasExistingCover && !metadata.coverData;
 }
 
@@ -54,15 +71,15 @@ function getNeeds(state: ChainState): ProviderNeeds {
     };
 }
 
-function createInitialState({
-    info,
-    extras,
-    hasCover,
-}: ExistingTags): ChainState {
+function createInitialState(
+    { info, extras, hasCover }: ExistingTags,
+    { replaceCover = false }: FindOptions
+): ChainState {
     return {
         metadata: { info: { ...info }, extras: { ...extras }, coverData: null },
         matched: false,
         hasExistingCover: hasCover,
+        replacesCover: replaceCover,
     };
 }
 
@@ -84,9 +101,10 @@ export class MetadataChain {
 
     async find(
         search: TrackSearch,
-        existing: ExistingTags
+        existing: ExistingTags,
+        options: FindOptions = {}
     ): Promise<TrackMetadata | null> {
-        const state = await this.collectMetadata(search, existing);
+        const state = await this.collectMetadata(search, existing, options);
 
         if (!state.matched) {
             return null;
@@ -98,9 +116,10 @@ export class MetadataChain {
 
     private async collectMetadata(
         search: TrackSearch,
-        existing: ExistingTags
+        existing: ExistingTags,
+        options: FindOptions
     ): Promise<ChainState> {
-        let state = createInitialState(existing);
+        let state = createInitialState(existing, options);
 
         for (const provider of this.providers) {
             state = await this.applyProvider(provider, search, state);
@@ -114,7 +133,7 @@ export class MetadataChain {
         search: TrackSearch,
         state: ChainState
     ): Promise<ChainState> {
-        if (isComplete(state.metadata, state.hasExistingCover)) {
+        if (isComplete(state.metadata, keepsExistingCover(state))) {
             return state;
         }
 
@@ -143,7 +162,7 @@ export class MetadataChain {
         search: TrackSearch,
         state: ChainState
     ): Promise<ChainState> {
-        if (!needsCover(state)) {
+        if (!needsFallbackCover(state)) {
             return state;
         }
 

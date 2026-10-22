@@ -639,6 +639,28 @@ test("App keeps the fixing choice of each queued target", async () => {
     );
 });
 
+test("App keeps the overwriting choice of each queued target", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, jobs } = await renderApp(directory);
+    stdin.write("a");
+    await waitFor(() => jobs.length === 1);
+
+    stdin.write("o");
+    await waitForFrame(lastFrame, "overwriting on");
+    stdin.write(KEYS.down);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Black Sabbath");
+    stdin.write("t");
+    await waitForFrame(lastFrame, "1 queued");
+    jobs[0].finish(true);
+    await waitFor(() => jobs.length === 2);
+
+    assert.deepEqual(
+        jobs.map(({ target }) => target.settings.overwriteTags),
+        [false, true]
+    );
+});
+
 test("App ignores tag keys while quitting", async () => {
     const directory = await createLibrary();
     const { lastFrame, stdin, jobs, services } = await renderApp(directory);

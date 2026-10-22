@@ -583,3 +583,39 @@ test("tag stores keep the other performers when writing a TagLib artist", async 
         written.dispose();
     }
 });
+
+const releaseExtras: TrackExtras = {
+    albumArtist: "Old Artist",
+    trackNumber: 5,
+    trackCount: 12,
+    discNumber: 2,
+    discCount: 3,
+};
+
+const TRACK_CREATORS: [string, () => Promise<string>][] = [
+    ["mp3", createMp3],
+    ["flac", () => copyFixture("flac")],
+];
+
+for (const [format, createTrack] of TRACK_CREATORS) {
+    test(`tag stores clear the extras they are asked to clear (${format})`, async () => {
+        const source = await createTrack();
+        await writeExtras(source, { ...releaseExtras, genre: "Rock" });
+
+        await getTagStore(source).write(source, {
+            info: completeInfo,
+            extras: { trackNumber: 3 },
+            coverData: null,
+            clearedExtras: [
+                "genre",
+                "albumArtist",
+                "trackNumber",
+                "trackCount",
+                "discNumber",
+                "discCount",
+            ],
+        });
+
+        assert.deepEqual(await readExtras(source), { trackNumber: 3 });
+    });
+}

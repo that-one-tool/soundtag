@@ -123,21 +123,22 @@ to). Inside tmux, screen or Zellij the kitty protocol is not detected. Set
 `SOUNDTAG_COVER` to `kitty`, `blocks` or `none` to choose instead, for example
 `kitty` in WezTerm with its kitty graphics enabled. Processing messages appear in the log pane below.
 
-| Key                    | Action                                                     |
-| ---------------------- | ---------------------------------------------------------- |
-| `↑` `↓`, PgUp, PgDn    | Move the cursor                                            |
-| Enter, `→`             | Open the folder under the cursor                           |
-| `←`, Backspace, Delete | Go up one folder                                           |
-| `t`                    | Tag the file or folder under the cursor                    |
-| `a`                    | Tag the folder being browsed                               |
-| `e`                    | Rename the file or folder under the cursor                 |
-| `D` (Shift+d)          | Remove all tags and the cover of the file under the cursor |
-| `r`                    | Include or exclude subfolders in folder runs               |
-| `n`                    | Turn file and folder renaming on or off for the next runs  |
-| `f`                    | Turn fix mode (`--fix`) on or off for the next runs        |
-| `s`                    | Stop the current run after the file in progress            |
-| `q`, Ctrl+C            | Quit (press again during a run to quit at once)            |
-| Tab                    | Switch between the browser and the log pane                |
+| Key                    | Action                                                        |
+| ---------------------- | ------------------------------------------------------------- |
+| `↑` `↓`, PgUp, PgDn    | Move the cursor                                               |
+| Enter, `→`             | Open the folder under the cursor                              |
+| `←`, Backspace, Delete | Go up one folder                                              |
+| `t`                    | Tag the file or folder under the cursor                       |
+| `a`                    | Tag the folder being browsed                                  |
+| `e`                    | Rename the file or folder under the cursor                    |
+| `D` (Shift+d)          | Remove all tags and the cover of the file under the cursor    |
+| `r`                    | Include or exclude subfolders in folder runs                  |
+| `n`                    | Turn file and folder renaming on or off for the next runs     |
+| `f`                    | Turn fix mode (`--fix`) on or off for the next runs           |
+| `o`                    | Turn overwriting of existing tags on or off for the next runs |
+| `s`                    | Stop the current run after the file in progress               |
+| `q`, Ctrl+C            | Quit (press again during a run to quit at once)               |
+| Tab                    | Switch between the browser and the log pane                   |
 
 `e` edits the name in place: Enter saves it, Esc or Ctrl+C cancels. A file
 keeps its extension. A name already used in the folder (ignoring case) is
@@ -160,7 +161,15 @@ files inside it. Folder runs include subfolders unless `--no-recursive` was
 passed; `r` switches this for the folders queued next. Likewise, runs rename
 files and folders unless `--no-rename` was passed; `n` switches this for the
 files and folders queued next. The status bar shows these choices and whether
-fix mode is on. A file or
+fix mode or overwriting is on. With overwriting on (`o`), even fully tagged
+files are searched with their existing tags, and what the services find
+replaces the stored tags and cover; tags no service finds are kept, and a file
+whose tags already match is left unchanged. A different album (not only a
+remaster of the same one) also clears the old album artist and track and disc
+numbers that were not found, and the log names what was cleared. Fix-mode
+corrections win over what is found. The Deezer album and YouTube cover
+fallbacks never replace an embedded cover, unless fix mode replaced the album.
+A file or
 folder that is already queued or running is not queued again, even with a
 different choice; the log says so. A file renamed by
 an earlier run before its own queued run starts is skipped. Quitting during a

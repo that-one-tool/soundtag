@@ -23,7 +23,9 @@ import { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import { TrackCorrector } from "../../src/metadata/track-corrector.js";
 import type {
     CanonicalTrack,
+    ProviderNeeds,
     TrackExtras,
+    TrackMetadata,
     TrackSearch,
 } from "../../src/metadata/types.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
@@ -1199,4 +1201,196 @@ test("processTrack replaces a wrong album and the cover and numbers that came wi
         typeof tags.image === "object" && tags.image.imageBuffer,
         Buffer.from("new cover")
     );
+});
+
+async function createFullyTaggedTrack(): Promise<string> {
+    const directory = await createTemporaryDirectory();
+    const source = path.join(directory, "tagged.mp3");
+    await fs.writeFile(source, "audio bytes");
+    await getTagStore(source).write(source, {
+        info: {
+            title: "Old Title",
+            artist: "Old Artist",
+            album: "Old Album",
+            year: "1990",
+        },
+        extras: { genre: "Old Genre", trackNumber: 1, discNumber: 2 },
+        coverData: Buffer.from("old cover"),
+    });
+    return source;
+}
+
+type ProviderCall = { search: TrackSearch; needs: ProviderNeeds };
+
+function createRecordingChain(
+    found: TrackMetadata | null,
+    calls: ProviderCall[] = [],
+    fallbackCover: Buffer | null = null
+): MetadataChain {
+    return new MetadataChain(
+        [
+            {
+                name: "Fake",
+                findMetadata: async (search, needs) => {
+                    calls.push({ search, needs });
+                    return found;
+                },
+            },
+        ],
+        [{ name: "FakeCover", findCover: async () => fallbackCover }],
+        createProviderServices()
+    );
+}
+
+const newMetadata: TrackMetadata = {
+    info: {
+        title: "New Title",
+        artist: "New Artist",
+        album: "New Album",
+        year: "2001",
+    },
+    extras: { genre: "New Genre", trackNumber: 5 },
+    coverData: Buffer.from("new cover"),
+};
+
+function overwriteTrack(
+    source: string,
+    metadataChain: MetadataChain,
+    corrector?: TrackCorrector
+) {
+    return processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain,
+        corrector,
+        overwriteTags: true,
+    });
+}
+
+test("processTrack overwrites existing tags with what the services find", async () => {
+    const source = await createFullyTaggedTrack();
+    const calls: ProviderCall[] = [];
+
+    const result = await overwriteTrack(
+        source,
+        createRecordingChain(newMetadata, calls)
+    );
+
+    assert.equal(result.status, "TAGGED");
+    assert.deepEqual(calls, [
+        {
+            search: {
+                title: "Old Title",
+                artist: "Old Artist",
+                album: "Old Album",
+            },
+            needs: { cover: true, details: true },
+        },
+    ]);
+    assert.deepEqual(result.tags?.info, newMetadata.info);
+    assert.deepEqual(result.tags?.extras, newMetadata.extras);
+    assert.deepEqual(
+        await getTagStore(source).readCover(source),
+        Buffer.from("new cover")
+    );
+});
+
+test("processTrack keeps the existing tags when overwriting finds nothing", async () => {
+    const source = await createFullyTaggedTrack();
+    const before = await fs.readFile(source);
+
+    const result = await overwriteTrack(source, createRecordingChain(null));
+
+    assert.equal(result.status, "SKIPPED");
+    assert.deepEqual(await fs.readFile(source), before);
+    assert.ok(output.logs.includes("  skip   not found"));
+});
+
+test("processTrack leaves a file unchanged when overwriting finds the same tags", async () => {
+    const source = await createFullyTaggedTrack();
+    const before = await fs.readFile(source);
+    const same = await getTagStore(source).read(source);
+    const found = {
+        info: same.info,
+        extras: same.extras,
+        coverData: Buffer.from("old cover"),
+    };
+
+    const result = await overwriteTrack(source, createRecordingChain(found));
+
+    assert.equal(result.status, "SKIPPED");
+    assert.deepEqual(await fs.readFile(source), before);
+    assert.ok(output.logs.includes("  skip   nothing new"));
+});
+
+test("processTrack keeps the existing cover over a fallback cover when overwriting", async () => {
+    const source = await createFullyTaggedTrack();
+    const withoutCover = { ...newMetadata, coverData: null };
+    const chain = createRecordingChain(
+        withoutCover,
+        [],
+        Buffer.from("fallback")
+    );
+
+    await overwriteTrack(source, chain);
+
+    assert.deepEqual(
+        await getTagStore(source).readCover(source),
+        Buffer.from("old cover")
+    );
+    assert.ok(
+        output.logs.includes(
+            '  write  title "New Title" · artist "New Artist" · album "New Album" · year "2001" · genre "New Genre" · track 5 · cleared disc'
+        )
+    );
+});
+
+test("processTrack keeps fix-mode corrections over what overwriting finds", async () => {
+    const source = await createCompilationTrack();
+    const { corrector } = createFakeCorrector(dancingQueen);
+    const remaster = {
+        ...newMetadata,
+        info: { ...newMetadata.info, title: "Dancing Queen", year: "2011" },
+    };
+
+    const result = await overwriteTrack(
+        source,
+        createRecordingChain(remaster),
+        corrector
+    );
+
+    assert.equal(result.status, "TAGGED");
+    assert.deepEqual(result.tags?.info, {
+        title: "Dancing Queen",
+        artist: "ABBA",
+        album: "New Album",
+        year: "1976",
+    });
+});
+
+test("processTrack writes the corrections when overwriting finds nothing", async () => {
+    const source = await createCompilationTrack();
+    const { corrector } = createFakeCorrector(dancingQueen);
+
+    const result = await overwriteTrack(
+        source,
+        createRecordingChain(null),
+        corrector
+    );
+
+    assert.equal(result.status, "TAGGED");
+    assert.equal(result.tags?.info.year, "1976");
+});
+
+test("processTrack counts the kept tags as found when overwriting", async () => {
+    const source = await createFullyTaggedTrack();
+    const titleOnly = {
+        info: { ...emptyInfo, title: "New Title", artist: "Old Artist" },
+        extras: {},
+        coverData: null,
+    };
+
+    await overwriteTrack(source, createRecordingChain(titleOnly));
+
+    assert.ok(output.logs.includes('  write  title "New Title"'));
 });

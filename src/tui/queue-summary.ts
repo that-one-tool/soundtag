@@ -25,6 +25,10 @@ export function describeFixingChoice(enabled: boolean): string {
     return `fixing ${enabled ? "on" : "off"}`;
 }
 
+export function describeOverwritingChoice(enabled: boolean): string {
+    return `overwriting ${enabled ? "on" : "off"}`;
+}
+
 function listSubfolderChoice(target: TagTarget): string[] {
     return target.kind === "folder"
         ? [describeSubfolderChoice(target.recursive)]
@@ -32,11 +36,16 @@ function listSubfolderChoice(target: TagTarget): string[] {
 }
 
 // Only choices that differ from the defaults are worth naming.
-function listSettingChoices({ renameFiles, fixTags }: TagJobSettings) {
-    return [
-        ...(renameFiles ? [] : [describeRenamingChoice(false)]),
-        ...(fixTags ? [describeFixingChoice(true)] : []),
-    ];
+const SETTING_CHOICES: [(settings: TagJobSettings) => boolean, string][] = [
+    [(settings) => !settings.renameFiles, describeRenamingChoice(false)],
+    [(settings) => settings.fixTags, describeFixingChoice(true)],
+    [(settings) => settings.overwriteTags, describeOverwritingChoice(true)],
+];
+
+function listSettingChoices(settings: TagJobSettings): string[] {
+    return SETTING_CHOICES.filter(([differs]) => differs(settings)).map(
+        ([, choice]) => choice
+    );
 }
 
 function listTargetChoices(target: TagTarget): string[] {

@@ -2,15 +2,17 @@ import { describeCorrection } from "../metadata/track-corrections.js";
 import { TRACK_FIELDS } from "../metadata/track-metadata.js";
 import type {
     TagCorrection,
+    TrackExtras,
     TrackInfo,
     TrackMetadata,
     TrackSearch,
 } from "../metadata/types.js";
+import type { TagWrite } from "../tags/types.js";
 import { formatLogLine } from "../shared/lookup-log.js";
 
 export interface WrittenTrack {
     existing: TrackInfo;
-    metadata: TrackMetadata;
+    metadata: TagWrite;
     missing: string[];
 }
 
@@ -64,6 +66,22 @@ function describeNewExtras({ metadata }: WrittenTrack): string[] {
     });
 }
 
+const EXTRA_NAMES: Record<keyof TrackExtras, string> = {
+    genre: "genre",
+    albumArtist: "album artist",
+    trackNumber: "track",
+    trackCount: "track count",
+    discNumber: "disc",
+    discCount: "disc count",
+};
+
+function describeCleared({ metadata }: WrittenTrack): string[] {
+    const names = (metadata.clearedExtras ?? []).map(
+        (field) => EXTRA_NAMES[field]
+    );
+    return names.length > 0 ? [`cleared ${names.join(", ")}`] : [];
+}
+
 function describeMissing(missing: string[]): string {
     return missing.length > 0 ? ` (missing: ${missing.join(", ")})` : "";
 }
@@ -74,6 +92,7 @@ export function formatWriteLine(written: WrittenTrack): string {
         ...describeNewInfo(written),
         ...describeNewExtras(written),
         ...cover,
+        ...describeCleared(written),
     ];
     const text = fields.join(SEPARATOR) || "corrected tags";
     return formatLogLine("write", `${text}${describeMissing(written.missing)}`);

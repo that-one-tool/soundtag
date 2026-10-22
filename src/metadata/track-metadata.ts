@@ -39,10 +39,10 @@ export function removeUnknownValues<Values extends object>(
     return Object.fromEntries(knownEntries) as Values;
 }
 
-type ExtraGroup = readonly (keyof TrackExtras)[];
+export type ExtraGroup = readonly (keyof TrackExtras)[];
 
 // A count only makes sense with the position it came from, so they move together.
-const EXTRA_GROUPS: readonly ExtraGroup[] = [
+export const EXTRA_GROUPS: readonly ExtraGroup[] = [
     ["genre"],
     ["albumArtist"],
     ["trackNumber", "trackCount"],

@@ -9,6 +9,7 @@ import {
     MAX_FILES_PER_RUN,
     processBatch,
 } from "../processing/batch.js";
+import type { ProcessingContext } from "../processing/processing.js";
 import type { ProcessedTrack, ProcessingReport } from "../processing/types.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
@@ -69,21 +70,39 @@ interface TagRun {
     settings: TagJobSettings;
 }
 
+function buildContext(
+    sourceRoot: string,
+    settings: TagJobSettings,
+    { metadataChain, corrector, logger }: TagJobDependencies
+): ProcessingContext {
+    const fixing = settings.fixTags ? corrector : undefined;
+    const { overwriteTags } = settings;
+    return {
+        sourceRoot,
+        metadataChain,
+        logger,
+        overwriteTags,
+        corrector: fixing,
+    };
+}
+
 async function runBatch(
     { sourceRoot, files }: TargetFiles,
     { stopSignal, settings }: TagRun,
     dependencies: TagJobDependencies
 ): Promise<ProcessingReport> {
-    const { metadataChain, corrector, logger, ...batchSettings } = dependencies;
+    const { logger, libraryRoot, onTrackProcessed, onFolderRenamed } =
+        dependencies;
     logger.info(`Tagging ${files.length} audio files in ${sourceRoot}`);
     const report = createReport(files, sourceRoot);
-    const fixing = settings.fixTags ? corrector : undefined;
     await processBatch(files, {
-        context: { sourceRoot, metadataChain, logger, corrector: fixing },
+        context: buildContext(sourceRoot, settings, dependencies),
         report,
         stopSignal,
         renameFiles: settings.renameFiles,
-        ...batchSettings,
+        libraryRoot,
+        onTrackProcessed,
+        onFolderRenamed,
     });
     return report;
 }

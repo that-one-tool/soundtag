@@ -21,7 +21,7 @@ function normalizeAlbum(album: string | undefined): string {
     return splitWords(withoutNotes).join("") || folded.trim();
 }
 
-function isSameAlbum(
+export function isSameAlbum(
     foundAlbum: string | undefined,
     searchedAlbum: string
 ): boolean {

@@ -260,3 +260,16 @@ test("createTuiServices starts the fixing choice from the options", () => {
 
     assert.equal(services.fixing.getSnapshot(), true);
 });
+
+test("createTuiServices starts with overwriting off", () => {
+    const services = createTuiServices({
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: true,
+        renameFiles: true,
+        fixTags: true,
+        startDirectory: process.cwd(),
+    });
+
+    assert.equal(services.overwriting.getSnapshot(), false);
+});

@@ -59,3 +59,17 @@ test("formatWriteLine names a write of corrections only", () => {
 test("formatSkipLine gives the reason", () => {
     assert.equal(formatSkipLine("not found"), "  skip   not found");
 });
+
+test("formatWriteLine names the cleared extras", () => {
+    const metadata = {
+        info,
+        extras: { trackNumber: 3 },
+        coverData: null,
+        clearedExtras: ["albumArtist", "discNumber"] as const,
+    };
+
+    assert.equal(
+        formatWriteLine({ existing: info, metadata, missing: [] }),
+        "  write  track 3 · cleared album artist, disc"
+    );
+});

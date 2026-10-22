@@ -27,6 +27,7 @@ export interface KeyboardControls {
     subfolders: ToggleSetting;
     renaming: ToggleSetting;
     fixing: ToggleSetting;
+    overwriting: ToggleSetting;
     logView: LogView;
     logPageSize: number;
     rename: RenameControls;
@@ -42,6 +43,7 @@ function getJobSettings(controls: KeyboardControls): TagJobSettings {
     return {
         renameFiles: controls.renaming.getSnapshot(),
         fixTags: controls.fixing.getSnapshot(),
+        overwriteTags: controls.overwriting.getSnapshot(),
     };
 }
 
@@ -153,6 +155,7 @@ function createKeyHandlers(controls: KeyboardControls): KeyHandlers<KeyAction> {
         toggleSubfolders: () => controls.subfolders.toggle(),
         toggleRenaming: () => controls.renaming.toggle(),
         toggleFixing: () => controls.fixing.toggle(),
+        toggleOverwriting: () => controls.overwriting.toggle(),
         rename: () => startRename(controls),
         clearTags: () => requestClear(controls),
         confirmClear: () => confirmClear(controls),

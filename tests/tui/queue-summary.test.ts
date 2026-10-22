@@ -85,7 +85,11 @@ test("describeTarget names a file, or a folder with its subfolder choice", () =>
 });
 
 test("describeTarget tells when a target keeps its names", () => {
-    const keepNames = { renameFiles: false, fixTags: false };
+    const keepNames = {
+        renameFiles: false,
+        fixTags: false,
+        overwriteTags: false,
+    };
 
     assert.equal(
         describeTarget({ kind: "file", path: "/a.mp3", settings: keepNames }),
@@ -107,8 +111,23 @@ test("describeTarget tells when a target fixes existing tags", () => {
         describeTarget({
             kind: "file",
             path: "/a.mp3",
-            settings: { renameFiles: true, fixTags: true },
+            settings: {
+                renameFiles: true,
+                fixTags: true,
+                overwriteTags: false,
+            },
         }),
         "a.mp3 (fixing on)"
+    );
+});
+
+test("describeTarget tells when a target overwrites existing tags", () => {
+    assert.equal(
+        describeTarget({
+            kind: "file",
+            path: "/a.mp3",
+            settings: { ...DEFAULT_JOB_SETTINGS, overwriteTags: true },
+        }),
+        "a.mp3 (overwriting on)"
     );
 });

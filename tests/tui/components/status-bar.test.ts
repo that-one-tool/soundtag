@@ -15,11 +15,15 @@ const queueState = {
 };
 
 // Wider than the 100 columns of ink-testing-library, so no hint is cut off.
-const WIDE_TERMINAL = 160;
+const WIDE_TERMINAL = 190;
 
 function renderStatusBar(
     subfoldersIncluded: boolean,
-    { renamingEnabled = true, fixingEnabled = false } = {}
+    {
+        renamingEnabled = true,
+        fixingEnabled = false,
+        overwritingEnabled = false,
+    } = {}
 ): string {
     const statusBar = createElement(StatusBar, {
         queueState,
@@ -27,6 +31,7 @@ function renderStatusBar(
         subfoldersIncluded,
         renamingEnabled,
         fixingEnabled,
+        overwritingEnabled,
     });
     const wideRow = createElement(Box, { width: WIDE_TERMINAL }, statusBar);
     return render(wideRow).lastFrame() ?? "";
@@ -35,10 +40,13 @@ function renderStatusBar(
 test("StatusBar shows the queue state and the key hints", () => {
     const frame = renderStatusBar(true);
 
-    assert.match(frame, /Idle · subfolders on · renaming on · fixing off/);
     assert.match(
         frame,
-        /t tag {2}a all {2}e name {2}D clear {2}r subs {2}n names {2}f fix {2}s stop {2}q quit/
+        /Idle · subfolders on · renaming on · fixing off · overwriting off/
+    );
+    assert.match(
+        frame,
+        /t tag {2}a all {2}e name {2}D clear {2}r subs {2}n names {2}f fix {2}o over {2}s stop {2}q quit/
     );
 });
 
@@ -57,5 +65,12 @@ test("StatusBar shows when fixing is on", () => {
     assert.match(
         renderStatusBar(true, { fixingEnabled: true }),
         /renaming on · fixing on/
+    );
+});
+
+test("StatusBar shows when overwriting is on", () => {
+    assert.match(
+        renderStatusBar(true, { overwritingEnabled: true }),
+        /fixing off · overwriting on/
     );
 });

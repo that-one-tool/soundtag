@@ -68,7 +68,24 @@ async function createTrack(
     return source;
 }
 
-const RENAMING_OFF = { renameFiles: false, fixTags: false };
+async function createTaggedTrack(
+    directory: string,
+    filename: string
+): Promise<string> {
+    const source = await createTrack(directory, filename);
+    await getTagStore(source).write(source, {
+        info: { title: "Old Title", artist: "Artist", album: "", year: "" },
+        extras: { genre: "Rock" },
+        coverData: Buffer.from("old cover"),
+    });
+    return source;
+}
+
+const RENAMING_OFF = {
+    renameFiles: false,
+    fixTags: false,
+    overwriteTags: false,
+};
 
 function createRunner(overrides: { libraryRoot?: string } = {}) {
     const processed: ProcessedTrack[] = [];
@@ -330,7 +347,7 @@ test("a job corrects existing tags only when fixing is on", async () => {
     const fixed = await createTrack(directory, "fixed.mp3");
     const kept = await createTrack(directory, "kept.mp3");
     const { runJob } = createRunner();
-    const fixing = { renameFiles: false, fixTags: true };
+    const fixing = { ...RENAMING_OFF, fixTags: true };
 
     await runJob(
         { kind: "file", path: fixed, settings: fixing },
@@ -343,4 +360,25 @@ test("a job corrects existing tags only when fixing is on", async () => {
 
     assert.equal((await getTagStore(fixed).read(fixed)).info.year, "1999");
     assert.equal((await getTagStore(kept).read(kept)).info.year, "2024");
+});
+
+test("a job overwrites existing tags only when overwriting is on", async () => {
+    const directory = await createTemporaryDirectory();
+    const overwritten = await createTaggedTrack(directory, "overwritten.mp3");
+    const kept = await createTaggedTrack(directory, "kept.mp3");
+    const { runJob } = createRunner();
+    const overwriting = { ...RENAMING_OFF, overwriteTags: true };
+
+    await runJob(
+        { kind: "file", path: overwritten, settings: overwriting },
+        new AbortController().signal
+    );
+    await runJob(
+        { kind: "file", path: kept, settings: RENAMING_OFF },
+        new AbortController().signal
+    );
+
+    const store = getTagStore(overwritten);
+    assert.equal((await store.read(overwritten)).info.title, "Title");
+    assert.equal((await store.read(kept)).info.title, "Old Title");
 });

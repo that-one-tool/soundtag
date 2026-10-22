@@ -16,12 +16,8 @@ import {
     TRACK_FIELDS,
     trimOrEmpty,
 } from "../metadata/track-metadata.js";
-import type {
-    TrackExtras,
-    TrackInfo,
-    TrackMetadata,
-} from "../metadata/types.js";
-import type { StoredTags, TagStore } from "./types.js";
+import type { TrackExtras, TrackInfo } from "../metadata/types.js";
+import type { StoredTags, TagStore, TagWrite } from "./types.js";
 
 type FieldWriter = (tag: Tag, value: string) => void;
 
@@ -68,6 +64,33 @@ const EXTRA_WRITERS: readonly ExtraWriter[] = [
         if (discCount !== undefined) tag.discCount = discCount;
     },
 ];
+
+const EXTRA_CLEARERS: Record<keyof TrackExtras, (tag: Tag) => void> = {
+    genre: (tag) => {
+        tag.genres = [];
+    },
+    albumArtist: (tag) => {
+        tag.albumArtists = [];
+    },
+    trackNumber: (tag) => {
+        tag.track = 0;
+    },
+    trackCount: (tag) => {
+        tag.trackCount = 0;
+    },
+    discNumber: (tag) => {
+        tag.disc = 0;
+    },
+    discCount: (tag) => {
+        tag.discCount = 0;
+    },
+};
+
+function clearExtras(tag: Tag, cleared: readonly (keyof TrackExtras)[] = []) {
+    for (const field of cleared) {
+        EXTRA_CLEARERS[field](tag);
+    }
+}
 
 // Tags need neither the audio properties nor the picture bytes up front.
 const TAGS_ONLY = ReadStyle.None | ReadStyle.PictureLazy;
@@ -150,9 +173,10 @@ function removeAllTags(file: TagLibFile): void {
 
 function writeTagLibMetadata(
     file: TagLibFile,
-    { info, extras, coverData }: TrackMetadata
+    { info, extras, coverData, clearedExtras }: TagWrite
 ): void {
     writeFilledFields(file.tag, info);
+    clearExtras(file.tag, clearedExtras);
     writeKnownExtras(file.tag, extras);
 
     if (coverData) {
@@ -183,7 +207,7 @@ export class TagLibTagStore implements TagStore {
         );
     }
 
-    async write(source: string, metadata: TrackMetadata): Promise<void> {
+    async write(source: string, metadata: TagWrite): Promise<void> {
         await writeTemporaryCopy(source, source, async (temporary) =>
             useTagLibFile(temporary, (file) =>
                 writeTagLibMetadata(file, metadata)

@@ -36,6 +36,7 @@ export interface TuiServices {
     subfolders: ToggleSetting;
     renaming: ToggleSetting;
     fixing: ToggleSetting;
+    overwriting: ToggleSetting;
     detailsCache: VersionedCache<EntryDetails>;
     coverCache: VersionedCache<CoverLookup>;
     renamer: EntryRenamer;
@@ -128,6 +129,7 @@ export function createTuiServices(
         subfolders: new ToggleSetting(options.recursive),
         renaming: new ToggleSetting(options.renameFiles),
         fixing: new ToggleSetting(options.fixTags),
+        overwriting: new ToggleSetting(false),
         detailsCache: createDetailsCache(),
         coverCache: createCoverCache(display.mode),
         coverOverlay: new CoverOverlay(display.writeToTerminal),

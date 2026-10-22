@@ -1,6 +1,7 @@
 import { Box, Text } from "ink";
 import {
     describeFixingChoice,
+    describeOverwritingChoice,
     describeQueue,
     describeRenamingChoice,
     describeSubfolderChoice,
@@ -21,6 +22,7 @@ const KEY_HINTS: Hint[] = [
     ["r", "subs"],
     ["n", "names"],
     ["f", "fix"],
+    ["o", "over"],
     ["s", "stop"],
     ["q", "quit"],
     ["⇥", "log"],
@@ -48,6 +50,7 @@ export interface StatusBarProps {
     subfoldersIncluded: boolean;
     renamingEnabled: boolean;
     fixingEnabled: boolean;
+    overwritingEnabled: boolean;
 }
 
 function describeStatus(props: StatusBarProps): string {
@@ -56,6 +59,7 @@ function describeStatus(props: StatusBarProps): string {
         describeSubfolderChoice(props.subfoldersIncluded),
         describeRenamingChoice(props.renamingEnabled),
         describeFixingChoice(props.fixingEnabled),
+        describeOverwritingChoice(props.overwritingEnabled),
     ].join(" · ");
 }
 

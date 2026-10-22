@@ -11,6 +11,7 @@ import {
     getFirstFilled,
     getNewExtras,
     hasNewFields,
+    mergeMetadata,
 } from "../metadata/track-metadata.js";
 import { parseTrackFilename } from "../library/track-name-parser.js";
 import type {
@@ -21,8 +22,9 @@ import type {
     TrackMetadata,
     TrackSearch,
 } from "../metadata/types.js";
-import type { StoredTags } from "../tags/types.js";
+import type { StoredTags, TagWrite } from "../tags/types.js";
 import { normalizeTagValue } from "./album-tags.js";
+import { getOverwrite } from "./overwrite.js";
 import { getAlternativeSearches } from "./correction-searches.js";
 import {
     hasSuspectIdentity,
@@ -48,6 +50,7 @@ export interface ProcessingContext {
     logger: Logger;
     // Only set in fix mode.
     corrector?: TrackCorrector;
+    overwriteTags?: boolean;
 }
 
 interface FoundMetadata {
@@ -58,15 +61,19 @@ interface FoundMetadata {
 interface TrackLookup {
     source: string;
     existing: ExistingTags;
+    // The tags to search with, even when overwriting forgets them.
+    hints: TrackInfo;
+    replaceCover?: boolean;
 }
 
 interface SearchRun {
     metadataChain: MetadataChain;
     subject?: string;
+    replaceCover?: boolean;
 }
 
 interface PlannedWrite {
-    metadata: TrackMetadata | null;
+    metadata: TagWrite | null;
     existing: TrackInfo;
     missing: string[];
 }
@@ -111,10 +118,10 @@ export function buildTrackSearch(
 function searchServices(
     search: TrackSearch,
     existing: ExistingTags,
-    { metadataChain, subject }: SearchRun
+    { metadataChain, subject, replaceCover }: SearchRun
 ): Promise<TrackMetadata | null> {
     return metadataChain.lookups.step({ label: "search", subject }, () =>
-        metadataChain.find(search, existing)
+        metadataChain.find(search, existing, { replaceCover })
     );
 }
 
@@ -153,20 +160,20 @@ function keepExistingInfo(
 function shouldSearchFileName(
     fileSearch: TrackSearch,
     tagSearch: TrackSearch,
-    { info }: ExistingTags
+    hints: TrackInfo
 ): boolean {
-    return hasSuspectTags(info) && !isSameSearch(fileSearch, tagSearch);
+    return hasSuspectTags(hints) && !isSameSearch(fileSearch, tagSearch);
 }
 
 // Wrong tags (an artist inside the title) also spoil the search they lead.
 async function findFromFileName(
-    { source, existing }: TrackLookup,
+    { source, existing, hints, replaceCover }: TrackLookup,
     tagSearch: TrackSearch,
     { sourceRoot, metadataChain }: ProcessingContext
 ): Promise<TrackMetadata | null> {
     const search = buildTrackSearch(source, sourceRoot, EMPTY_TRACK_INFO);
 
-    if (!shouldSearchFileName(search, tagSearch, existing)) {
+    if (!shouldSearchFileName(search, tagSearch, hints)) {
         return null;
     }
 
@@ -175,6 +182,7 @@ async function findFromFileName(
     const found = await searchServices(search, withoutInfo, {
         metadataChain,
         subject,
+        replaceCover,
     });
     return found && keepExistingInfo(found, existing);
 }
@@ -183,13 +191,14 @@ async function findTrackMetadata(
     lookup: TrackLookup,
     context: ProcessingContext
 ): Promise<TrackMetadata | null> {
-    const { source, existing } = lookup;
-    const search = buildTrackSearch(source, context.sourceRoot, existing.info);
+    const { source, existing, hints, replaceCover } = lookup;
+    const search = buildTrackSearch(source, context.sourceRoot, hints);
     const { metadataChain } = context;
-    const subject = getSearchSubject(search, existing.info);
+    const subject = getSearchSubject(search, hints);
     const found = await searchServices(search, existing, {
         metadataChain,
         subject,
+        replaceCover,
     });
     return found ?? findFromFileName(lookup, search, context);
 }
@@ -283,7 +292,7 @@ async function tagUntaggedTrack(
     track: CorrectedTags,
     context: ProcessingContext
 ): Promise<TrackStatus> {
-    const lookup = { source, existing: track.tags };
+    const lookup = { source, existing: track.tags, hints: track.tags.info };
     const found = await findTrackMetadata(lookup, context);
     const corrected = getCorrectedMetadata(track);
     return isWritable(found) || !corrected
@@ -326,6 +335,87 @@ function tagCorrectedTrack(
     return isProperlyTagged(track.tags)
         ? keepProperTags(source, track, context.logger)
         : tagUntaggedTrack(source, track, context);
+}
+
+interface ReadTrack {
+    stored: StoredTags;
+    track: CorrectedTags;
+}
+
+// Only the corrections are known up front, so they win over what is found.
+function getOverwriteSeed(track: CorrectedTags): ExistingTags {
+    const corrected = getCorrectedMetadata(track);
+    const info = corrected ? corrected.info : EMPTY_TRACK_INFO;
+    return { info, extras: {}, hasCover: track.tags.hasCover };
+}
+
+function readCoverToCompare(
+    source: string,
+    stored: StoredTags,
+    found: TrackMetadata
+): Promise<Buffer | null> {
+    const needsCompare = stored.hasCover && found.coverData;
+    return needsCompare
+        ? getTagStore(source).readCover(source)
+        : Promise.resolve(null);
+}
+
+// Tags no service finds are kept, so they are not missing.
+function getStillMissingFields(
+    found: TrackMetadata,
+    stored: StoredTags
+): string[] {
+    return getMissingFields({
+        metadata: mergeMetadata(found, { ...stored, coverData: null }),
+        hasExistingCover: stored.hasCover,
+    });
+}
+
+async function writeOverwrite(
+    source: string,
+    { stored, found }: { stored: StoredTags; found: TrackMetadata | null },
+    logger: Logger
+): Promise<TrackStatus> {
+    const metadata = keepWritableMetadata(found, logger);
+    if (!metadata) {
+        return "SKIPPED";
+    }
+
+    const cover = await readCoverToCompare(source, stored, metadata);
+    const missing = getStillMissingFields(metadata, stored);
+    const overwrite = getOverwrite({ tags: stored, cover }, metadata);
+    const planned = {
+        metadata: overwrite,
+        existing: EMPTY_TRACK_INFO,
+        missing,
+    };
+    return writeNewMetadata(source, planned, logger);
+}
+
+async function overwriteTrack(
+    source: string,
+    { stored, track }: ReadTrack,
+    context: ProcessingContext
+): Promise<TrackStatus> {
+    const existing = getOverwriteSeed(track);
+    const hints = track.tags.info;
+    const lookup = { source, existing, hints, replaceCover: true };
+    const found = await findTrackMetadata(lookup, context);
+    if (!isWritable(found) && getCorrectedMetadata(track)) {
+        return writeCorrections(source, track, context.logger);
+    }
+
+    return writeOverwrite(source, { stored, found }, context.logger);
+}
+
+function tagReadTrack(
+    source: string,
+    read: ReadTrack,
+    context: ProcessingContext
+): Promise<TrackStatus> {
+    return context.overwriteTags
+        ? overwriteTrack(source, read, context)
+        : tagCorrectedTrack(source, read.track, context);
 }
 
 function buildCorrectionRequest(
@@ -395,7 +485,8 @@ async function tagTrack(
     const storedTags = await getTagStore(source).read(source);
     context.logger.info(formatTagsLine(storedTags.info));
     const track = await readCorrectedTags(source, storedTags, context);
-    const status = await tagCorrectedTrack(source, track, context);
+    const read = { stored: storedTags, track };
+    const status = await tagReadTrack(source, read, context);
     // Only a write changes the tags, so other tracks keep the ones already read.
     const tags =
         status === "TAGGED"

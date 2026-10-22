@@ -60,11 +60,12 @@ function useBrowsing(startDirectory: string, services: TuiServices) {
     return { browser, dispatch, hovered, details, statuses, redoneFiles };
 }
 
-function useSettingChoices({ subfolders, renaming, fixing }: TuiServices) {
+function useSettingChoices(services: TuiServices) {
     return {
-        subfoldersIncluded: useStore(subfolders),
-        renamingEnabled: useStore(renaming),
-        fixingEnabled: useStore(fixing),
+        subfoldersIncluded: useStore(services.subfolders),
+        renamingEnabled: useStore(services.renaming),
+        fixingEnabled: useStore(services.fixing),
+        overwritingEnabled: useStore(services.overwriting),
     };
 }
 
