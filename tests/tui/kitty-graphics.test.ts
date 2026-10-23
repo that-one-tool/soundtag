@@ -31,12 +31,12 @@ test("buildTransmission sends a small PNG in one chunk", () => {
     );
 });
 
-test("buildPlacement places the image at a cell and restores the cursor", () => {
-    const placement = { row: 4, column: 53, columns: 48, rows: 24 };
+test("buildPlacement fits the image to its cells and restores the cursor", () => {
+    const placement = { row: 4, column: 53, columns: 48, rows: 20 };
 
     assert.equal(
         buildPlacement(placement, 7),
-        `${ESC}7${ESC}[5;54H${ESC}_Ga=p,i=7,p=1,c=48,C=1,q=2${ESC}\\${ESC}8`
+        `${ESC}7${ESC}[5;54H${ESC}_Ga=p,i=7,p=1,c=48,r=20,C=1,q=2${ESC}\\${ESC}8`
     );
 });
 

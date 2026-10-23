@@ -24,11 +24,11 @@ export function buildTransmission(png: Buffer, imageId: number): string {
         .join("");
 }
 
-// C=1 and the saved cursor leave Ink's cursor where Ink expects it. Without
-// r, the terminal picks the rows that keep the cover square for its cell shape.
+// C=1 and the saved cursor leave Ink's cursor where Ink expects it. Konsole
+// ignores c without r and draws the image at its pixel size; r assumes 2:1 cells.
 export function buildPlacement(spot: CoverSpot, imageId: number): string {
-    const { row, column, columns } = spot;
-    const placement = `a=p,i=${imageId},p=1,c=${columns},C=1,q=2`;
+    const { row, column, columns, rows } = spot;
+    const placement = `a=p,i=${imageId},p=1,c=${columns},r=${rows},C=1,q=2`;
     const moveCursor = `${ESC}[${row + 1};${column + 1}H`;
     return `${ESC}7${moveCursor}${wrapCommand(placement)}${ESC}8`;
 }
