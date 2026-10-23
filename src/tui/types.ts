@@ -24,6 +24,8 @@ export interface CoverSpot {
     rows: number;
 }
 
+export type CoverBox = Pick<CoverSpot, "columns" | "rows">;
+
 export type CoverLookup =
     | { kind: "found"; art: CoverPicture }
     | { kind: "missing" }

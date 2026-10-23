@@ -3,6 +3,7 @@ import {
     type MetadataChainConfig,
 } from "../metadata/create-metadata-chain.js";
 import { systemClock } from "../shared/rate-limiter.js";
+import { DEFAULT_CELL_RATIO } from "./cell-shape.js";
 import type { CoverMode } from "./cover-mode.js";
 import { CoverOverlay, type CoverPlacer } from "./cover-overlay.js";
 import { createCoverCache } from "./cover-reader.js";
@@ -42,15 +43,18 @@ export interface TuiServices {
     renamer: EntryRenamer;
     tagClearer: TagClearer;
     coverOverlay: CoverPlacer;
+    cellRatio: number;
 }
 
 export interface CoverDisplay {
     mode: CoverMode;
+    cellRatio: number;
     writeToTerminal: (text: string) => void;
 }
 
 const NO_COVER_DISPLAY: CoverDisplay = {
     mode: "none",
+    cellRatio: DEFAULT_CELL_RATIO,
     writeToTerminal: () => {},
 };
 
@@ -133,5 +137,6 @@ export function createTuiServices(
         detailsCache: createDetailsCache(),
         coverCache: createCoverCache(display.mode),
         coverOverlay: new CoverOverlay(display.writeToTerminal),
+        cellRatio: display.cellRatio,
     };
 }

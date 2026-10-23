@@ -53,6 +53,7 @@ export function createControlledServices(): {
             detailsCache: createDetailsCache(),
             coverCache: createCoverCache("blocks"),
             coverOverlay: new CoverOverlay(() => {}),
+            cellRatio: 2,
             renamer: new EntryRenamer({ queue, pathMoves, logger: logBuffer }),
             tagClearer: new TagClearer({
                 queue,

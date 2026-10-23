@@ -32,7 +32,10 @@ function createRecordingPlacer() {
     return { placer, shown, getHiddenCount: () => hidden };
 }
 
-function createPanelProps(detailRows: number): MetadataPanelProps {
+function createPanelProps(
+    detailRows: number,
+    { width = 52, cellRatio = 2 } = {}
+): MetadataPanelProps {
     return {
         entry: { name: "a.mp3", path: "/a.mp3", kind: "file" },
         statuses: new Map(),
@@ -60,7 +63,8 @@ function createPanelProps(detailRows: number): MetadataPanelProps {
         loading: false,
         cover: PNG_COVER,
         detailRows,
-        width: 52,
+        width,
+        cellRatio,
     };
 }
 
@@ -106,6 +110,40 @@ test("KittyCoverView shrinks the cover box to the free rows", async () => {
         column: 2,
         columns: 16,
         rows: 8,
+    });
+});
+
+test("KittyCoverView widens the cover box to stay square in taller cells", async () => {
+    const { placer, shown } = createRecordingPlacer();
+
+    renderWithPlacer(
+        placer,
+        createPanelProps(36, { width: 58, cellRatio: 2.25 })
+    );
+
+    await waitFor(() => shown.length > 0);
+    assert.deepEqual(shown.at(-1)?.spot, {
+        row: 14,
+        column: 2,
+        columns: 54,
+        rows: 24,
+    });
+});
+
+test("KittyCoverView shrinks a widened cover box to the panel width", async () => {
+    const { placer, shown } = createRecordingPlacer();
+
+    renderWithPlacer(
+        placer,
+        createPanelProps(36, { width: 40, cellRatio: 2.25 })
+    );
+
+    await waitFor(() => shown.length > 0);
+    assert.deepEqual(shown.at(-1)?.spot, {
+        row: 14,
+        column: 2,
+        columns: 36,
+        rows: 16,
     });
 });
 

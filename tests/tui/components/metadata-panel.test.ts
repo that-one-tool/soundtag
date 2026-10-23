@@ -23,13 +23,19 @@ const EMPTY_TRACK = {
     sizeBytes: 0,
 };
 
-type PanelDefaults = "loading" | "cover" | "detailRows" | "width";
+type PanelDefaults = "loading" | "cover" | "detailRows" | "width" | "cellRatio";
 
 function renderPanel(
     props: Omit<MetadataPanelProps, PanelDefaults> &
         Partial<Pick<MetadataPanelProps, PanelDefaults>>
 ): string {
-    const defaults = { loading: false, cover: null, detailRows: 40, width: 52 };
+    const defaults = {
+        loading: false,
+        cover: null,
+        detailRows: 40,
+        width: 52,
+        cellRatio: 2,
+    };
     const panel = createElement(MetadataPanel, { ...defaults, ...props });
     return render(panel).lastFrame() ?? "";
 }
@@ -179,6 +185,19 @@ test("MetadataPanel shrinks the cover to the free rows", () => {
     assert.equal(coverLines[0].length, 16);
 });
 
+test("MetadataPanel keeps half-block covers two pixels per row in taller cells", () => {
+    const frame = renderPanel({
+        ...createFileProps(),
+        detailRows: 36,
+        width: 58,
+        cellRatio: 2.25,
+    });
+
+    const coverLines = getCoverLines(frame);
+    assert.equal(coverLines.length, 24);
+    assert.equal(coverLines[0].length, 48);
+});
+
 test("MetadataPanel leaves out a cover that would be too small", () => {
     const frame = renderPanel({ ...createFileProps(), detailRows: 19 });
 
@@ -204,6 +223,7 @@ test("MetadataPanel keeps its width beside a long file name", () => {
         loading: false,
         detailRows: 36,
         width: 52,
+        cellRatio: 2,
     });
 
     const frame =

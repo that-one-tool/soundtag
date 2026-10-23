@@ -34,14 +34,25 @@ test("getLayout keeps a minimum list height", () => {
 });
 
 test("getPanelWidth fits the cover but takes at most half the terminal", () => {
-    assert.equal(getPanelWidth(200), 52);
-    assert.equal(getPanelWidth(80), 40);
-    assert.equal(getPanelWidth(81), 40);
+    assert.equal(getPanelWidth(200, 2), 52);
+    assert.equal(getPanelWidth(80, 2), 40);
+    assert.equal(getPanelWidth(81, 2), 40);
+});
+
+test("getPanelWidth widens for a square cover in taller cells", () => {
+    assert.equal(getPanelWidth(200, 2.25), 58);
+    assert.equal(getPanelWidth(200, 2.3), 60);
+    assert.equal(getPanelWidth(100, 2.25), 50);
+});
+
+test("getPanelWidth keeps room for the fields in wider cells", () => {
+    assert.equal(getPanelWidth(200, 1.5), 52);
 });
 
 test("getNameWidth leaves the browser row frame and the panel aside", () => {
-    assert.equal(getNameWidth(100), 42);
-    assert.equal(getNameWidth(200), 140);
+    assert.equal(getNameWidth(100, 2), 42);
+    assert.equal(getNameWidth(200, 2), 140);
+    assert.equal(getNameWidth(200, 2.25), 134);
 });
 
 test("getLogWidth leaves room for the log pane border and padding", () => {

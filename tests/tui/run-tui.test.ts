@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -132,30 +133,64 @@ test("hasTrueColor needs a terminal with 24-bit colors", () => {
     assert.equal(hasTrueColor({} as NodeJS.WriteStream), false);
 });
 
-test("createCoverDisplay detects the mode and writes images to stdout", () => {
-    const writes: string[] = [];
+function createReplyingStreams(writes: string[]) {
+    const replies: string[] = [];
+    const stdin = Object.assign(new EventEmitter(), {
+        isTTY: true,
+        setRawMode: () => {},
+        read: () => replies.shift() ?? null,
+    });
     const stdout = {
         getColorDepth: () => 24,
-        write: (text: string) => writes.push(text),
-    } as unknown as NodeJS.WriteStream;
-    const options = {
-        startDirectory: process.cwd(),
-        lastFmApiKey: "key",
-        verbose: false,
-        recursive: true,
-        renameFiles: true,
-        fixTags: false,
+        write: (text: string) => {
+            writes.push(text);
+            if (text === "\u001B[16t") {
+                replies.push("\u001B[6;18;8t");
+                stdin.emit("readable");
+            }
+            return true;
+        },
     };
+    return {
+        stdin: stdin as unknown as NodeJS.ReadStream,
+        stdout: stdout as unknown as NodeJS.WriteStream,
+    };
+}
 
-    const display = createCoverDisplay(options, stdout, {
+const COVER_OPTIONS = {
+    startDirectory: process.cwd(),
+    lastFmApiKey: "key",
+    verbose: false,
+    recursive: true,
+    renameFiles: true,
+    fixTags: false,
+};
+
+test("createCoverDisplay detects the mode, measures cells and writes images to stdout", async () => {
+    const writes: string[] = [];
+    const streams = createReplyingStreams(writes);
+
+    const display = await createCoverDisplay(COVER_OPTIONS, streams, {
         TERM: "xterm-kitty",
     });
     display.writeToTerminal("image");
 
     assert.equal(display.mode, "kitty");
-    assert.deepEqual(writes, ["image"]);
-    assert.equal(
-        createCoverDisplay({ ...options, coverMode: "none" }, stdout, {}).mode,
-        "none"
+    assert.equal(display.cellRatio, 2.25);
+    assert.deepEqual(writes, ["\u001B[16t", "image"]);
+});
+
+test("createCoverDisplay keeps two pixels per row without kitty graphics", async () => {
+    const writes: string[] = [];
+    const streams = createReplyingStreams(writes);
+
+    const display = await createCoverDisplay(
+        { ...COVER_OPTIONS, coverMode: "none" },
+        streams,
+        {}
     );
+
+    assert.equal(display.mode, "none");
+    assert.equal(display.cellRatio, 2);
+    assert.deepEqual(writes, []);
 });

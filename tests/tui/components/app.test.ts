@@ -890,6 +890,35 @@ test("App places the kitty cover at its spot on screen, again after a resize, an
     assert.equal(counts.cleared, 1);
 });
 
+test("App widens the metadata pane and cover box for taller cells", async () => {
+    const directory = await createLibrary();
+    const { services } = createControlledServices();
+    const { overlay, spots } = createRecordingOverlay();
+    services.coverOverlay = overlay;
+    services.cellRatio = 2.25;
+    const art = { png: Buffer.from("png"), key: "png", width: 48, height: 48 };
+    services.coverCache = new VersionedCache<CoverLookup>(async () => ({
+        kind: "found",
+        art,
+    }));
+    const terminal = createFakeTerminal({ columns: 120, rows: 60 });
+    const outcome = renderTui(services, directory, terminal.streams);
+    await waitForInput(terminal.stdin);
+    await waitFor(() => terminal.stdout.output.includes("song.mp3"));
+    terminal.stdin.write(KEYS.down);
+    terminal.stdin.write(KEYS.down);
+
+    await waitFor(() => spots.length > 0);
+    assert.deepEqual(spots.at(-1), {
+        row: 15,
+        column: 64,
+        columns: 52,
+        rows: 23,
+    });
+    terminal.stdin.write("q");
+    await outcome;
+});
+
 test("App frees the kitty covers before leaving the alternate screen", async () => {
     const directory = await createLibrary();
     const { services } = createControlledServices();

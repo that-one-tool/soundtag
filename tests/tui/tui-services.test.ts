@@ -235,6 +235,25 @@ test("createTuiServices draws no covers by default", async () => {
     });
 });
 
+test("createTuiServices takes the cell shape from the cover display", () => {
+    const options = {
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: false,
+        renameFiles: false,
+        fixTags: false,
+        startDirectory: process.cwd(),
+    };
+    const display = {
+        mode: "kitty" as const,
+        cellRatio: 2.25,
+        writeToTerminal: () => {},
+    };
+
+    assert.equal(createTuiServices(options).cellRatio, 2);
+    assert.equal(createTuiServices(options, display).cellRatio, 2.25);
+});
+
 test("createTuiServices starts the renaming choice from the options", () => {
     const services = createTuiServices({
         lastFmApiKey: "key",

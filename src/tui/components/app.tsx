@@ -27,14 +27,14 @@ export interface AppProps {
     services: TuiServices;
 }
 
-function useLayout() {
+function useLayout(cellRatio: number) {
     const { rows, columns } = useWindowSize();
     const layout = getLayout(rows);
     return {
         rows,
         ...layout,
-        panelWidth: getPanelWidth(columns),
-        nameWidth: getNameWidth(columns),
+        panelWidth: getPanelWidth(columns, cellRatio),
+        nameWidth: getNameWidth(columns, cellRatio),
         logSize: { height: layout.logLines, width: getLogWidth(columns) },
     };
 }
@@ -81,7 +81,7 @@ function useStatus(services: TuiServices) {
 }
 
 function useAppState({ startDirectory, services }: AppProps) {
-    const layout = useLayout();
+    const layout = useLayout(services.cellRatio);
     const browsing = useBrowsing(startDirectory, services);
     const { status, requestQuit } = useStatus(services);
     const logView = useLogView(services.logBuffer, layout.logSize);
@@ -152,6 +152,7 @@ function getMetadataPanelProps(
         statuses: state.statuses,
         detailRows: state.detailRows,
         width: state.panelWidth,
+        cellRatio: state.services.cellRatio,
     };
 }
 

@@ -1,5 +1,10 @@
 import { render } from "ink";
-import { detectCoverMode } from "./cover-mode.js";
+import {
+    DEFAULT_CELL_RATIO,
+    queryCellRatio,
+    type CellQueryStreams,
+} from "./cell-shape.js";
+import { detectCoverMode, type CoverMode } from "./cover-mode.js";
 import { App } from "./components/app.js";
 import {
     createTuiServices,
@@ -45,28 +50,33 @@ export async function renderTui(
     return (await instance.waitUntilExit()) as TuiOutcome;
 }
 
-export function createCoverDisplay(
+async function getCellRatio(mode: CoverMode, streams: CellQueryStreams) {
+    return mode === "kitty" ? queryCellRatio(streams) : DEFAULT_CELL_RATIO;
+}
+
+export async function createCoverDisplay(
     options: TuiOptions,
-    stdout: NodeJS.WriteStream,
+    streams: CellQueryStreams,
     env: NodeJS.ProcessEnv
-): CoverDisplay {
-    const trueColor = hasTrueColor(stdout);
+): Promise<CoverDisplay> {
+    const trueColor = hasTrueColor(streams.stdout);
+    const override = options.coverMode;
+    const mode = detectCoverMode({ env, trueColor, override });
     return {
-        mode: detectCoverMode({ env, trueColor, override: options.coverMode }),
-        writeToTerminal: (text) => stdout.write(text),
+        mode,
+        cellRatio: await getCellRatio(mode, streams),
+        writeToTerminal: (text) => streams.stdout.write(text),
     };
 }
 
-export function runTui(
+export async function runTui(
     options: TuiOptions,
     streams: TerminalStreams = processStreams,
     env: NodeJS.ProcessEnv = process.env
 ): Promise<TuiOutcome> {
+    const display = await createCoverDisplay(options, streams, env);
     return renderTui(
-        createTuiServices(
-            options,
-            createCoverDisplay(options, streams.stdout, env)
-        ),
+        createTuiServices(options, display),
         options.startDirectory,
         streams
     );

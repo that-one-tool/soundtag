@@ -115,7 +115,10 @@ current directory. The left pane lists subfolders and audio files, and the right
 pane shows the stored tags of the file under the cursor (or, for a folder, its
 file counts). When the terminal is tall enough (about 37 rows or more), the
 file's embedded cover is drawn below its tags, growing with the terminal up to
-48 columns by 24 rows (from about 61 rows and 104 columns). Konsole 22.04 or
+24 rows tall, from about 61 rows. With the kitty graphics protocol, SoundTag
+asks the terminal for its character size so the cover stays square: 48 columns
+wide for characters twice as tall as wide (from about 104 columns), 54 for
+8×18-pixel ones (from about 116). Konsole 22.04 or
 later, kitty and Ghostty show it at full quality through the kitty graphics
 protocol; other terminals draw it with colored half blocks, which needs true
 color support (`COLORTERM=truecolor`, which tmux only passes on when configured

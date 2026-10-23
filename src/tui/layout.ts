@@ -27,18 +27,28 @@ export function getLayout(rows: number): Layout {
     return { logLines, listHeight, detailRows };
 }
 
-// Wide enough for the 48-column cover inside the border and padding.
-const FULL_PANEL_WIDTH = 52;
+// The 48-pixel cover takes 24 rows; its columns follow the cell shape.
+const FULL_COVER_ROWS = 24;
+// Border and padding on both sides.
+export const PANEL_FRAME_COLUMNS = 4;
+// Room for the fields when cells are wider than half their height.
+const MIN_FULL_PANEL_WIDTH = 52;
 
-export function getPanelWidth(columns: number): number {
-    return Math.min(FULL_PANEL_WIDTH, Math.floor(columns / 2));
+function getFullPanelWidth(cellRatio: number): number {
+    const coverColumns = Math.ceil(FULL_COVER_ROWS * cellRatio);
+    return Math.max(MIN_FULL_PANEL_WIDTH, coverColumns + PANEL_FRAME_COLUMNS);
+}
+
+export function getPanelWidth(columns: number, cellRatio: number): number {
+    return Math.min(getFullPanelWidth(cellRatio), Math.floor(columns / 2));
 }
 
 // Browser border, padding, cursor marker, status dot and the space after it.
 const BROWSER_ROW_FRAME_COLUMNS = 8;
 
-export function getNameWidth(columns: number): number {
-    return columns - getPanelWidth(columns) - BROWSER_ROW_FRAME_COLUMNS;
+export function getNameWidth(columns: number, cellRatio: number): number {
+    const panelWidth = getPanelWidth(columns, cellRatio);
+    return columns - panelWidth - BROWSER_ROW_FRAME_COLUMNS;
 }
 
 // The log pane's round border and one column of padding on each side.

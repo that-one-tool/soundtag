@@ -15,8 +15,11 @@ import { ERROR_COLOR, PANE_COLOR, STATUS_COLOR } from "../theme.js";
 import { countFolderStatuses, STATUS_ORDER } from "../track-statuses.js";
 import type { TrackExtras } from "../../metadata/types.js";
 import type { TrackDetails } from "../../tags/types.js";
+import { DEFAULT_CELL_RATIO, getCoverColumns } from "../cell-shape.js";
+import { PANEL_FRAME_COLUMNS } from "../layout.js";
 import type {
     BrowserEntry,
+    CoverBox,
     CoverPicture,
     EntryDetails,
     TrackStatuses,
@@ -24,9 +27,7 @@ import type {
 import { CoverArtView } from "./cover-art-view.js";
 import { KittyCoverView } from "./kitty-cover-view.js";
 
-// Border and padding on both sides.
-const PANEL_FRAME_COLUMNS = 4;
-const MIN_COVER_SIZE = 16;
+const MIN_COVER_ROWS = 8;
 const LABEL_WIDTH = 13;
 
 interface FieldRow {
@@ -60,6 +61,7 @@ interface DetailsViewProps<Kind extends EntryDetails["kind"]> {
     cover: CoverPicture | null;
     detailRows: number;
     width: number;
+    cellRatio: number;
 }
 
 type FileDetailsData = Extract<EntryDetails, { kind: "file" }>;
@@ -118,27 +120,30 @@ function getStatusRow(status: TrackStatus | undefined): FieldRow {
 interface CoverSpace {
     freeRows: number;
     freeColumns: number;
+    cellRatio: number;
 }
 
-function roundDownToEven(value: number): number {
-    return value - (value % 2);
+function getBoxRatio(cover: CoverPicture, cellRatio: number): number {
+    return "png" in cover ? cellRatio : DEFAULT_CELL_RATIO;
 }
 
-// Each row holds two pixels and one blank row sits above the cover.
-function getCoverSize(
-    cover: CoverPicture,
-    { freeRows, freeColumns }: CoverSpace
-) {
-    const sizeByRows = (freeRows - 1) * 2;
-    return roundDownToEven(Math.min(cover.height, sizeByRows, freeColumns));
+// One blank row sits above the cover; its columns follow the cell shape.
+function getCoverBox(cover: CoverPicture, space: CoverSpace): CoverBox {
+    const ratio = getBoxRatio(cover, space.cellRatio);
+    const rows = Math.min(
+        cover.height / 2,
+        space.freeRows - 1,
+        Math.floor(space.freeColumns / ratio)
+    );
+    return { rows, columns: getCoverColumns(rows, ratio) };
 }
 
-function CoverView({ cover, size }: { cover: CoverPicture; size: number }) {
+function CoverView({ cover, box }: { cover: CoverPicture; box: CoverBox }) {
     if ("png" in cover) {
-        return <KittyCoverView cover={cover} size={size} />;
+        return <KittyCoverView cover={cover} box={box} />;
     }
 
-    return <CoverArtView cover={cover} size={size} />;
+    return <CoverArtView cover={cover} size={box.columns} />;
 }
 
 function FittingCover({
@@ -148,14 +153,14 @@ function FittingCover({
     cover: CoverPicture;
     space: CoverSpace;
 }) {
-    const size = getCoverSize(cover, space);
-    if (size < MIN_COVER_SIZE) {
+    const box = getCoverBox(cover, space);
+    if (box.rows < MIN_COVER_ROWS) {
         return null;
     }
 
     return (
         <Box marginTop={1}>
-            <CoverView cover={cover} size={size} />
+            <CoverView cover={cover} box={box} />
         </Box>
     );
 }
@@ -170,6 +175,7 @@ function FileDetails(props: DetailsViewProps<"file">) {
     const space = {
         freeRows: props.detailRows - rows.length,
         freeColumns: props.width - PANEL_FRAME_COLUMNS,
+        cellRatio: props.cellRatio,
     };
     return (
         <>
@@ -250,6 +256,7 @@ export interface MetadataPanelProps {
     cover: CoverPicture | null;
     detailRows: number;
     width: number;
+    cellRatio: number;
 }
 
 function PanelHeader({ loading }: { loading: boolean }) {

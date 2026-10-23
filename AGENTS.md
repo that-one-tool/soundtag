@@ -167,6 +167,9 @@ Not enforced by tooling, but expected:
   picks up the `tsconfig.json` of the working directory for JSX.
 - Ink owns stdin in raw mode, so the `SIGINT` listener of the stop session is
   removed before the TUI starts and Ctrl+C reaches the UI as a key press.
+- In kitty cover mode, `runTui` asks the terminal for its cell size
+  (`CSI 16 t`, `src/tui/cell-shape.ts`) before Ink reads stdin, so covers stay
+  square; without a reply in 200 ms, cells are taken as twice as tall as wide.
 - Node ≥ 24 is required, and `@types/node` is pinned to v24 so the typecheck
   rejects newer APIs.
 - Files are rewritten through a hidden temporary copy (`.<name>.<uuid>.<ext>`).
