@@ -7,6 +7,7 @@ import {
     isSameTrack,
     isVariousArtists,
     hasNoteAfterName,
+    stripRemasterNote,
 } from "../../src/metadata/track-matching.js";
 
 test("isSameName ignores case, accents, punctuation and noise brackets", () => {
@@ -310,5 +311,17 @@ test("isSearchedAlbum takes Various and VA for various artists", () => {
     assert.equal(
         isSearchedAlbum({ album: "Hits 90", artist: "Haddaway" }, hits),
         false
+    );
+});
+
+test("stripRemasterNote drops a remaster note but keeps other editions", () => {
+    assert.equal(stripRemasterNote("Jazz (2011 Remaster)"), "Jazz");
+    assert.equal(
+        stripRemasterNote("Abbey Road - Remastered 2009"),
+        "Abbey Road"
+    );
+    assert.equal(
+        stripRemasterNote("Discovery (Deluxe Edition)"),
+        "Discovery (Deluxe Edition)"
     );
 });

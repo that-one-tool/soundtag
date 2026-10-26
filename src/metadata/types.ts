@@ -44,10 +44,35 @@ export interface AlbumSearch {
     album: string;
 }
 
-// The album as the service spells it.
+// Like tags, the track count is per disc.
+export interface AlbumTrackEntry {
+    title: string;
+    artist?: string;
+    trackNumber: number;
+    trackCount: number;
+    discNumber: number;
+    discCount: number;
+}
+
+// The album as the service spells it, with what else the service knows.
 export interface FoundAlbum {
     album: string;
+    artist: string;
+    year?: string;
+    genre?: string;
     covers: ImageRequest[];
+    tracks?: AlbumTrackEntry[];
+}
+
+// What every track of an album shares; found is false when only the folder named it.
+export interface AlbumData {
+    album: string;
+    artist: string;
+    year: string;
+    genre: string;
+    cover: Buffer | null;
+    tracks: AlbumTrackEntry[];
+    found: boolean;
 }
 
 export interface AlbumSource {

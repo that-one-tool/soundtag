@@ -66,7 +66,10 @@ export function getAlbumArtist({ artists }: DiscogsAlbum): string {
     return credit === DISCOGS_VARIOUS_ARTISTS ? "Various Artists" : credit;
 }
 
-function getTrackArtist(track: DiscogsTrack, album: DiscogsAlbum): string {
+export function getTrackArtist(
+    track: DiscogsTrack,
+    album: DiscogsAlbum
+): string {
     return getCredit(track.artists) || getAlbumArtist(album);
 }
 
@@ -130,7 +133,9 @@ function toPosition([, disc = "1", track]: RegExpExecArray): TrackPosition {
     return { disc: Number(disc), track: Number(track) };
 }
 
-function parsePosition(position: string | undefined): TrackPosition | null {
+export function parsePosition(
+    position: string | undefined
+): TrackPosition | null {
     const match = NUMBERED_POSITION.exec(valueOrEmpty(position).trim());
     return match ? toPosition(match) : null;
 }

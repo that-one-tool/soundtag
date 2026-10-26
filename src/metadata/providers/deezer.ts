@@ -17,6 +17,7 @@ import type {
 import {
     buildQuery,
     getCoverRequests,
+    getDeezerGenre,
     type DeezerAlbum,
     type DeezerAlbumTrack,
     type DeezerClient,
@@ -78,14 +79,6 @@ function getTrackInfo(track: DeezerTrack, isRelease: boolean): TrackInfo {
     };
 }
 
-function getGenres({ genres }: DeezerAlbum): { name?: string }[] {
-    return genres?.data ?? [];
-}
-
-function getGenre(album: DeezerAlbum): string | undefined {
-    return optionalText(getGenres(album)[0]?.name);
-}
-
 function getAlbumArtist(album: DeezerAlbum): string | undefined {
     return optionalText(album.artist?.name);
 }
@@ -140,7 +133,7 @@ function isReleaseOfTrack(
 }
 
 function getGenreDetails(album: DeezerAlbum): DeezerDetails {
-    const extras = removeUnknownValues({ genre: getGenre(album) });
+    const extras = removeUnknownValues({ genre: getDeezerGenre(album) });
     return { extras, isRelease: false };
 }
 
@@ -226,7 +219,7 @@ export class DeezerProvider implements MetadataProvider {
     ): Promise<DeezerDetails> {
         const tracks = await this.client.getAlbumTracks(albumId);
         const extras = {
-            genre: getGenre(album),
+            genre: getDeezerGenre(album),
             albumArtist: getAlbumArtist(album),
             ...getPositionExtras(tracks, trackId),
         };

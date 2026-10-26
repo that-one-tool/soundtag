@@ -1,6 +1,11 @@
 import type { ImageRequest } from "../../shared/http.js";
 import { isSearchedAlbum } from "../track-matching.js";
-import { valueOrEmpty } from "../track-metadata.js";
+import {
+    extractYear,
+    optionalText,
+    removeUnknownValues,
+    valueOrEmpty,
+} from "../track-metadata.js";
 import type { AlbumSearch, AlbumSource, FoundAlbum } from "../types.js";
 import {
     getMusicBrainzArtist,
@@ -36,8 +41,13 @@ export class MusicBrainzAlbumSource implements AlbumSource {
         );
     }
 
-    private describeAlbum({ id, title }: MusicBrainzReleaseGroup): FoundAlbum {
-        const covers = id ? this.getCoverRequests(id) : [];
-        return { album: valueOrEmpty(title), covers };
+    private describeAlbum(group: MusicBrainzReleaseGroup): FoundAlbum {
+        const { id, title } = group;
+        return removeUnknownValues({
+            album: valueOrEmpty(title),
+            artist: getMusicBrainzArtist(group["artist-credit"]),
+            year: optionalText(extractYear(group["first-release-date"])),
+            covers: id ? this.getCoverRequests(id) : [],
+        });
     }
 }

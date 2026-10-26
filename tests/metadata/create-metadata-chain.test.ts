@@ -2,7 +2,10 @@ import { consoleLogger } from "../../src/shared/logger.js";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { createMetadataLookups } from "../../src/metadata/create-metadata-chain.js";
+import { DeezerAlbumSource } from "../../src/metadata/providers/deezer-album.js";
 import { DeezerCoverProvider } from "../../src/metadata/providers/deezer-cover.js";
+import { DiscogsAlbumSource } from "../../src/metadata/providers/discogs-album.js";
+import { MusicBrainzAlbumSource } from "../../src/metadata/providers/musicbrainz-album.js";
 import { DeezerProvider } from "../../src/metadata/providers/deezer.js";
 import {
     DiscogsAlbumProvider,
@@ -132,4 +135,52 @@ test("createMetadataLookups gives the injected logger to the chain and providers
         logger.infos.at(-1),
         "  search Deezer ✗ HTTP 500 0.0s · iTunes ✗ HTTP 500 0.0s · Last.fm ✗ HTTP 500 0.0s"
     );
+});
+
+function getSourceKinds(sources: object[]) {
+    return sources.map((source) => source.constructor);
+}
+
+test("createMetadataLookups orders the album sources of each field", () => {
+    const { albums } = createMetadataLookups(
+        {
+            verbose: false,
+            musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
+            discogsConsumerKey: "discogs-key",
+            discogsConsumerSecret: "discogs-secret",
+        },
+        instantClock,
+        createRecordingLogger()
+    );
+
+    const [deezer, musicBrainz, discogs] = [
+        DeezerAlbumSource,
+        MusicBrainzAlbumSource,
+        DiscogsAlbumSource,
+    ];
+    assert.deepEqual(
+        Object.fromEntries(
+            Object.entries(albums.order).map(([field, sources]) => [
+                field,
+                getSourceKinds(sources),
+            ])
+        ),
+        {
+            identity: [deezer, musicBrainz, discogs],
+            year: [discogs, musicBrainz, deezer],
+            genre: [deezer, discogs],
+            tracks: [discogs, deezer],
+            cover: [deezer, musicBrainz, discogs],
+        }
+    );
+});
+
+test("createMetadataLookups looks albums up on Deezer alone without keys", () => {
+    const { albums } = createMetadataLookups(
+        { verbose: false },
+        instantClock,
+        createRecordingLogger()
+    );
+
+    assert.deepEqual(getSourceKinds(albums.order.year), [DeezerAlbumSource]);
 });

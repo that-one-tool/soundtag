@@ -4,6 +4,7 @@ import { DeezerAlbumSource } from "../../../src/metadata/providers/deezer-album.
 import { DeezerClient } from "../../../src/metadata/providers/deezer-client.js";
 import { DEEZER_COVER_XL, mockDeezer } from "../../helpers/deezer.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
+import { createRecordingLogger } from "../../helpers/logger.js";
 import { createProviderServices } from "../../helpers/metadata-chain.js";
 
 restoreFetchAfterEach();
@@ -11,8 +12,9 @@ restoreFetchAfterEach();
 const search = { artist: "Daft Punk", album: "discovery" };
 
 function findDeezerAlbum(albumSearch = search) {
-    const client = new DeezerClient(createProviderServices());
-    return new DeezerAlbumSource(client).findAlbum(albumSearch);
+    const services = createProviderServices();
+    const client = new DeezerClient(services);
+    return new DeezerAlbumSource(client, services).findAlbum(albumSearch);
 }
 
 test("DeezerAlbumSource gives the searched album as Deezer spells it", async () => {
@@ -135,9 +137,8 @@ test("DeezerAlbumSource searches each artist and lists its albums once per batch
         },
         "/artist/7/albums": { data: [{ title: "Acoustica" }] },
     });
-    const source = new DeezerAlbumSource(
-        new DeezerClient(createProviderServices())
-    );
+    const services = createProviderServices();
+    const source = new DeezerAlbumSource(new DeezerClient(services), services);
 
     await source.findAlbum(acoustica);
     await source.findAlbum({ ...acoustica, album: "Crazy World" });
@@ -155,4 +156,109 @@ test("DeezerAlbumSource falls back to an artist sharing the credit", async () =>
     });
 
     assert.equal((await findDeezerAlbum(acoustica))?.album, "Acoustica");
+});
+
+test("DeezerAlbumSource gives the album artist, genre, year and tracklist", async () => {
+    const requested = mockDeezer({
+        "/search/album": {
+            data: [
+                {
+                    id: 7,
+                    title: "Discovery",
+                    artist: { name: "Daft Punk" },
+                    cover_xl: DEEZER_COVER_XL,
+                },
+            ],
+        },
+        "/album/7": {
+            genres: { data: [{ name: "Electro" }] },
+            release_date: "2001-03-12",
+        },
+        "/album/7/tracks": {
+            data: [
+                { title: "One More Time", track_position: 1, disk_number: 1 },
+                { title: "Aerodynamic", track_position: 2, disk_number: 1 },
+            ],
+        },
+    });
+
+    const found = await findDeezerAlbum();
+
+    assert.deepEqual(
+        { ...found, covers: undefined },
+        {
+            album: "Discovery",
+            artist: "Daft Punk",
+            year: "2001",
+            genre: "Electro",
+            covers: undefined,
+            tracks: [
+                {
+                    title: "One More Time",
+                    trackNumber: 1,
+                    trackCount: 2,
+                    discNumber: 1,
+                    discCount: 1,
+                },
+                {
+                    title: "Aerodynamic",
+                    trackNumber: 2,
+                    trackCount: 2,
+                    discNumber: 1,
+                    discCount: 1,
+                },
+            ],
+        }
+    );
+    assert.equal(requested.length, 3);
+});
+
+const discoveryResult = {
+    data: [{ id: 7, title: "Discovery", artist: { name: "Daft Punk" } }],
+};
+
+test("DeezerAlbumSource keeps the album when its details cannot be read", async () => {
+    mockDeezer({
+        "/search/album": discoveryResult,
+        "/album/7": { error: { message: "quota" } },
+    });
+    const services = createProviderServices({
+        logger: createRecordingLogger(),
+    });
+    const client = new DeezerClient(services);
+
+    const found = await services.lookups.call("Deezer", () =>
+        new DeezerAlbumSource(client, services).findAlbum(search)
+    );
+
+    assert.equal(found?.album, "Discovery");
+    assert.equal(found?.tracks, undefined);
+});
+
+test("DeezerAlbumSource reads no year from an unknown date and track artists", async () => {
+    mockDeezer({
+        "/search/album": discoveryResult,
+        "/album/7": { release_date: "0000-00-00" },
+        "/album/7/tracks": {
+            data: [
+                {
+                    title: "Digital Love",
+                    artist: { name: "Daft Punk" },
+                    track_position: 3,
+                },
+            ],
+        },
+    });
+
+    const found = await findDeezerAlbum();
+
+    assert.equal(found?.year, undefined);
+    assert.deepEqual(found?.tracks?.[0], {
+        title: "Digital Love",
+        artist: "Daft Punk",
+        trackNumber: 3,
+        trackCount: 1,
+        discNumber: 1,
+        discCount: 1,
+    });
 });

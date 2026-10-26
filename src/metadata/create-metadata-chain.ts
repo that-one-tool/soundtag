@@ -1,6 +1,9 @@
+import { AlbumResolver } from "./album-resolver.js";
+import { DeezerAlbumSource } from "./providers/deezer-album.js";
 import { DeezerClient } from "./providers/deezer-client.js";
 import { DeezerCoverProvider } from "./providers/deezer-cover.js";
 import { DeezerProvider } from "./providers/deezer.js";
+import { DiscogsAlbumSource } from "./providers/discogs-album.js";
 import { DiscogsClient } from "./providers/discogs-client.js";
 import {
     DiscogsAlbumProvider,
@@ -13,6 +16,7 @@ import { ListenBrainzClient } from "./providers/listenbrainz-client.js";
 import { ListenBrainzProvider } from "./providers/listenbrainz.js";
 import { trimOrEmpty } from "./track-metadata.js";
 import { MetadataChain } from "./metadata-chain.js";
+import { MusicBrainzAlbumSource } from "./providers/musicbrainz-album.js";
 import { MusicBrainzClient } from "./providers/musicbrainz-client.js";
 import { MusicBrainzProvider } from "./providers/musicbrainz.js";
 import { BatchCache } from "../shared/batch-cache.js";
@@ -21,6 +25,7 @@ import type { Logger } from "../shared/logger.js";
 import { LookupLog } from "../shared/lookup-log.js";
 import type { Clock } from "../shared/rate-limiter.js";
 import type {
+    AlbumSource,
     CoverProvider,
     MetadataProvider,
     ProviderServices,
@@ -39,6 +44,7 @@ export interface MetadataChainConfig {
 
 export interface MetadataLookups {
     chain: MetadataChain;
+    albums: AlbumResolver;
 }
 
 interface ProviderKeys {
@@ -277,6 +283,36 @@ function createChain(
     );
 }
 
+function createOptionalSources(
+    keys: ProviderKeys,
+    { musicBrainz, discogs }: ServiceClients
+): { musicBrainz: AlbumSource[]; discogs: AlbumSource[] } {
+    return {
+        musicBrainz: keys.musicBrainzUserAgent
+            ? [new MusicBrainzAlbumSource(musicBrainz)]
+            : [],
+        discogs: discogs ? [new DiscogsAlbumSource(discogs)] : [],
+    };
+}
+
+// Deezer has the best covers, Discogs masters and MusicBrainz the original years.
+function createAlbumResolver(
+    keys: ProviderKeys,
+    clients: ServiceClients,
+    services: ProviderServices
+): AlbumResolver {
+    const deezer = [new DeezerAlbumSource(clients.deezer, services)];
+    const { musicBrainz, discogs } = createOptionalSources(keys, clients);
+    const order = {
+        identity: [...deezer, ...musicBrainz, ...discogs],
+        year: [...discogs, ...musicBrainz, ...deezer],
+        genre: [...deezer, ...discogs],
+        tracks: [...discogs, ...deezer],
+        cover: [...deezer, ...musicBrainz, ...discogs],
+    };
+    return new AlbumResolver(order, services);
+}
+
 export function createMetadataLookups(
     config: MetadataChainConfig,
     clock: Clock,
@@ -288,5 +324,5 @@ export function createMetadataLookups(
     const clients = createClients(keys, services);
     const brainz = createBrainzProviders(keys, clients.musicBrainz, services);
     const chain = createChain(config, { brainz, clients }, services);
-    return { chain };
+    return { chain, albums: createAlbumResolver(keys, clients, services) };
 }

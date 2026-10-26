@@ -26,6 +26,15 @@ function normalizeAlbum(album: string | undefined): string {
     return splitWords(withoutNotes).join("") || folded.trim();
 }
 
+// The tag names the album, not the remaster a service lists.
+export function stripRemasterNote(album: string): string {
+    const stripped = album
+        .replaceAll(SPELLED_NOTE_BRACKET, "")
+        .replace(SPELLED_NOTE_SUFFIX, "")
+        .trim();
+    return stripped || album;
+}
+
 export function isSameAlbum(
     foundAlbum: string | undefined,
     searchedAlbum: string
@@ -46,6 +55,8 @@ const ALBUM_NOTE =
     "(?:\\d{4}\\s+)?(?:digital(?:ly)?\\s+)?remaster(?:ed)?(?:\\s+\\d{4})?(?:\\s+(?:version|edition))?";
 const ALBUM_NOTE_BRACKET = new RegExp(`[([]\\s*${ALBUM_NOTE}\\s*[)\\]]`, "gu");
 const ALBUM_NOTE_SUFFIX = new RegExp(`\\s[-–—]\\s${ALBUM_NOTE}\\s*$`, "u");
+const SPELLED_NOTE_BRACKET = new RegExp(ALBUM_NOTE_BRACKET.source, "giu");
+const SPELLED_NOTE_SUFFIX = new RegExp(ALBUM_NOTE_SUFFIX.source, "iu");
 const FEATURING_SUFFIX = /\s(?:feat\.?|ft\.|featuring)\s.*$/u;
 const WORD_SEPARATOR = /[^\p{L}\p{N}]+/u;
 const ARTIST_SEPARATOR =

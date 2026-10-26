@@ -4,15 +4,32 @@ import {
     isSearchedAlbum,
     isVariousCredit,
 } from "../track-matching.js";
-import { valueOrEmpty } from "../track-metadata.js";
-import type { AlbumSearch, AlbumSource, FoundAlbum } from "../types.js";
+import { buildTracklist } from "../album-tracklist.js";
+import {
+    extractYear,
+    optionalText,
+    removeUnknownValues,
+    valueOrEmpty,
+} from "../track-metadata.js";
+import type {
+    AlbumSearch,
+    AlbumSource,
+    AlbumTrackEntry,
+    FoundAlbum,
+    ProviderServices,
+} from "../types.js";
 import {
     buildQuery,
     getCoverRequests,
+    getDeezerGenre,
+    type DeezerAlbum,
     type DeezerAlbumSummary,
+    type DeezerAlbumTrack,
     type DeezerArtist,
     type DeezerClient,
 } from "./deezer-client.js";
+
+type AlbumDetails = Pick<FoundAlbum, "year" | "genre" | "tracks">;
 
 interface FoundArtist extends DeezerArtist {
     id: number;
@@ -50,20 +67,77 @@ function findSearchedArtist(
 function describeAlbum(album: DeezerAlbumSummary): FoundAlbum {
     return {
         album: valueOrEmpty(album.title),
+        artist: valueOrEmpty(album.artist?.name),
         covers: getCoverRequests(album),
     };
+}
+
+function describeTrack({ title, artist }: DeezerAlbumTrack) {
+    return { title: valueOrEmpty(title), artist: optionalText(artist?.name) };
+}
+
+function getTracklist(tracks: DeezerAlbumTrack[]): AlbumTrackEntry[] {
+    const placed = tracks.filter(({ track_position }) => track_position);
+    return buildTracklist(
+        placed.map((track) => ({
+            ...describeTrack(track),
+            disc: track.disk_number ?? 1,
+            track: track.track_position ?? 0,
+        }))
+    );
+}
+
+// Deezer dates what it does not know "0000-00-00".
+function getReleaseYear({ release_date }: DeezerAlbum): string | undefined {
+    const year = extractYear(release_date);
+    return Number(year) > 0 ? year : undefined;
+}
+
+// Its release dates are often a reissue's, so other services' years come first.
+function getDetails(
+    album: DeezerAlbum,
+    tracks: DeezerAlbumTrack[]
+): AlbumDetails {
+    return removeUnknownValues({
+        year: getReleaseYear(album),
+        genre: getDeezerGenre(album),
+        tracks: getTracklist(tracks),
+    });
 }
 
 export class DeezerAlbumSource implements AlbumSource {
     readonly name = "Deezer";
 
-    constructor(private readonly client: DeezerClient) {}
+    constructor(
+        private readonly client: DeezerClient,
+        private readonly services: ProviderServices
+    ) {}
 
     async findAlbum(search: AlbumSearch): Promise<FoundAlbum | null> {
         const album =
             (await this.searchAlbum(search)) ??
             (await this.findArtistAlbum(search));
-        return album ? describeAlbum(album) : null;
+        return album ? this.describeWithDetails(album) : null;
+    }
+
+    private async describeWithDetails(
+        album: DeezerAlbumSummary
+    ): Promise<FoundAlbum> {
+        const details =
+            album.id === undefined ? {} : await this.findDetails(album.id);
+        return { ...describeAlbum(album), ...details };
+    }
+
+    // The search already named the album, which a failed detail must not undo.
+    private async findDetails(albumId: number): Promise<AlbumDetails> {
+        try {
+            const album = await this.client.getAlbum(albumId);
+            const tracks = await this.client.getAlbumTracks(albumId);
+            return getDetails(album, tracks);
+        } catch (error) {
+            this.services.lookups.noteFailure("album details", error);
+            return {};
+        }
     }
 
     private async searchAlbum(

@@ -66,6 +66,23 @@ test("MusicBrainzAlbumSource gives no cover for a release group without an id", 
 
     assert.deepEqual(await findMusicBrainzAlbum(), {
         album: "Discovery",
+        artist: "Daft Punk",
         covers: [],
     });
+});
+
+test("MusicBrainzAlbumSource gives the artist and first release year", async () => {
+    mockReleaseGroups([
+        {
+            id: "group",
+            title: "Discovery",
+            "artist-credit": [{ name: "Daft Punk" }],
+            "first-release-date": "2001-03-07",
+        },
+    ]);
+
+    const found = await findMusicBrainzAlbum();
+
+    assert.equal(found?.artist, "Daft Punk");
+    assert.equal(found?.year, "2001");
 });

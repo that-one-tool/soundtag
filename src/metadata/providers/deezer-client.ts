@@ -5,6 +5,7 @@ import {
     createRateLimiter,
     type RateLimiter,
 } from "../../shared/rate-limiter.js";
+import { optionalText } from "../track-metadata.js";
 import type { ProviderServices } from "../types.js";
 
 const DEEZER_API_URL = "https://api.deezer.com/";
@@ -39,10 +40,13 @@ export interface DeezerTrack {
 
 export interface DeezerAlbum extends DeezerAlbumSummary {
     genres?: { data?: DeezerNamed[] };
+    release_date?: string;
 }
 
 export interface DeezerAlbumTrack {
     id?: number;
+    title?: string;
+    artist?: DeezerNamed;
     track_position?: number;
     disk_number?: number;
 }
@@ -72,6 +76,14 @@ function buildDeezerUrl(path: string, params: Record<string, string>): URL {
 
 export function buildQuery(parts: string[]): string {
     return parts.filter(Boolean).join(" ");
+}
+
+function getGenreNames({ genres }: DeezerAlbum): DeezerNamed[] {
+    return genres?.data ?? [];
+}
+
+export function getDeezerGenre(album: DeezerAlbum): string | undefined {
+    return optionalText(getGenreNames(album)[0]?.name);
 }
 
 export function getCoverRequests(

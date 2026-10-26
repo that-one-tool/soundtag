@@ -65,6 +65,7 @@ export interface MusicBrainzReleaseDetails extends MusicBrainzRelease {
 export interface MusicBrainzReleaseGroup {
     id?: string;
     title?: string;
+    "first-release-date"?: string;
     "artist-credit"?: MusicBrainzArtistCredit[];
 }
 
