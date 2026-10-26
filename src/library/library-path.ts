@@ -30,7 +30,7 @@ function foldName(name: string): string {
     return cleanFilenamePart(name).normalize("NFC").toLowerCase();
 }
 
-function isSameFolderName(folder: string, artist: string): boolean {
+export function isSameFolderName(folder: string, artist: string): boolean {
     return foldName(folder) === foldName(artist);
 }
 
@@ -38,7 +38,7 @@ function readArtistFolder(folder: string, artist: string): string | null {
     return isSameFolderName(folder, artist) ? "" : null;
 }
 
-function cleanFolderAlbum(album: string): string {
+export function cleanFolderAlbum(album: string): string {
     const cleaned = cleanAlbumDirectory(album).replace(RIP_NOTES, "").trim();
     return LOOSE_TRACK_FOLDER.test(cleaned) ? "" : cleaned;
 }
