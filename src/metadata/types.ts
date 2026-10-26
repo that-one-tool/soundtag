@@ -75,6 +75,10 @@ export interface AlbumData {
     found: boolean;
 }
 
+export interface AlbumFinder {
+    resolve(search: AlbumSearch, fileCount?: number): Promise<AlbumData>;
+}
+
 export interface AlbumSource {
     readonly name: string;
     findAlbum(search: AlbumSearch): Promise<FoundAlbum | null>;

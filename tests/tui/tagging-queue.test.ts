@@ -244,3 +244,47 @@ test("TaggingQueue is busy with nothing while idle", () => {
 
     assert.equal(queue.isBusyWith("/music/Album"), false);
 });
+
+const jazz = "/music/Queen/Queen - Jazz";
+
+function albumFile(...parts: string[]): TagTarget {
+    return {
+        kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
+        path: [jazz, ...parts].join("/"),
+    };
+}
+
+test("TaggingQueue keeps the whole album busy for one of its files", () => {
+    const { queue } = createControlledQueue();
+
+    queue.enqueue(albumFile("CD1", "Queen - Mustapha.mp3"));
+
+    assert.equal(queue.isBusyWith(`${jazz}/CD2/Queen - Fun It.mp3`), true);
+    assert.equal(queue.isBusyWith("/music/Queen/Queen - Bicycle.mp3"), false);
+});
+
+test("TaggingQueue keeps the album busy for its disc folder", () => {
+    const { queue } = createControlledQueue();
+
+    queue.enqueue({
+        kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
+        path: `${jazz}/CD1`,
+        recursive: false,
+    });
+
+    assert.equal(queue.isBusyWith(`${jazz}/CD2`), true);
+});
+
+test("TaggingQueue does not queue another file of a queued album", () => {
+    const { queue, logger } = createControlledQueue();
+
+    queue.enqueue(single);
+    queue.enqueue(albumFile("Queen - Mustapha.mp3"));
+    queue.enqueue(albumFile("Queen - Fun It.mp3"));
+    queue.enqueue({ ...single, path: "/music/other.mp3" });
+
+    assert.equal(queue.getSnapshot().pending.length, 2);
+    assert.deepEqual(logger.infos, ["Already queued: Queen - Mustapha.mp3."]);
+});

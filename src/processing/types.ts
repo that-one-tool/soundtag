@@ -1,3 +1,6 @@
+import type { MetadataChain } from "../metadata/metadata-chain.js";
+import type { Logger } from "../shared/logger.js";
+
 export interface ProcessingStats {
     ok: number;
     skipped: number;
@@ -16,4 +19,12 @@ export interface ProcessingReport {
 export interface ProcessedTrack {
     source: string;
     status: TrackStatus;
+}
+
+export interface ProcessingContext {
+    sourceRoot: string;
+    metadataChain: MetadataChain;
+    logger: Logger;
+    // Found values replace the stored ones instead of only filling the gaps.
+    overwrite?: boolean;
 }

@@ -1,4 +1,5 @@
 import { dirname } from "node:path";
+import { findFolderAlbum } from "../library/album-plan.js";
 import type { Logger } from "../shared/logger.js";
 import { isInsideFolder, movePath, type PathMove } from "../shared/paths.js";
 import { Listeners } from "./listeners.js";
@@ -14,8 +15,33 @@ const OCCUPIED_PATHS: Record<TagTarget["kind"], (target: string) => string> = {
     folder: (target) => target,
 };
 
+function getAlbumPath(target: TagTarget): string | null {
+    return findFolderAlbum(getOccupiedPath(target));
+}
+
 function getOccupiedPath({ kind, path: target }: TagTarget): string {
     return OCCUPIED_PATHS[kind](target);
+}
+
+// A job on any part of an album folder tags the whole album.
+function getBusyPath(target: TagTarget): string {
+    return getAlbumPath(target) ?? getOccupiedPath(target);
+}
+
+function getFileAlbum(target: TagTarget): string | null {
+    return target.kind === "file" ? getAlbumPath(target) : null;
+}
+
+function isSameAlbumFile(target: TagTarget, queued: TagTarget): boolean {
+    const album = getFileAlbum(target);
+    return album !== null && getFileAlbum(queued) === album;
+}
+
+function isSameJob(target: TagTarget, queued: TagTarget | null): boolean {
+    return (
+        queued !== null &&
+        (queued.path === target.path || isSameAlbumFile(target, queued))
+    );
 }
 
 function areNested(first: string, second: string): boolean {
@@ -82,13 +108,15 @@ export class TaggingQueue {
     isBusyWith(entryPath: string): boolean {
         const { running, pending } = this.state;
         return [running, ...pending].some((target) =>
-            Boolean(target && areNested(getOccupiedPath(target), entryPath))
+            Boolean(target && areNested(getBusyPath(target), entryPath))
         );
     }
 
-    private findQueued({ path }: TagTarget): TagTarget | null | undefined {
+    private findQueued(target: TagTarget): TagTarget | null | undefined {
         const { running, pending } = this.state;
-        return [running, ...pending].find((queued) => queued?.path === path);
+        return [running, ...pending].find((queued) =>
+            isSameJob(target, queued)
+        );
     }
 
     private async drain(): Promise<void> {

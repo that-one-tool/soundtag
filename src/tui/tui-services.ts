@@ -71,9 +71,9 @@ function clearRedoneFilesAfterJob(
 function createLookupDependencies(
     options: TaggingOptions,
     logBuffer: LogBuffer
-): Pick<TagJobDependencies, "metadataChain"> {
+): Pick<TagJobDependencies, "metadataChain" | "albums"> {
     const lookups = createMetadataLookups(options, systemClock, logBuffer);
-    return { metadataChain: lookups.chain };
+    return { metadataChain: lookups.chain, albums: lookups.albums };
 }
 
 function createJobRunner(

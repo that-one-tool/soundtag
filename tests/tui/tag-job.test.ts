@@ -51,6 +51,17 @@ function createRunner() {
     const logger = createRecordingLogger();
     const runJob = createTagJobRunner({
         metadataChain: foundChain,
+        albums: {
+            resolve: async ({ artist, album }) => ({
+                album,
+                artist,
+                year: "1978",
+                genre: "",
+                cover: null,
+                tracks: [],
+                found: false,
+            }),
+        },
         logger,
         onTrackProcessed: (result) => processed.push(result),
     });
@@ -276,4 +287,46 @@ test("a job overwrites existing tags only when overwriting is on", async () => {
     const store = getTagStore(overwritten);
     assert.equal((await store.read(overwritten)).info.title, "Title");
     assert.equal((await store.read(kept)).info.title, "Old");
+});
+
+test("a file job in an album folder tags the whole album", async () => {
+    const album = path.join(
+        await createTemporaryDirectory(),
+        "Queen",
+        "Queen - Jazz"
+    );
+    const first = await createTrack(album, "Queen - Mustapha.mp3");
+    const second = await createTrack(album, "Queen - Fun It.mp3");
+    const { runJob, processed } = createRunner();
+
+    await runJob(
+        { kind: "file", path: first, settings: DEFAULT_JOB_SETTINGS },
+        new AbortController().signal
+    );
+
+    assert.deepEqual(
+        processed.map(({ source }) => source).toSorted(),
+        [second, first].toSorted()
+    );
+    assert.equal((await getTagStore(second).read(second)).info.year, "1978");
+});
+
+test("a file job in a disc folder reports from its album folder", async () => {
+    const album = path.join(
+        await createTemporaryDirectory(),
+        "Queen",
+        "Queen - Jazz"
+    );
+    const source = await createTrack(
+        path.join(album, "CD1"),
+        "Queen - Mustapha.mp3"
+    );
+    const { runJob, logger } = createRunner();
+
+    await runJob(
+        { kind: "file", path: source, settings: DEFAULT_JOB_SETTINGS },
+        new AbortController().signal
+    );
+
+    assert.ok(logger.infos.includes(`Tagging 1 audio files in ${album}`));
 });

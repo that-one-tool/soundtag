@@ -7,11 +7,17 @@ import {
     countStatuses,
     createReport,
     processBatch,
+    type BatchRun,
 } from "../../src/processing/batch.js";
 import { captureConsole } from "../helpers/console.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { consoleLogger } from "../../src/shared/logger.js";
 import type { ProcessedTrack } from "../../src/processing/types.js";
+import type {
+    AlbumData,
+    AlbumFinder,
+    AlbumSearch,
+} from "../../src/metadata/types.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import {
@@ -22,6 +28,9 @@ import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 restoreFetchAfterEach();
 const output = captureConsole();
+const unusedAlbums: AlbumFinder = {
+    resolve: () => assert.fail("No album should be looked up."),
+};
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-batch-test-"
 );
@@ -72,6 +81,7 @@ test("processBatch clears the metadata cache once the files are processed", asyn
         },
         report,
         stopSignal: new AbortController().signal,
+        albums: unusedAlbums,
     });
 
     assert.deepEqual(statusesAtClear, ["FAILED"]);
@@ -96,6 +106,7 @@ test("processBatch clears the metadata cache when processing throws", async () =
             },
             report: createReport([broken], directory),
             stopSignal: new AbortController().signal,
+            albums: unusedAlbums,
             onTrackProcessed: () => {
                 throw new Error("listener failed");
             },
@@ -127,6 +138,7 @@ test("processBatch records each file status and logs its position", async () => 
         },
         report,
         stopSignal: new AbortController().signal,
+        albums: unusedAlbums,
     });
 
     assert.deepEqual(report, {
@@ -167,6 +179,7 @@ test("processBatch stops before the next file once a stop is requested", async (
         },
         report,
         stopSignal: stop.signal,
+        albums: unusedAlbums,
     });
 
     assert.deepEqual(report, {
@@ -191,6 +204,7 @@ test("processBatch logs to the context logger", async () => {
         },
         report: createReport([source], directory),
         stopSignal: new AbortController().signal,
+        albums: unusedAlbums,
     });
 
     assert.deepEqual(logger.infos, ["\n[1/1] broken.flac (FLAC)"]);
@@ -219,11 +233,231 @@ test("processBatch announces each processed track", async () => {
         },
         report: createReport(files, directory),
         stopSignal: new AbortController().signal,
+        albums: unusedAlbums,
         onTrackProcessed: (result) => results.push(result),
     });
 
     assert.deepEqual(results, [
         { source: broken, status: "FAILED" },
         { source: tagged, status: "SKIPPED" },
+    ]);
+});
+
+const jazz: AlbumData = {
+    album: "Jazz",
+    artist: "Queen",
+    year: "1978",
+    genre: "Rock",
+    cover: null,
+    tracks: [],
+    found: true,
+};
+
+function createAlbumFinder() {
+    const searches: [AlbumSearch, number | undefined][] = [];
+    const albums: AlbumFinder = {
+        resolve: async (search, fileCount) => {
+            searches.push([search, fileCount]);
+            return jazz;
+        },
+    };
+    return { albums, searches };
+}
+
+async function createAlbumFolder(filenames: string[]) {
+    const root = await createTemporaryDirectory();
+    const folder = path.join(root, "Queen", "Queen - Jazz");
+    await fs.mkdir(folder, { recursive: true });
+    const files = filenames.map((filename) => path.join(folder, filename));
+    await Promise.all(files.map((file) => fs.writeFile(file, "audio bytes")));
+    return { root, folder, files };
+}
+
+test("processBatch tags every track of an album folder from one lookup", async () => {
+    const { folder, files } = await createAlbumFolder([
+        "Queen - Mustapha.mp3",
+        "Queen - Bicycle Race.mp3",
+    ]);
+    const { albums, searches } = createAlbumFinder();
+    const report = createReport([files[0]], folder);
+    const processed: ProcessedTrack[] = [];
+
+    await processBatch([files[0]], {
+        context: {
+            sourceRoot: folder,
+            metadataChain: createTestChain(),
+            logger: consoleLogger,
+        },
+        albums,
+        report,
+        stopSignal: new AbortController().signal,
+        onTrackProcessed: (result) => processed.push(result),
+    });
+
+    assert.deepEqual(searches, [[{ artist: "Queen", album: "Jazz" }, 2]]);
+    for (const file of files) {
+        assert.equal((await getTagStore(file).read(file)).info.album, "Jazz");
+    }
+    assert.deepEqual(report.files, {
+        "Queen - Bicycle Race.mp3": "TAGGED",
+        "Queen - Mustapha.mp3": "TAGGED",
+    });
+    assert.equal(processed.length, 2);
+    assert.deepEqual(
+        output.logs.filter((line) => line.startsWith("\n")),
+        [
+            "\nAlbum Queen - Jazz (2 tracks)",
+            "\n[1/2] Queen - Bicycle Race.mp3 (MP3)",
+            "\n[2/2] Queen - Mustapha.mp3 (MP3)",
+        ]
+    );
+});
+
+test("processBatch stops inside an album once a stop is requested", async () => {
+    const { folder, files } = await createAlbumFolder(["a.mp3", "b.mp3"]);
+    const { albums } = createAlbumFinder();
+    const controller = new AbortController();
+    const report = createReport(files, folder);
+
+    await processBatch(files, {
+        context: {
+            sourceRoot: folder,
+            metadataChain: createTestChain(),
+            logger: consoleLogger,
+        },
+        albums,
+        report,
+        stopSignal: controller.signal,
+        onTrackProcessed: () => controller.abort(),
+    });
+
+    assert.deepEqual(countStatuses(report), {
+        ok: 1,
+        skipped: 0,
+        errors: 0,
+        unprocessed: 1,
+    });
+    assert.ok(
+        output.logs.includes("Stopped before processing the remaining files.")
+    );
+});
+
+async function createAlbumFolders(albums: Record<string, string[]>) {
+    const root = await createTemporaryDirectory();
+    const files: string[] = [];
+    for (const [name, filenames] of Object.entries(albums)) {
+        const folder = path.join(root, "Queen", name);
+        await fs.mkdir(folder, { recursive: true });
+        for (const filename of filenames) {
+            const file = path.join(folder, filename);
+            await fs.writeFile(file, "audio bytes");
+            files.push(file);
+        }
+    }
+    return { root, files };
+}
+
+function runBatchOn(files: string[], root: string, run: Partial<BatchRun>) {
+    const report = createReport(files, root);
+    const done = processBatch(files, {
+        context: {
+            sourceRoot: root,
+            metadataChain: createTestChain(),
+            logger: consoleLogger,
+        },
+        albums: unusedAlbums,
+        report,
+        stopSignal: new AbortController().signal,
+        ...run,
+    });
+    return { report, done };
+}
+
+test("processBatch looks no further album up once a stop is requested", async () => {
+    const { root, files } = await createAlbumFolders({
+        "Queen - Jazz": ["a.mp3"],
+        "Queen - News of the World": ["b.mp3"],
+    });
+    const { albums, searches } = createAlbumFinder();
+    const controller = new AbortController();
+
+    const { report, done } = runBatchOn(files, root, {
+        albums,
+        stopSignal: controller.signal,
+        onTrackProcessed: () => controller.abort(),
+    });
+    await done;
+
+    assert.equal(searches.length, 1);
+    assert.equal(countStatuses(report).unprocessed, 1);
+});
+
+test("processBatch fails the tracks of an album it cannot look up and goes on", async () => {
+    const { root, files } = await createAlbumFolders({
+        "Queen - Jazz": ["a.mp3", "b.mp3"],
+    });
+    const single = path.join(root, "single.flac");
+    await fs.writeFile(single, "not audio");
+    const albums: AlbumFinder = {
+        resolve: async () => {
+            throw new TypeError("lookup bug");
+        },
+    };
+
+    const { report, done } = runBatchOn([...files, single], root, { albums });
+    await done;
+
+    assert.deepEqual(Object.values(report.files), [
+        "FAILED",
+        "FAILED",
+        "FAILED",
+    ]);
+});
+
+test("processBatch looks no fully tagged album up unless overwriting", async () => {
+    const { root, files } = await createAlbumFolders({
+        "Queen - Jazz": ["a.mp3"],
+    });
+    await getTagStore(files[0]).write(files[0], {
+        info: { title: "A", artist: "Queen", album: "Jazz", year: "1978" },
+        extras: { genre: "Rock" },
+        coverData: Buffer.from("cover"),
+    });
+    const { albums, searches } = createAlbumFinder();
+
+    const { report, done } = runBatchOn(files, root, { albums });
+    await done;
+
+    assert.equal(searches.length, 0);
+    assert.deepEqual(Object.values(report.files), ["SKIPPED"]);
+});
+
+test("processBatch reports every file of an album, selected or not", async () => {
+    const { root, files } = await createAlbumFolders({
+        "Queen - Jazz": ["a.mp3", "b.mp3"],
+    });
+    const { albums } = createAlbumFinder();
+    const controller = new AbortController();
+    controller.abort();
+
+    const { report, done } = runBatchOn([files[0]], root, {
+        albums,
+        stopSignal: controller.signal,
+    });
+    await done;
+
+    assert.equal(countStatuses(report).unprocessed, 2);
+});
+
+test("processBatch fits no tracklist to a sibling disc folder", async () => {
+    const { root, files } = await createAlbumFolders({
+        "Queen - Live Killers - CD1": ["a.mp3", "b.mp3"],
+    });
+    const { albums, searches } = createAlbumFinder();
+
+    await runBatchOn(files, root, { albums }).done;
+
+    assert.deepEqual(searches, [
+        [{ artist: "Queen", album: "Live Killers" }, undefined],
     ]);
 });

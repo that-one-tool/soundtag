@@ -96,6 +96,27 @@ test("runApp searches fully tagged files again with --overwrite", async () => {
     assert.ok(!output.logs.includes("  skip   already tagged"));
 });
 
+test("runApp tags an album folder from its names when no service has it", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const source = path.join(
+        workingDirectory,
+        "Queen",
+        "Queen - Jazz",
+        "Queen - Mustapha.mp3"
+    );
+    await fs.mkdir(path.dirname(source), { recursive: true });
+    await fs.writeFile(source, "audio bytes");
+    globalThis.fetch = async () => new Response(null, { status: 500 });
+
+    assert.equal(await runAppIn(workingDirectory, ["."]), 0);
+
+    const tags = NodeID3.read(source);
+    assert.deepEqual(
+        [tags.title, tags.artist, tags.album, tags.performerInfo],
+        ["Mustapha", "Queen", "Jazz", "Queen"]
+    );
+});
+
 test("runApp lists failed files relative to the source", async () => {
     const workingDirectory = await createTemporaryDirectory();
     const disc = path.join(workingDirectory, "Disc 2");

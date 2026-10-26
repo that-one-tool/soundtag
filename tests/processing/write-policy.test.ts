@@ -49,3 +49,26 @@ test("the overwrite policy writes nothing when nothing differs", () => {
 
     assert.equal(getWritePolicy(true).getChanges(stored, same), null);
 });
+
+const albumTags = {
+    info: { title: "Song", artist: "Band", album: "Jazz", year: "1978" },
+    extras: { genre: "Pop", albumArtist: "Band", trackNumber: 2 },
+    coverData: Buffer.from("album cover"),
+};
+
+test("the fill policy keeps the stored values over the album's", () => {
+    assert.deepEqual(getWritePolicy(false).keepStored(stored, albumTags), {
+        info: { title: "Song", artist: "Artist", album: "Album", year: "1990" },
+        extras: {
+            genre: "Rock",
+            albumArtist: "Band",
+            trackNumber: 5,
+            trackCount: 12,
+        },
+        coverData: null,
+    });
+});
+
+test("the overwrite policy keeps none of the stored values", () => {
+    assert.equal(getWritePolicy(true).keepStored(stored, albumTags), albumTags);
+});

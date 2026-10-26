@@ -46,7 +46,39 @@ DISCOGS_CONSUMER_SECRET=your_discogs_consumer_secret
 # SOUNDTAG_COVER=kitty
 ```
 
-SoundTag asks the services below in order, and stops once the title, artist,
+SoundTag tags two kinds of files:
+
+- **Album tracks**, filed as
+  `<Artist>/<Artist> - <Album>/<Artist> - <Title>.<extension>`: the album
+  folder must sit in a folder named after its artist (ignoring case). Disc
+  folders inside it (`CD1`, `Disc 2`) belong to the album, and so do sibling
+  folders such as `<Artist> - <Album> - CD2`, `<Artist> - <Album> (Disc 2)`,
+  which give their tracks the disc number. Rip notes after the album
+  (`(1978)`, `[FLAC]`) are left out, and `Singles` or `Discography` folders
+  are no albums.
+- **Single tracks**: every other file, such as
+  `<Artist>/<Artist> - <Title>.<extension>`.
+
+An album is looked up once per run, and every one of its tracks gets the same
+album, artist, album artist (the album's artist, also on tracks with a guest),
+year, genre and cover. Like any file, a track only gets the fields it lacks and
+is skipped when fully tagged, unless `--overwrite` (`w`) is on: only then do
+all tracks end up with exactly the same values. An album whose tracks are all
+fully tagged is not looked up. Tagging any of its files, even with `t` on a single
+one, tags the whole album folder. The album is searched by the artist and
+album of its folder: its name and artist come from Deezer, then MusicBrainz,
+then Discogs; its year from the original release (Discogs masters, then
+MusicBrainz), then Deezer, whose dates are often reissues'; its genre from
+Deezer, then Discogs; its cover from Deezer (1000×1000), then the Cover Art
+Archive (1200 px), then Discogs. A note that only says the album was
+remastered is left out of its name. Each track takes its title and its track
+and disc numbers and counts from the album's tracklist, matched by the title
+of its tags or file name: Discogs' or Deezer's, whichever has as many tracks
+as the folder, Discogs' otherwise. A track missing from the tracklist keeps
+its title and only takes the disc number of its folder. When no service has
+the album, the folder names give its album and artist.
+
+For single tracks, SoundTag asks the services below in order, and stops once the title, artist,
 album, year, genre, track number and cover are all known. A result is only used
 when it is the searched song: the same title and, when known, an artist shared
 by both credits ("Daft Punk" matches "Daft Punk feat. Pharrell Williams"). Case,
@@ -162,11 +194,12 @@ to). Inside tmux, screen or Zellij the kitty protocol is not detected. Set
 `e` edits the name in place: Enter saves it, Esc or Ctrl+C cancels. A file
 keeps its extension. A name already used in the folder (ignoring case) is
 refused, and so is renaming a file or folder that a queued or running tag job
-works on, including the other entries in the folder of a queued file.
+works on, including the other entries in the folder of a queued file (its whole album
+folder for an album track, whose job tags the album).
 
 `D` asks for confirmation in the log pane: press `y` to remove every tag and
 the embedded cover (on MP3, ID3v1 and APE tags too); any other key cancels. Like a rename, it is refused for a file that a queued or running tag
-job works on, including the other files in the folder of a queued file.
+job works on, including the other files in the folder or album of a queued file.
 
 While the log pane has focus, `↑` `↓`, PgUp and PgDn scroll it; it stays in
 place as new messages arrive until you scroll back to the bottom.
@@ -266,7 +299,7 @@ Single ambiguous folders are treated as album context, not assumed to be an
 artist. Structural folders such as disc numbers, cover-art folders, and
 unknown placeholders are ignored.
 
-Files filed as `<Artist>/<Artist> - <Title>.<extension>` or
+Single tracks filed as `<Artist>/<Artist> - <Title>.<extension>` or
 `<Artist> - <Album>/<Artist> - <Title>.<extension>` (disc folders such as
 `CD1` in between are skipped) are searched first by the artist, title and album
 of their path, and only then by their tags. The folder must name the file's

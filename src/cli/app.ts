@@ -116,7 +116,7 @@ function printProcessingStart(fileCount: number): void {
 function createBatchRun(
     config: AppConfig,
     run: TaggingRun,
-    { chain }: MetadataLookups
+    { chain, albums }: MetadataLookups
 ): BatchRun {
     return {
         context: {
@@ -125,6 +125,7 @@ function createBatchRun(
             logger: consoleLogger,
             overwrite: config.overwrite,
         },
+        albums,
         report: run.report,
         stopSignal: run.stopSignal,
     };

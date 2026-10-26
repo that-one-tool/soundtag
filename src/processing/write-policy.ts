@@ -1,4 +1,6 @@
 import {
+    fillMissingExtras,
+    fillMissingFields,
     getChangedExtras,
     getNewExtras,
     getStaleExtras,
@@ -21,6 +23,8 @@ export interface WritePolicy {
     // Services only fill what these tags lack.
     getSearchedTags(stored: StoredTags): ExistingTags;
     getChanges(stored: StoredTags, found: TrackMetadata): TagWrite | null;
+    // What found values the stored tags let through.
+    keepStored(stored: StoredTags, found: TrackMetadata): TrackMetadata;
 }
 
 const EMPTY_INFO = { title: "", artist: "", album: "", year: "" };
@@ -42,6 +46,17 @@ function keepChanges(info: TrackInfo, changes: Changes): TrackMetadata | null {
     return hasChanges(changes) ? { info, extras, coverData } : null;
 }
 
+function fillGaps(
+    { info, extras, hasCover }: StoredTags,
+    found: TrackMetadata
+): TrackMetadata {
+    return {
+        info: fillMissingFields(info, found.info),
+        extras: fillMissingExtras(extras, found.extras),
+        coverData: hasCover ? null : found.coverData,
+    };
+}
+
 const FILL_POLICY: WritePolicy = {
     replacesCover: false,
     skipsTaggedTrack: isProperlyTagged,
@@ -52,6 +67,7 @@ const FILL_POLICY: WritePolicy = {
             extras: getNewExtras(stored.extras, extras),
             coverData,
         }),
+    keepStored: fillGaps,
 };
 
 function getOverwrite(
@@ -76,6 +92,7 @@ const OVERWRITE_POLICY: WritePolicy = {
         hasCover,
     }),
     getChanges: getOverwrite,
+    keepStored: (_stored, found) => found,
 };
 
 export function getWritePolicy(overwrite: boolean): WritePolicy {

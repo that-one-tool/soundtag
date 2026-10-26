@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildTracklist } from "../../src/metadata/album-tracklist.js";
+import {
+    buildTracklist,
+    findTracklistEntry,
+} from "../../src/metadata/album-tracklist.js";
 
 test("buildTracklist counts the tracks of each disc and the discs", () => {
     assert.deepEqual(
@@ -51,5 +54,47 @@ test("buildTracklist gives nothing when two tracks share a place", () => {
             { title: "B", disc: 1, track: 1 },
         ]),
         []
+    );
+});
+
+const jazz = buildTracklist([
+    { title: "Mustapha", disc: 1, track: 1 },
+    { title: "Bicycle Race", disc: 1, track: 2 },
+    { title: "Mustapha", disc: 2, track: 1 },
+]);
+
+test("findTracklistEntry matches one of the titles, ignoring case and notes", () => {
+    assert.equal(
+        findTracklistEntry(jazz, {
+            titles: ["", "bicycle race (2011 remaster)"],
+            disc: null,
+        })?.trackNumber,
+        2
+    );
+    assert.equal(
+        findTracklistEntry(jazz, {
+            titles: ["Fat Bottomed Girls"],
+            disc: null,
+        }),
+        undefined
+    );
+});
+
+test("findTracklistEntry prefers the entry of the track's disc", () => {
+    assert.equal(
+        findTracklistEntry(jazz, { titles: ["Mustapha"], disc: 2 })?.discNumber,
+        2
+    );
+    assert.equal(
+        findTracklistEntry(jazz, { titles: ["Mustapha"], disc: null })
+            ?.discNumber,
+        1
+    );
+});
+
+test("findTracklistEntry takes no entry of another disc than the track's", () => {
+    assert.equal(
+        findTracklistEntry(jazz, { titles: ["Bicycle Race"], disc: 2 }),
+        undefined
     );
 });

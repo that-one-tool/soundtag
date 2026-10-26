@@ -60,6 +60,11 @@ export function findAlbumFolder(file: string): AlbumFolder | null {
         : null;
 }
 
+// The album a folder belongs to: itself, or the album above its disc folder.
+export function findFolderAlbum(folder: string): string | null {
+    return findAlbumFolder(path.join(folder, "track"))?.folder ?? null;
+}
+
 function isInAlbum(file: string, folder: string): boolean {
     return findAlbumFolder(file)?.folder === folder;
 }
