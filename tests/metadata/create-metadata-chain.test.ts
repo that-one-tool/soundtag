@@ -60,7 +60,7 @@ test("createMetadataLookups orders every configured provider", () => {
     );
     assert.deepEqual(
         albums.sources.map((source) => source.constructor),
-        [DeezerAlbumSource, MusicBrainzAlbumSource, DiscogsAlbumSource]
+        [MusicBrainzAlbumSource, DeezerAlbumSource, DiscogsAlbumSource]
     );
 });
 

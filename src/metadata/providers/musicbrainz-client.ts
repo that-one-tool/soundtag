@@ -18,7 +18,7 @@ const COVER_ART_ARCHIVE_BASE = "https://coverartarchive.org/release/";
 const COVER_ART_ARCHIVE_GROUP_BASE =
     "https://coverartarchive.org/release-group/";
 const RELEASE_GROUP_SEARCH_LIMIT = 5;
-const MUSICBRAINZ_REQUEST_INTERVAL = 3_000;
+const MUSICBRAINZ_REQUEST_INTERVAL = 3_500;
 const SERVICE_UNAVAILABLE = 503;
 const DEFAULT_RETRY_DELAY = 3_000;
 const MAX_RETRY_DELAY = 10_000;

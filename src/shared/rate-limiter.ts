@@ -30,6 +30,23 @@ export async function sleepAndReport(
     onWait(clock.now() - startedAt);
 }
 
+// Timers can wake a millisecond early; a clock that does not move (tests) ends the wait.
+async function waitUntilAllowed(
+    clock: Clock,
+    getRemainingWait: () => number,
+    onWait: WaitListener
+): Promise<void> {
+    let remainingWait = getRemainingWait();
+    while (remainingWait > 0) {
+        const sleptFrom = clock.now();
+        await sleepAndReport(clock, remainingWait, onWait);
+        if (clock.now() === sleptFrom) {
+            return;
+        }
+        remainingWait = getRemainingWait();
+    }
+}
+
 export function createRateLimiter(
     interval: number,
     clock: Clock = systemClock,
@@ -37,10 +54,11 @@ export function createRateLimiter(
 ): RateLimiter {
     let lastStartedAt = Number.NEGATIVE_INFINITY;
     let queue: Promise<unknown> = Promise.resolve();
+    const getRemainingWait = () =>
+        Math.ceil(interval - (clock.now() - lastStartedAt));
 
     async function runWhenAllowed<T>(task: () => Promise<T>): Promise<T> {
-        const remainingWait = interval - (clock.now() - lastStartedAt);
-        await sleepAndReport(clock, remainingWait, onWait);
+        await waitUntilAllowed(clock, getRemainingWait, onWait);
         lastStartedAt = clock.now();
         return task();
     }

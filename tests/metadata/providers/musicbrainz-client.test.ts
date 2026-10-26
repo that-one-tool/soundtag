@@ -93,7 +93,7 @@ test("MusicBrainzClient waits three seconds without a Retry-After header", async
 
     await createClient({ clock }).searchRecordings(search);
 
-    assert.deepEqual(clock.sleeps, [3000]);
+    assert.deepEqual(clock.sleeps, [3000, 500]);
 });
 
 test("MusicBrainzClient rate-limits the retry", async () => {
@@ -102,7 +102,40 @@ test("MusicBrainzClient rate-limits the retry", async () => {
 
     await createClient({ clock }).searchRecordings(search);
 
-    assert.deepEqual(clock.sleeps, [3000]);
+    assert.deepEqual(clock.sleeps, [3500]);
+});
+
+test("MusicBrainzClient starts its requests at least 3.5 seconds apart", async () => {
+    const clock = createFakeClock();
+    const startedAt: number[] = [];
+    const answers: ("timeout" | Response)[] = [
+        Response.json({}),
+        "timeout",
+        Response.json({}),
+        Response.json({}),
+    ];
+    globalThis.fetch = async () => {
+        startedAt.push(clock.now());
+        const answer = answers[startedAt.length - 1];
+        if (answer === "timeout") {
+            throw new DOMException("aborted", "TimeoutError");
+        }
+        return answer;
+    };
+    const client = createClient({ clock });
+
+    await client.searchRecordings(search);
+    await client.searchRecordings({ ...search, title: "Other" });
+    await client.searchReleaseGroups({ artist: "Artist", album: "Album" });
+
+    const gaps = startedAt
+        .slice(1)
+        .map((time, index) => time - startedAt[index]);
+    assert.equal(startedAt.length, 4);
+    assert.ok(
+        gaps.every((gap) => gap >= 3500),
+        `gaps: ${gaps.join(", ")}`
+    );
 });
 
 test("MusicBrainzClient gives up after a second unavailable response", async () => {
@@ -190,7 +223,7 @@ test("MusicBrainzClient notes a retry and shows its requests when verbose", asyn
     assert.equal(logger.infos[1], logger.infos[0]);
     assert.match(
         logger.infos[2],
-        /^ {9}MusicBrainz ✓ \(MusicBrainz HTTP 503, retried\) 0\.0s \(\+3\.0s wait\)$/
+        /^ {9}MusicBrainz ✓ \(MusicBrainz HTTP 503, retried\) 0\.0s \(\+3\.5s wait\)$/
     );
 });
 

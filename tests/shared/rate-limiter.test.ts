@@ -96,3 +96,41 @@ test("createRateLimiter reports each wait", async () => {
 
     assert.deepEqual(waits, [700]);
 });
+
+// Node timers can wake a millisecond early, but always move the clock.
+function createEarlyClock() {
+    const clock = createFakeClock();
+    return {
+        ...clock,
+        async sleep(milliseconds: number) {
+            clock.sleeps.push(milliseconds);
+            clock.advance(Math.max(milliseconds - 1, 1));
+        },
+    };
+}
+
+test("createRateLimiter waits again when its timer wakes early", async () => {
+    const clock = createEarlyClock();
+    const schedule = createRateLimiter(1000, clock);
+    const startedAt: number[] = [];
+
+    await schedule(async () => startedAt.push(clock.now()));
+    await schedule(async () => startedAt.push(clock.now()));
+
+    assert.ok(startedAt[1] - startedAt[0] >= 1000);
+    assert.deepEqual(clock.sleeps, [1000, 1]);
+});
+
+test("createRateLimiter does not wait forever with a clock that never moves", async () => {
+    const sleeps: number[] = [];
+    const frozenClock = {
+        now: () => 0,
+        sleep: async (milliseconds: number) => sleeps.push(milliseconds),
+    };
+    const schedule = createRateLimiter(1000, frozenClock);
+
+    await schedule(async () => undefined);
+    await schedule(async () => undefined);
+
+    assert.deepEqual(sleeps, [1000]);
+});

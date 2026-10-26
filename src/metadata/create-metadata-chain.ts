@@ -295,10 +295,10 @@ function createAlbumSources(
     { deezer, musicBrainz, discogs }: ServiceClients
 ): AlbumSource[] {
     return [
-        new DeezerAlbumSource(deezer),
         ...(keys.musicBrainzUserAgent
             ? [new MusicBrainzAlbumSource(musicBrainz)]
             : []),
+        new DeezerAlbumSource(deezer),
         ...(discogs ? [new DiscogsAlbumSource(discogs)] : []),
     ];
 }

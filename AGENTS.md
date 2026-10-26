@@ -185,7 +185,7 @@ Not enforced by tooling, but expected:
 - Files are rewritten through a hidden temporary copy (`.<name>.<uuid>.<ext>`).
   The scan skips hidden files and folders so leftovers are never tagged.
 - MusicBrainz needs `MUSICBRAINZ_USER_AGENT` and allows 1 request/s; SoundTag
-  spaces requests 3 s apart (2 s and 2.5 s still drew 503s) and retries once
+  spaces requests 3.5 s apart (2 s and 2.5 s still drew 503s, 3 s some) and retries once
   after a 503 or a timeout (`TimeoutError`). ListenBrainz
   lookups need a user token and an artist, allow about 1 request/s and are spaced
   1 s apart; no match is `{}` with HTTP 200. Last.fm API calls are

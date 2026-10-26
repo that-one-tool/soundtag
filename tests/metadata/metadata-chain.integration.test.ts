@@ -1331,7 +1331,7 @@ test("ListenBrainz release lookups and MusicBrainz searches share one rate limit
         createRecordingLogger()
     ).chain.find({ ...numbSearch, album: "" }, emptyTags);
 
-    assert.deepEqual(clock.sleeps, [3000]);
+    assert.deepEqual(clock.sleeps, [3500]);
 });
 
 test("findTrackMetadata takes the year from iTunes after Deezer", async () => {

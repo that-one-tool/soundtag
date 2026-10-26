@@ -92,7 +92,7 @@ album.
    needs no API key, but a meaningful User-Agent: set `MUSICBRAINZ_USER_AGENT`
    to identify your SoundTag installation and provide contact information.
    MusicBrainz allows one request per second; SoundTag spaces its requests,
-   release lookups included, three seconds apart, and asks once more when a
+   release lookups included, 3.5 seconds apart, and asks once more when a
    request times out.
 4. **Deezer** needs no key or account. Among its results, it prefers the
    searched song on the track's album, and gives the genre, the track and disc
@@ -298,7 +298,7 @@ earliest of their years, and an early demo or live recording can make it a
 little earlier than the album release.
 
 Fix mode makes one more MusicBrainz request
-per file than filling alone (about 3 seconds), since its search leaves out the
+per file than filling alone (about 3.5 seconds), since its search leaves out the
 album. Each correction is logged as
 `field: "old" → "new"`, the corrected tags are used for the search that fills
 the remaining gaps, and renaming follows the corrected tags.
@@ -307,7 +307,7 @@ Each file gets one log line per step: its current `tags`, the folder
 `album` lookup (logged once per folder), each fix-mode `check`, the `fix`es (a confirmed folder album too), each `search`, then `write`, `skip` or `rename`. A step
 lists every service it asked, with its result (`✓` and the fields it added,
 `no match`, or `✗` and the error) and its time, then any wait for the
-service's request spacing (MusicBrainz takes one request every 3 seconds), and
+service's request spacing (MusicBrainz takes one request every 3.5 seconds), and
 names the song a service matched when it is not the searched one:
 
 ```text
@@ -366,11 +366,12 @@ check the corrected tags.
 Before its songs are searched, a folder named `<Artist> - <Album>` (disc and
 artwork folders in between are skipped, so are a year before the album and rip
 notes after it) is looked up as an album, once per folder and batch: on
-Deezer (its album search, then the first 200 albums of the artist when that misses,
-except for various artists), then on MusicBrainz (release groups, with `MUSICBRAINZ_USER_AGENT`),
-then on Discogs (masters, then releases, with its keys). ListenBrainz searches
-albums through MusicBrainz, so it is not asked again. A service that fails is asked again for the next file of the
-folder. The first service that has the album by that artist confirms
+MusicBrainz (release groups, with `MUSICBRAINZ_USER_AGENT`), then on Deezer
+(its album search, then the first 200 albums of the artist when that misses,
+except for various artists), then on Discogs (masters, then releases, with its
+keys). ListenBrainz searches albums through MusicBrainz, so it is not asked
+again. A service that fails is asked again for the next file of the folder.
+The first service that has the album by that artist confirms
 it: case, accents, punctuation and a remaster note are ignored, but
 `(Deluxe Edition)` is another album; `Various`, `VA` and `Various Artists` are
 the same artist. Every audio file of a confirmed folder, whatever its name,
