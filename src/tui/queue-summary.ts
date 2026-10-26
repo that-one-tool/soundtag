@@ -17,14 +17,26 @@ export function describeSubfolderChoice(included: boolean): string {
     return `subfolders ${included ? "on" : "off"}`;
 }
 
+export function describeOverwriteChoice(enabled: boolean): string {
+    return `overwrite ${enabled ? "on" : "off"}`;
+}
+
 function listSubfolderChoice(target: TagTarget): string[] {
     return target.kind === "folder"
         ? [describeSubfolderChoice(target.recursive)]
         : [];
 }
 
+// Only an overwrite differs from the defaults enough to be worth naming.
+function listOverwriteChoice(target: TagTarget): string[] {
+    return target.settings.overwrite ? [describeOverwriteChoice(true)] : [];
+}
+
 function describeTargetChoices(target: TagTarget): string {
-    const choices = listSubfolderChoice(target);
+    const choices = [
+        ...listSubfolderChoice(target),
+        ...listOverwriteChoice(target),
+    ];
     return choices.length > 0 ? ` (${choices.join(", ")})` : "";
 }
 

@@ -6,6 +6,7 @@ import { createTuiServices } from "../../src/tui/tui-services.js";
 import type { BrowserEntry } from "../../src/tui/types.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
+import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 restoreFetchAfterEach();
 const createTemporaryDirectory = useTemporaryDirectories(
@@ -20,6 +21,7 @@ test("createTuiServices routes job results to the status store and logs", async 
     const services = createTuiServices({
         lastFmApiKey: "key",
         verbose: false,
+        overwrite: false,
         recursive: true,
         musicBrainzUserAgent: " ",
         startDirectory: directory,
@@ -27,6 +29,7 @@ test("createTuiServices routes job results to the status store and logs", async 
 
     services.queue.enqueue({
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: source,
     });
     await services.queue.whenIdle();
@@ -49,6 +52,7 @@ test("createTuiServices marks files as redone only once their new status is reco
     const services = createTuiServices({
         lastFmApiKey: "key",
         verbose: false,
+        overwrite: false,
         recursive: true,
         startDirectory: directory,
     });
@@ -67,6 +71,7 @@ test("createTuiServices marks files as redone only once their new status is reco
 
     services.queue.enqueue({
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: source,
     });
     await services.queue.whenIdle();
@@ -79,6 +84,7 @@ test("createTuiServices forgets redone files when a job fails", async () => {
     const services = createTuiServices({
         lastFmApiKey: "key",
         verbose: false,
+        overwrite: false,
         recursive: true,
         startDirectory: directory,
     });
@@ -86,6 +92,7 @@ test("createTuiServices forgets redone files when a job fails", async () => {
 
     services.queue.enqueue({
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: path.join(directory, "missing"),
         recursive: true,
     });
@@ -98,6 +105,7 @@ test("createTuiServices starts the subfolder choice from the options", () => {
     const services = createTuiServices({
         lastFmApiKey: "key",
         verbose: false,
+        overwrite: false,
         recursive: false,
         startDirectory: process.cwd(),
     });
@@ -109,6 +117,7 @@ test("createTuiServices logs tag clears and checks them against the queue", asyn
     const services = createTuiServices({
         lastFmApiKey: "key",
         verbose: false,
+        overwrite: false,
         recursive: false,
         startDirectory: process.cwd(),
     });
@@ -120,6 +129,7 @@ test("createTuiServices logs tag clears and checks them against the queue", asyn
     };
     services.queue.enqueue({
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: folder,
         recursive: false,
     });
@@ -141,10 +151,16 @@ test("createTuiServices moves the statuses of a renamed folder", async () => {
     const services = createTuiServices({
         lastFmApiKey: "key",
         verbose: false,
+        overwrite: false,
         recursive: false,
         startDirectory: directory,
     });
-    services.queue.enqueue({ kind: "folder", path: album, recursive: false });
+    services.queue.enqueue({
+        kind: "folder",
+        path: album,
+        recursive: false,
+        settings: DEFAULT_JOB_SETTINGS,
+    });
     await services.queue.whenIdle();
     const renamed = path.join(directory, "Artist - Album");
 
@@ -160,6 +176,7 @@ test("createTuiServices draws no covers by default", async () => {
     const services = createTuiServices({
         lastFmApiKey: "key",
         verbose: false,
+        overwrite: false,
         recursive: false,
         startDirectory: process.cwd(),
     });
@@ -188,6 +205,7 @@ test("createTuiServices takes the cell shape from the cover display", () => {
     const options = {
         lastFmApiKey: "key",
         verbose: false,
+        overwrite: false,
         recursive: false,
         startDirectory: process.cwd(),
     };
@@ -199,4 +217,16 @@ test("createTuiServices takes the cell shape from the cover display", () => {
 
     assert.equal(createTuiServices(options).cellRatio, 2);
     assert.equal(createTuiServices(options, display).cellRatio, 2.25);
+});
+
+test("createTuiServices starts the overwrite choice from the options", () => {
+    const services = createTuiServices({
+        lastFmApiKey: "key",
+        verbose: false,
+        recursive: true,
+        overwrite: true,
+        startDirectory: process.cwd(),
+    });
+
+    assert.equal(services.overwriting.getSnapshot(), true);
 });

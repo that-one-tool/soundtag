@@ -1,5 +1,9 @@
 import { Box, Text } from "ink";
-import { describeQueue, describeSubfolderChoice } from "../queue-summary.js";
+import {
+    describeOverwriteChoice,
+    describeQueue,
+    describeSubfolderChoice,
+} from "../queue-summary.js";
 import { ACCENT } from "../theme.js";
 import type { QueueState } from "../types.js";
 
@@ -14,6 +18,7 @@ const KEY_HINTS: Hint[] = [
     ["e", "name"],
     ["D", "clear"],
     ["r", "subs"],
+    ["w", "overwrite"],
     ["s", "stop"],
     ["q", "quit"],
     ["⇥", "log"],
@@ -39,12 +44,14 @@ export interface StatusBarProps {
     queueState: QueueState;
     quitting: boolean;
     subfoldersIncluded: boolean;
+    overwriteEnabled: boolean;
 }
 
 function describeStatus(props: StatusBarProps): string {
     return [
         describeQueue(props.queueState, props.quitting),
         describeSubfolderChoice(props.subfoldersIncluded),
+        describeOverwriteChoice(props.overwriteEnabled),
     ].join(" · ");
 }
 

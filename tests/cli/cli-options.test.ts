@@ -7,6 +7,7 @@ test("parseArguments keeps the recursive default and reads a source path", () =>
         sourcePath: "./music",
         recursive: true,
         verbose: false,
+        overwrite: false,
     });
 });
 
@@ -15,6 +16,7 @@ test("parseArguments supports scan and verbose options", () => {
         sourcePath: "./music",
         recursive: false,
         verbose: true,
+        overwrite: false,
     });
     assert.equal(
         parseArguments(["--no-recursive", "--recursive"]).recursive,
@@ -39,6 +41,7 @@ test("parseArguments accepts the long and short option aliases", () => {
     assert.deepEqual(parseArguments(["--no-recursive", "-r", "--verbose"]), {
         recursive: true,
         verbose: true,
+        overwrite: false,
     });
 });
 
@@ -52,4 +55,8 @@ test("parseArguments rejects the removed renaming, fix and cover options", () =>
     ]) {
         assert.throws(() => parseArguments([option]), /Unknown option/);
     }
+});
+
+test("parseArguments turns overwriting on with --overwrite", () => {
+    assert.equal(parseArguments(["./music", "--overwrite"]).overwrite, true);
 });

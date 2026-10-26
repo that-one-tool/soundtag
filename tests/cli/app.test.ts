@@ -68,9 +68,10 @@ test("runApp tags a library and prints a summary", async () => {
     assert.equal(output.logs[1], "                SOUNDTAG");
     assert.ok(
         output.logs.includes(
-            "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose]"
+            "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--overwrite]"
         )
     );
+    assert.ok(output.logs.includes("Existing tags: kept"));
     assert.ok(output.logs.includes("Skipped:    1"));
     assert.ok(output.logs.includes("PROCESSING COMPLETE"));
     assert.deepEqual(output.logs.slice(-2), [
@@ -81,6 +82,18 @@ test("runApp tags a library and prints a summary", async () => {
     assert.ok(!output.logs.includes("Failed:"));
     assert.ok(!output.logs.some((line) => line.startsWith("Not processed:")));
     await assertNoReport(workingDirectory);
+});
+
+test("runApp searches fully tagged files again with --overwrite", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    await writeFullyTaggedMp3(path.join(workingDirectory, "tagged.mp3"));
+    globalThis.fetch = async () => new Response(null, { status: 500 });
+
+    assert.equal(await runAppIn(workingDirectory, [".", "--overwrite"]), 0);
+
+    assert.ok(output.logs.includes("Existing tags: overwritten"));
+    assert.ok(output.logs.includes("  skip   not found"));
+    assert.ok(!output.logs.includes("  skip   already tagged"));
 });
 
 test("runApp lists failed files relative to the source", async () => {
@@ -175,6 +188,7 @@ test("runApp opens the folder browser in the working directory", async () => {
             lastFmApiKey: "test-key",
             recursive: false,
             verbose: false,
+            overwrite: false,
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
             youtubeApiKey: undefined,
             listenBrainzToken: "test-token",

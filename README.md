@@ -144,19 +144,20 @@ to). Inside tmux, screen or Zellij the kitty protocol is not detected. Set
 `SOUNDTAG_COVER` to `kitty`, `blocks` or `none` to choose instead, for example
 `kitty` in WezTerm with its kitty graphics enabled. Processing messages appear in the log pane below.
 
-| Key                    | Action                                                     |
-| ---------------------- | ---------------------------------------------------------- |
-| `↑` `↓`, PgUp, PgDn    | Move the cursor                                            |
-| Enter, `→`             | Open the folder under the cursor                           |
-| `←`, Backspace, Delete | Go up one folder                                           |
-| `t`                    | Tag the file or folder under the cursor                    |
-| `a`                    | Tag the folder being browsed                               |
-| `e`                    | Rename the file or folder under the cursor                 |
-| `D` (Shift+d)          | Remove all tags and the cover of the file under the cursor |
-| `r`                    | Include or exclude subfolders in folder runs               |
-| `s`                    | Stop the current run after the file in progress            |
-| `q`, Ctrl+C            | Quit (press again during a run to quit at once)            |
-| Tab                    | Switch between the browser and the log pane                |
+| Key                    | Action                                                       |
+| ---------------------- | ------------------------------------------------------------ |
+| `↑` `↓`, PgUp, PgDn    | Move the cursor                                              |
+| Enter, `→`             | Open the folder under the cursor                             |
+| `←`, Backspace, Delete | Go up one folder                                             |
+| `t`                    | Tag the file or folder under the cursor                      |
+| `a`                    | Tag the folder being browsed                                 |
+| `e`                    | Rename the file or folder under the cursor                   |
+| `D` (Shift+d)          | Remove all tags and the cover of the file under the cursor   |
+| `r`                    | Include or exclude subfolders in folder runs                 |
+| `w`                    | Turn overwriting (`--overwrite`) on or off for the next runs |
+| `s`                    | Stop the current run after the file in progress              |
+| `q`, Ctrl+C            | Quit (press again during a run to quit at once)              |
+| Tab                    | Switch between the browser and the log pane                  |
 
 `e` edits the name in place: Enter saves it, Esc or Ctrl+C cancels. A file
 keeps its extension. A name already used in the folder (ignoring case) is
@@ -175,8 +176,9 @@ presses are queued and run one after another, and are ignored once you quit.
 Once processed in this session, files get a colored dot: green for `TAGGED`,
 yellow for `SKIPPED`, red for `FAILED`. A folder shows the worst status of the
 files inside it. Folder runs include subfolders unless `--no-recursive` was
-passed; `r` switches this for the folders queued next, and the status bar
-shows the choice. A file or folder that is already queued or running is not
+passed; `r` switches this for the folders queued next. Likewise, `w` switches
+overwriting (off unless `--overwrite` was passed) for the files and folders
+queued next. The status bar shows both choices. A file or folder that is already queued or running is not
 queued again, even with a different choice; the log says so. A file moved or
 removed outside SoundTag before its queued run starts is skipped. Quitting during a
 run waits for the file in progress; quitting again exits immediately with
@@ -232,6 +234,20 @@ terminal show the step so far on a last line that the finished step replaces.
 Service requests time out after 6 seconds, cover downloads after 10. A
 service error moves on to the next service; any other error fails the file.
 
+Pass `--overwrite` to replace existing tags too, not only fill empty ones:
+even fully tagged files are searched, and every field a service finds (title,
+artist, album, year, genre, album artist, track and disc numbers, cover)
+replaces the stored one. Fields no service finds keep their stored value,
+except a track or disc count whose number changed, which is cleared. The
+folder album of an `<Artist> - <Album>` path still wins over the one a service
+gives; elsewhere, the stored album is replaced too. A cover is only replaced
+by one a metadata service finds for the song, never by the Deezer album or
+YouTube fallbacks, and a cover identical to the stored one is not rewritten:
+
+```sh
+soundtag /path/to/music --overwrite
+```
+
 Pass `-v` or `--verbose` to also log every service request URL, with API keys
 and tokens hidden:
 
@@ -273,7 +289,7 @@ skipped as already tagged only when it has a title, artist, year, genre, and
 embedded cover art. If any of these are missing, SoundTag attempts to process
 the file, so files tagged before genre support are processed again. An
 embedded cover, genre, album artist, track or disc number already in the file
-is kept.
+is kept, unless `--overwrite` is passed.
 If the services return a title and artist but cannot find optional fields such
 as the album, year, genre, track number, or cover art, SoundTag still writes
 the fields it found.

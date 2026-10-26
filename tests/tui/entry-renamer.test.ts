@@ -10,6 +10,7 @@ import { TaggingQueue } from "../../src/tui/tagging-queue.js";
 import type { BrowserEntry } from "../../src/tui/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
+import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-entry-renamer-test-"
@@ -85,6 +86,7 @@ test("EntryRenamer refuses entries the tagging queue works on", async () => {
     const { renamer, queue, logger, moves } = createRenamer();
     queue.enqueue({
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: song.path,
     });
 
@@ -128,10 +130,12 @@ test("EntryRenamer refuses a folder holding a queued file", async () => {
     const { renamer, queue, logger } = createRenamer();
     queue.enqueue({
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: path.join(folder, "other.mp3"),
     });
     queue.enqueue({
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: song.path,
     });
     const entry: BrowserEntry = {
@@ -153,6 +157,7 @@ test("EntryRenamer starts a draft only for an entry the queue leaves alone", asy
     assert.equal(renamer.startDraft(song)?.field.text, "old");
     queue.enqueue({
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: song.path,
     });
 

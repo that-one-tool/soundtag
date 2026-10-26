@@ -10,6 +10,7 @@ import type {
     BrowserEntry,
     EntryKind,
     FocusedPane,
+    TagJobSettings,
     TagTarget,
 } from "../types.js";
 import type { LogView } from "./use-log-view.js";
@@ -24,6 +25,7 @@ export interface KeyboardControls {
     requestQuit(): void;
     pageSize: number;
     subfolders: ToggleSetting;
+    overwriting: ToggleSetting;
     logView: LogView;
     logPageSize: number;
     rename: RenameControls;
@@ -35,12 +37,17 @@ type NavigationAction =
 
 type KeyHandlers<Action extends KeyAction> = Record<Action, () => void>;
 
+function getJobSettings(controls: KeyboardControls): TagJobSettings {
+    return { overwrite: controls.overwriting.getSnapshot() };
+}
+
 function getFolderTarget(
     folder: string,
     controls: KeyboardControls
 ): TagTarget {
     const recursive = controls.subfolders.getSnapshot();
-    return { kind: "folder", path: folder, recursive };
+    const settings = getJobSettings(controls);
+    return { kind: "folder", path: folder, recursive, settings };
 }
 
 const TARGET_BUILDERS: Record<
@@ -48,7 +55,11 @@ const TARGET_BUILDERS: Record<
     (entry: BrowserEntry, controls: KeyboardControls) => TagTarget | null
 > = {
     parent: () => null,
-    file: ({ path }) => ({ kind: "file", path }),
+    file: ({ path }, controls) => ({
+        kind: "file",
+        path,
+        settings: getJobSettings(controls),
+    }),
     folder: ({ path }, controls) => getFolderTarget(path, controls),
 };
 
@@ -136,6 +147,7 @@ function createKeyHandlers(controls: KeyboardControls): KeyHandlers<KeyAction> {
             enqueue(getFolderTarget(controls.directory, controls), controls),
         stop: () => controls.queue.stop(),
         toggleSubfolders: () => controls.subfolders.toggle(),
+        toggleOverwriting: () => controls.overwriting.toggle(),
         rename: () => startRename(controls),
         clearTags: () => requestClear(controls),
         confirmClear: () => confirmClear(controls),

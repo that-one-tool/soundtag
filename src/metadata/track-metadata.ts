@@ -87,6 +87,48 @@ export function getNewExtras(
     return combineGroups(newGroups.map((group) => pickGroup(merged, group)));
 }
 
+// A field the service did not find is no change.
+function isChangedGroup(
+    existing: TrackExtras,
+    found: TrackExtras,
+    group: ExtraGroup
+): boolean {
+    return group.some(
+        (field) =>
+            found[field] !== undefined && found[field] !== existing[field]
+    );
+}
+
+function getChangedGroups(
+    existing: TrackExtras,
+    found: TrackExtras
+): ExtraGroup[] {
+    return EXTRA_GROUPS.filter((group) =>
+        isChangedGroup(existing, found, group)
+    );
+}
+
+export function getChangedExtras(
+    existing: TrackExtras,
+    found: TrackExtras
+): TrackExtras {
+    const changedGroups = getChangedGroups(existing, found);
+    return combineGroups(changedGroups.map((group) => pickGroup(found, group)));
+}
+
+// A count from the old position would not fit the new one.
+export function getStaleExtras(
+    existing: TrackExtras,
+    found: TrackExtras
+): (keyof TrackExtras)[] {
+    return getChangedGroups(existing, found).flatMap((group) =>
+        group.filter(
+            (field) =>
+                found[field] === undefined && existing[field] !== undefined
+        )
+    );
+}
+
 export function hasAllDetails({ info, extras }: TrackMetadata): boolean {
     const hasAllExtras = EXTRA_GROUPS.every((group) =>
         hasLeadField(extras, group)
@@ -105,6 +147,15 @@ export function optionalCount(value: number | undefined): number | undefined {
 export function hasNewFields(existing: TrackInfo, found: TrackInfo): boolean {
     return TRACK_FIELDS.some(
         (field) => !existing[field].trim() && found[field].trim()
+    );
+}
+
+export function hasChangedFields(
+    existing: TrackInfo,
+    found: TrackInfo
+): boolean {
+    return TRACK_FIELDS.some(
+        (field) => found[field].trim() && found[field] !== existing[field]
     );
 }
 

@@ -63,6 +63,7 @@ function useBrowsing(startDirectory: string, services: TuiServices) {
 function useSettingChoices(services: TuiServices) {
     return {
         subfoldersIncluded: useStore(services.subfolders),
+        overwriteEnabled: useStore(services.overwriting),
     };
 }
 

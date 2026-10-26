@@ -10,6 +10,7 @@ import { createRecordingLogger } from "../helpers/logger.js";
 import { assertNoReport } from "../helpers/no-report.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 import { createProviderServices } from "../helpers/metadata-chain.js";
+import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-tag-job-test-"
@@ -62,7 +63,7 @@ test("a file job tags the file without writing a report", async () => {
     const { runJob, processed } = createRunner();
 
     const succeeded = await runJob(
-        { kind: "file", path: source },
+        { kind: "file", path: source, settings: DEFAULT_JOB_SETTINGS },
         new AbortController().signal
     );
 
@@ -81,6 +82,7 @@ test("a folder job tags subfolders when recursive", async () => {
     await runJob(
         {
             kind: "folder",
+            settings: DEFAULT_JOB_SETTINGS,
             path: directory,
             recursive: true,
         },
@@ -102,6 +104,7 @@ test("a folder job skips subfolders when not recursive", async () => {
     await runJob(
         {
             kind: "folder",
+            settings: DEFAULT_JOB_SETTINGS,
             path: directory,
             recursive: false,
         },
@@ -121,7 +124,7 @@ test("a job fails when a file fails", async () => {
 
     assert.equal(
         await runJob(
-            { kind: "file", path: source },
+            { kind: "file", path: source, settings: DEFAULT_JOB_SETTINGS },
             new AbortController().signal
         ),
         false
@@ -135,6 +138,7 @@ test("a job fails and logs when the folder cannot be read", async () => {
     const succeeded = await runJob(
         {
             kind: "folder",
+            settings: DEFAULT_JOB_SETTINGS,
             path: directory,
             recursive: true,
         },
@@ -154,6 +158,7 @@ test("a stopped job logs Done!", async () => {
     await runJob(
         {
             kind: "folder",
+            settings: DEFAULT_JOB_SETTINGS,
             path: directory,
             recursive: true,
         },
@@ -174,6 +179,7 @@ test("a job announces its target", async () => {
     await runJob(
         {
             kind: "folder",
+            settings: DEFAULT_JOB_SETTINGS,
             path: directory,
             recursive: true,
         },
@@ -191,6 +197,7 @@ test("a job without audio files succeeds", async () => {
     const succeeded = await runJob(
         {
             kind: "folder",
+            settings: DEFAULT_JOB_SETTINGS,
             path: directory,
             recursive: true,
         },
@@ -211,6 +218,7 @@ test("a file job succeeds when its whole folder is gone", async () => {
     const succeeded = await runJob(
         {
             kind: "file",
+            settings: DEFAULT_JOB_SETTINGS,
             path: path.join(directory, "a.mp3"),
         },
         new AbortController().signal
@@ -226,7 +234,7 @@ test("a file job skips a file that no longer exists", async () => {
     const { runJob, processed, logger } = createRunner();
 
     const succeeded = await runJob(
-        { kind: "file", path: source },
+        { kind: "file", path: source, settings: DEFAULT_JOB_SETTINGS },
         new AbortController().signal
     );
 
@@ -234,4 +242,38 @@ test("a file job skips a file that no longer exists", async () => {
     assert.deepEqual(processed, []);
     assert.ok(logger.infos.includes(`Skipped: ${source} no longer exists.`));
     assert.equal(logger.infos.at(-1), "Done!");
+});
+
+test("a job overwrites existing tags only when overwriting is on", async () => {
+    const directory = await createTemporaryDirectory();
+    const [overwritten, kept] = await Promise.all(
+        ["overwritten.mp3", "kept.mp3"].map(async (filename) => {
+            const source = await createTrack(directory, filename);
+            await getTagStore(source).write(source, {
+                info: {
+                    title: "Old",
+                    artist: "Artist",
+                    album: "",
+                    year: "1990",
+                },
+                extras: { genre: "Rock" },
+                coverData: Buffer.from("old cover"),
+            });
+            return source;
+        })
+    );
+    const { runJob } = createRunner();
+
+    await runJob(
+        { kind: "file", path: overwritten, settings: { overwrite: true } },
+        new AbortController().signal
+    );
+    await runJob(
+        { kind: "file", path: kept, settings: { overwrite: false } },
+        new AbortController().signal
+    );
+
+    const store = getTagStore(overwritten);
+    assert.equal((await store.read(overwritten)).info.title, "Title");
+    assert.equal((await store.read(kept)).info.title, "Old");
 });

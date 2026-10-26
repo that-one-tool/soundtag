@@ -17,6 +17,9 @@ import {
     getFilledFields,
     getFirstFilled,
     valueOrEmpty,
+    getChangedExtras,
+    getStaleExtras,
+    hasChangedFields,
 } from "../../src/metadata/track-metadata.js";
 
 const completeInfo = {
@@ -270,4 +273,55 @@ test("getAddedFieldNames names the fields a candidate fills", () => {
         "cover",
     ]);
     assert.deepEqual(getAddedFieldNames(candidate, current), []);
+});
+
+test("hasChangedFields finds a found value that differs from the existing one", () => {
+    const existing = { title: "Song", artist: "Artist", album: "", year: "" };
+
+    assert.equal(
+        hasChangedFields(existing, { ...existing, year: "1999" }),
+        true
+    );
+    assert.equal(
+        hasChangedFields(existing, { ...existing, title: "Other" }),
+        true
+    );
+    assert.equal(
+        hasChangedFields(existing, { ...existing, artist: "" }),
+        false
+    );
+    assert.equal(hasChangedFields(existing, existing), false);
+});
+
+test("getChangedExtras keeps the found groups that differ from the existing ones", () => {
+    assert.deepEqual(
+        getChangedExtras(
+            { genre: "Rock", trackNumber: 1, trackCount: 9, discNumber: 1 },
+            { genre: "Rock", trackNumber: 1, trackCount: 12, albumArtist: "VA" }
+        ),
+        { trackNumber: 1, trackCount: 12, albumArtist: "VA" }
+    );
+    assert.deepEqual(
+        getChangedExtras({ genre: "Rock" }, { genre: "Rock" }),
+        {}
+    );
+});
+
+test("getChangedExtras ignores the fields the service did not find", () => {
+    const stored = { trackNumber: 5, trackCount: 12 };
+
+    assert.deepEqual(getChangedExtras(stored, { trackNumber: 5 }), {});
+    assert.deepEqual(getChangedExtras(stored, { trackNumber: 3 }), {
+        trackNumber: 3,
+    });
+});
+
+test("getStaleExtras names the stored fields a changed group did not get", () => {
+    const stored = { genre: "Rock", trackNumber: 5, trackCount: 12 };
+
+    assert.deepEqual(getStaleExtras(stored, { trackNumber: 3 }), [
+        "trackCount",
+    ]);
+    assert.deepEqual(getStaleExtras(stored, { trackNumber: 5 }), []);
+    assert.deepEqual(getStaleExtras(stored, { genre: "Pop" }), []);
 });

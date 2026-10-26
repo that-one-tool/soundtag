@@ -59,14 +59,15 @@ function printBanner(): void {
     console.log("                SOUNDTAG");
     console.log(`${SEPARATOR}\n`);
     console.log(
-        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose]"
+        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--overwrite]"
     );
 }
 
-function printRunSettings({ sourceRoot, recursive }: AppConfig): void {
-    console.log(`\nSource: ${sourceRoot}`);
+function printRunSettings(config: AppConfig): void {
+    console.log(`\nSource: ${config.sourceRoot}`);
     console.log("Tagged files will be updated in place.\n");
-    console.log(`Subfolders: ${recursive ? "included" : "excluded"}`);
+    console.log(`Subfolders: ${config.recursive ? "included" : "excluded"}`);
+    console.log(`Existing tags: ${config.overwrite ? "overwritten" : "kept"}`);
     console.log(`Batch limit: ${MAX_FILES_PER_RUN} audio files per run\n`);
 }
 
@@ -122,6 +123,7 @@ function createBatchRun(
             sourceRoot: config.sourceRoot,
             metadataChain: chain,
             logger: consoleLogger,
+            overwrite: config.overwrite,
         },
         report: run.report,
         stopSignal: run.stopSignal,

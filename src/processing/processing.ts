@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { getTagStore, isProperlyTagged } from "../tags/audio-tags.js";
+import { getTagStore } from "../tags/audio-tags.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
 import {
@@ -9,15 +9,13 @@ import {
 import type { LibraryPathTerms } from "../library/types.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
 import {
+    fillMissingExtras,
     fillMissingFields,
     getFirstFilled,
-    getNewExtras,
-    hasNewFields,
 } from "../metadata/track-metadata.js";
 import { parseTrackFilename } from "../library/track-name-parser.js";
 import type {
     ExistingTags,
-    TrackExtras,
     TrackInfo,
     TrackMetadata,
     TrackSearch,
@@ -36,11 +34,14 @@ import {
     formatWriteLine,
 } from "./track-log.js";
 import type { TrackStatus } from "./types.js";
+import { getWritePolicy, type WritePolicy } from "./write-policy.js";
 
 export interface ProcessingContext {
     sourceRoot: string;
     metadataChain: MetadataChain;
     logger: Logger;
+    // Found values replace the stored ones instead of only filling the gaps.
+    overwrite?: boolean;
 }
 
 interface FoundMetadata {
@@ -53,11 +54,13 @@ interface TrackLookup {
     existing: ExistingTags;
     // The stored tags, before the path album is pinned.
     hints: TrackInfo;
+    replaceCover: boolean;
 }
 
 interface SearchRun {
     metadataChain: MetadataChain;
     subject?: string;
+    replaceCover: boolean;
 }
 
 interface PlannedWrite {
@@ -107,10 +110,10 @@ export function buildTrackSearch(
 function searchServices(
     search: TrackSearch,
     existing: ExistingTags,
-    { metadataChain, subject }: SearchRun
+    { metadataChain, subject, replaceCover }: SearchRun
 ): Promise<TrackMetadata | null> {
     return metadataChain.lookups.step({ label: "search", subject }, () =>
-        metadataChain.find(search, existing)
+        metadataChain.find(search, existing, { replaceCover })
     );
 }
 
@@ -207,18 +210,20 @@ async function findFromPath(
 
     const subject = `path ${formatSearchSubject(search)}`;
     const withoutIdentity = forgetIdentity(lookup.existing);
-    const run = { metadataChain, subject };
+    const { replaceCover } = lookup;
+    const run = { metadataChain, subject, replaceCover };
     const found = await searchServices(search, withoutIdentity, run);
     return acceptPathResult(found, lookup);
 }
 
 function findFromTags(
-    { existing, hints }: TrackLookup,
+    { existing, hints, replaceCover }: TrackLookup,
     tagSearch: TrackSearch,
     { metadataChain }: ProcessingContext
 ): Promise<TrackMetadata | null> {
     const subject = getSearchSubject(tagSearch, hints);
-    return searchServices(tagSearch, existing, { metadataChain, subject });
+    const run = { metadataChain, subject, replaceCover };
+    return searchServices(tagSearch, existing, run);
 }
 
 // Best-ofs and compilations keep the album of their folder.
@@ -272,34 +277,57 @@ function getMissingFields(found: FoundMetadata): string[] {
     ).map(([label]) => label);
 }
 
-function addsMetadata(
-    existing: ExistingTags,
-    { info, coverData }: TrackMetadata,
-    newExtras: TrackExtras
-): boolean {
-    const hasNewExtras = Object.keys(newExtras).length > 0;
-    return (
-        hasNewFields(existing.info, info) || hasNewExtras || Boolean(coverData)
-    );
+interface ReadTrack {
+    source: string;
+    stored: StoredTags;
+    policy: WritePolicy;
 }
 
-function getNewMetadata(
-    existing: ExistingTags,
-    metadata: TrackMetadata
-): TrackMetadata | null {
-    const extras = getNewExtras(existing.extras, metadata.extras);
-    return addsMetadata(existing, metadata, extras)
-        ? { ...metadata, extras }
-        : null;
-}
-
-function planWrite(tags: StoredTags, metadata: TrackMetadata): PlannedWrite {
-    const hasExistingCover = tags.hasCover;
+// What the file keeps counts too, so only fields missing from both are named.
+function getKeptMetadata(
+    stored: StoredTags,
+    { info, extras, coverData }: TrackMetadata
+): FoundMetadata {
     return {
-        metadata: getNewMetadata(tags, metadata),
-        existing: tags.info,
-        missing: getMissingFields({ metadata, hasExistingCover }),
+        metadata: {
+            info: fillMissingFields(info, stored.info),
+            extras: fillMissingExtras(extras, stored.extras),
+            coverData,
+        },
+        hasExistingCover: stored.hasCover,
     };
+}
+
+function planWrite(
+    { stored, policy }: ReadTrack,
+    metadata: TrackMetadata
+): PlannedWrite {
+    return {
+        metadata: policy.getChanges(stored, metadata),
+        existing: stored.info,
+        missing: getMissingFields(getKeptMetadata(stored, metadata)),
+    };
+}
+
+async function isStoredCover(
+    { source, stored }: ReadTrack,
+    coverData: Buffer
+): Promise<boolean> {
+    if (!stored.hasCover) {
+        return false;
+    }
+
+    const storedCover = await getTagStore(source).readCover(source);
+    return storedCover !== null && storedCover.equals(coverData);
+}
+
+async function dropStoredCover(
+    track: ReadTrack,
+    found: TrackMetadata
+): Promise<TrackMetadata> {
+    const { coverData } = found;
+    const isSame = coverData && (await isStoredCover(track, coverData));
+    return isSame ? { ...found, coverData: null } : found;
 }
 
 async function writeNewMetadata(
@@ -320,11 +348,13 @@ async function writeNewMetadata(
 }
 
 async function tagUntaggedTrack(
-    source: string,
-    tags: StoredTags,
+    track: ReadTrack,
     context: ProcessingContext
 ): Promise<TrackStatus> {
-    const lookup = { source, existing: tags, hints: tags.info };
+    const { source, stored, policy } = track;
+    const existing = policy.getSearchedTags(stored);
+    const { replacesCover: replaceCover } = policy;
+    const lookup = { source, existing, hints: stored.info, replaceCover };
     const found = await findTrackMetadata(lookup, context);
     const writable = keepWritableMetadata(found, context.logger);
 
@@ -332,7 +362,8 @@ async function tagUntaggedTrack(
         return "SKIPPED";
     }
 
-    return writeNewMetadata(source, planWrite(tags, writable), context.logger);
+    const metadata = await dropStoredCover(track, writable);
+    return writeNewMetadata(source, planWrite(track, metadata), context.logger);
 }
 
 async function tagTrack(
@@ -340,14 +371,15 @@ async function tagTrack(
     context: ProcessingContext
 ): Promise<TrackStatus> {
     const stored = await getTagStore(source).read(source);
+    const policy = getWritePolicy(context.overwrite === true);
     context.logger.info(formatTagsLine(stored.info));
 
-    if (isProperlyTagged(stored)) {
+    if (policy.skipsTaggedTrack(stored)) {
         context.logger.info(formatSkipLine("already tagged"));
         return "SKIPPED";
     }
 
-    return tagUntaggedTrack(source, stored, context);
+    return tagUntaggedTrack({ source, stored, policy }, context);
 }
 
 export async function processTrack(

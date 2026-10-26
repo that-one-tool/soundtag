@@ -9,6 +9,7 @@ import { TrackStatusStore } from "../../src/tui/track-status-store.js";
 import type { BrowserEntry } from "../../src/tui/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
+import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-tag-clearer-test-"
@@ -166,6 +167,7 @@ test("TagClearer refuses files the tagging queue works on", async () => {
     const { clearer, queue, logger } = createClearer();
     queue.enqueue({
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: song.path,
     });
 

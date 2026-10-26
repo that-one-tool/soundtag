@@ -19,7 +19,11 @@ import {
     emptyInfo,
 } from "../helpers/metadata-chain.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
-import type { TrackSearch } from "../../src/metadata/types.js";
+import type {
+    ProviderNeeds,
+    TrackMetadata,
+    TrackSearch,
+} from "../../src/metadata/types.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 restoreFetchAfterEach();
@@ -795,4 +799,191 @@ test("processTrack takes the path song over a placeholder tag title", async () =
 
     assert.equal(status, "TAGGED");
     assert.equal(searches.length, 1);
+});
+
+type ProviderCall = { search: TrackSearch; needs: ProviderNeeds };
+
+function createRecordingChain(
+    found: TrackMetadata | null,
+    calls: ProviderCall[] = [],
+    fallbackCover: Buffer | null = null
+): MetadataChain {
+    return new MetadataChain(
+        [
+            {
+                name: "Fake",
+                findMetadata: async (search, needs) => {
+                    calls.push({ search, needs });
+                    return found;
+                },
+            },
+        ],
+        [{ name: "FakeCover", findCover: async () => fallbackCover }],
+        createProviderServices()
+    );
+}
+
+const oldTags = {
+    info: {
+        title: "Old Title",
+        artist: "Old Artist",
+        album: "Old Album",
+        year: "1990",
+    },
+    extras: { genre: "Old Genre", trackNumber: 1, trackCount: 9 },
+    coverData: Buffer.from("old cover"),
+};
+
+const newMetadata: TrackMetadata = {
+    info: {
+        title: "New Title",
+        artist: "New Artist",
+        album: "New Album",
+        year: "2001",
+    },
+    extras: { genre: "New Genre", trackNumber: 5, trackCount: 12 },
+    coverData: Buffer.from("new cover"),
+};
+
+async function createOldTrack(
+    folders: string[] = [],
+    filename = "track.mp3"
+): Promise<string> {
+    const directory = path.join(await createTemporaryDirectory(), ...folders);
+    const source = path.join(directory, filename);
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(source, "audio bytes");
+    await getTagStore(source).write(source, oldTags);
+    return source;
+}
+
+function overwriteTrack(source: string, metadataChain: MetadataChain) {
+    return processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain,
+        overwrite: true,
+    });
+}
+
+test("processTrack overwrites the tags and cover of a fully tagged file", async () => {
+    const source = await createOldTrack();
+    const calls: ProviderCall[] = [];
+
+    const status = await overwriteTrack(
+        source,
+        createRecordingChain(newMetadata, calls)
+    );
+
+    assert.equal(status, "TAGGED");
+    assert.deepEqual(calls[0].needs, { cover: true, details: true });
+    const stored = await getTagStore(source).read(source);
+    assert.deepEqual(stored.info, newMetadata.info);
+    assert.deepEqual(stored.extras, newMetadata.extras);
+    assert.deepEqual(
+        await getTagStore(source).readCover(source),
+        newMetadata.coverData
+    );
+    assert.ok(
+        output.logs.includes(
+            '  write  title "New Title" · artist "New Artist" · album "New Album" · year "2001" · genre "New Genre" · track 5 · cover'
+        )
+    );
+});
+
+test("processTrack keeps the fields the services do not find when overwriting", async () => {
+    const source = await createOldTrack();
+    const partial = {
+        info: { ...newMetadata.info, album: "", year: "" },
+        extras: { genre: "New Genre" },
+        coverData: null,
+    };
+
+    assert.equal(
+        await overwriteTrack(source, createRecordingChain(partial)),
+        "TAGGED"
+    );
+
+    const stored = await getTagStore(source).read(source);
+    assert.deepEqual(stored.info, {
+        title: "New Title",
+        artist: "New Artist",
+        album: "Old Album",
+        year: "1990",
+    });
+    assert.deepEqual(stored.extras, {
+        genre: "New Genre",
+        trackNumber: 1,
+        trackCount: 9,
+    });
+    assert.deepEqual(
+        await getTagStore(source).readCover(source),
+        oldTags.coverData
+    );
+});
+
+test("processTrack overwrites the album with the folder album of the path", async () => {
+    const source = await createOldTrack(
+        ["New Artist", "New Artist - Best Of"],
+        "New Artist - New Title.mp3"
+    );
+    const calls: ProviderCall[] = [];
+
+    await overwriteTrack(source, createRecordingChain(newMetadata, calls));
+
+    assert.equal(calls[0].search.album, "Best Of");
+    const stored = await getTagStore(source).read(source);
+    assert.equal(stored.info.album, "Best Of");
+});
+
+test("processTrack skips an overwrite that changes nothing", async () => {
+    const source = await createOldTrack();
+    const same = { ...oldTags, coverData: null };
+
+    assert.equal(
+        await overwriteTrack(source, createRecordingChain(same)),
+        "SKIPPED"
+    );
+    assert.ok(output.logs.includes("  skip   nothing new"));
+});
+
+test("processTrack skips an overwrite whose cover is the stored one", async () => {
+    const source = await createOldTrack();
+    const same = { ...oldTags, extras: { ...oldTags.extras } };
+
+    assert.equal(
+        await overwriteTrack(source, createRecordingChain(same)),
+        "SKIPPED"
+    );
+});
+
+test("processTrack never overwrites a cover with a fallback cover", async () => {
+    const source = await createOldTrack();
+    const withoutCover = { ...newMetadata, coverData: null };
+    const chain = createRecordingChain(
+        withoutCover,
+        [],
+        Buffer.from("fallback cover")
+    );
+
+    assert.equal(await overwriteTrack(source, chain), "TAGGED");
+    assert.deepEqual(
+        await getTagStore(source).readCover(source),
+        oldTags.coverData
+    );
+});
+
+test("processTrack names only what neither the file nor the services have", async () => {
+    const source = await createOldTrack();
+    const partial = {
+        info: { ...newMetadata.info, album: "", year: "" },
+        extras: {},
+        coverData: null,
+    };
+
+    await overwriteTrack(source, createRecordingChain(partial));
+
+    assert.ok(
+        output.logs.includes('  write  title "New Title" · artist "New Artist"')
+    );
 });

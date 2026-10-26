@@ -14,7 +14,10 @@ import {
     waitFor,
     waitForInput,
 } from "../helpers/ink.js";
-import { createControlledServices } from "../helpers/tui.js";
+import {
+    createControlledServices,
+    DEFAULT_JOB_SETTINGS,
+} from "../helpers/tui.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
@@ -50,6 +53,7 @@ test("renderTui reports a failure when a job failed", async () => {
     const { stdin, outcome, services, jobs, directory } = await startTui();
     services.queue.enqueue({
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: directory,
         recursive: true,
     });
@@ -65,6 +69,7 @@ test("renderTui waits for the current file before quitting", async () => {
     const { stdin, outcome, services, jobs, directory } = await startTui();
     services.queue.enqueue({
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: directory,
         recursive: true,
     });
@@ -84,6 +89,7 @@ test("renderTui forces the quit when asked twice during a run", async () => {
     const { stdin, outcome, services, directory } = await startTui();
     services.queue.enqueue({
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: directory,
         recursive: true,
     });
@@ -104,6 +110,7 @@ test("runTui wires the services and browses the start directory", async () => {
             startDirectory: directory,
             lastFmApiKey: "key",
             verbose: false,
+            overwrite: false,
             recursive: true,
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
         },
@@ -153,6 +160,7 @@ const COVER_OPTIONS = {
     startDirectory: process.cwd(),
     lastFmApiKey: "key",
     verbose: false,
+    overwrite: false,
     recursive: true,
 };
 

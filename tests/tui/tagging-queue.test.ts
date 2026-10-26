@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { TaggingQueue } from "../../src/tui/tagging-queue.js";
 import type { TagTarget } from "../../src/tui/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
+import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 interface ControlledJob {
     target: TagTarget;
@@ -25,11 +26,13 @@ function createControlledQueue() {
 
 const album: TagTarget = {
     kind: "folder",
+    settings: DEFAULT_JOB_SETTINGS,
     path: "/music/Album",
     recursive: true,
 };
 const single: TagTarget = {
     kind: "file",
+    settings: DEFAULT_JOB_SETTINGS,
     path: "/music/single.mp3",
 };
 
@@ -147,10 +150,12 @@ test("TaggingQueue moves the queued targets inside a renamed folder", () => {
     const { queue } = createControlledQueue();
     const inside: TagTarget = {
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: "/music/Album/a.mp3",
     };
     const other: TagTarget = {
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: "/music/Albums/a.mp3",
     };
     queue.enqueue(album);
@@ -169,11 +174,13 @@ test("TaggingQueue moves the queued targets inside a renamed folder", () => {
     assert.deepEqual(queue.getSnapshot().pending, [
         {
             kind: "folder",
+            settings: DEFAULT_JOB_SETTINGS,
             path: "/music/A - B/CD1",
             recursive: false,
         },
         {
             kind: "file",
+            settings: DEFAULT_JOB_SETTINGS,
             path: "/music/A - B/a.mp3",
         },
         other,
@@ -184,6 +191,7 @@ test("TaggingQueue moves the queued targets inside a renamed folder", () => {
 function getDiscTarget(): TagTarget {
     return {
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: "/music/Album/CD1",
         recursive: false,
     };
@@ -215,6 +223,7 @@ test("TaggingQueue is busy with the folder of a queued file", () => {
     const { queue } = createControlledQueue();
     queue.enqueue({
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: "/music/Album/a.mp3",
     });
 

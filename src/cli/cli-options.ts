@@ -14,12 +14,17 @@ const enableVerboseOutput: OptionHandler = (options) => {
     options.verbose = true;
 };
 
+const enableOverwriting: OptionHandler = (options) => {
+    options.overwrite = true;
+};
+
 const OPTION_HANDLERS = new Map<string, OptionHandler>([
     ["--recursive", enableRecursion],
     ["-r", enableRecursion],
     ["--no-recursive", disableRecursion],
     ["--verbose", enableVerboseOutput],
     ["-v", enableVerboseOutput],
+    ["--overwrite", enableOverwriting],
 ]);
 
 function setSourcePath(options: CommandLineOptions, sourcePath: string): void {
@@ -48,6 +53,7 @@ export function parseArguments(args: string[]): CommandLineOptions {
     const options: CommandLineOptions = {
         recursive: true,
         verbose: false,
+        overwrite: false,
     };
 
     for (const arg of args) {

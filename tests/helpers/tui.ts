@@ -10,7 +10,9 @@ import { ToggleSetting } from "../../src/tui/toggle-setting.js";
 import { RedoneFiles } from "../../src/tui/redone-files.js";
 import { TrackStatusStore } from "../../src/tui/track-status-store.js";
 import type { TuiServices } from "../../src/tui/tui-services.js";
-import type { TagTarget } from "../../src/tui/types.js";
+import type { TagJobSettings, TagTarget } from "../../src/tui/types.js";
+
+export const DEFAULT_JOB_SETTINGS: TagJobSettings = { overwrite: false };
 
 export interface ControlledJob {
     target: TagTarget;
@@ -41,6 +43,7 @@ export function createControlledServices(): {
             redoneFiles: new RedoneFiles(),
             pathMoves,
             subfolders: new ToggleSetting(true),
+            overwriting: new ToggleSetting(false),
             detailsCache: createDetailsCache(),
             coverCache: createCoverCache("blocks"),
             coverOverlay: new CoverOverlay(() => {}),

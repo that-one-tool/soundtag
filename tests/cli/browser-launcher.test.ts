@@ -28,6 +28,7 @@ function createOptions(startDirectory: string): TuiOptions {
         startDirectory,
         lastFmApiKey: "key",
         verbose: false,
+        overwrite: false,
         recursive: true,
         musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
     };

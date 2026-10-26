@@ -45,7 +45,9 @@ export function formatSkipLine(reason: string): string {
 
 function describeNewInfo({ existing, metadata }: WrittenTrack): string[] {
     const added = TRACK_FIELDS.filter(
-        (field) => !existing[field].trim() && metadata.info[field].trim()
+        (field) =>
+            metadata.info[field].trim() &&
+            metadata.info[field] !== existing[field]
     );
     return added.map((field) => `${field} "${metadata.info[field]}"`);
 }

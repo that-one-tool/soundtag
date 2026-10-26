@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { describeQueue, describeTarget } from "../../src/tui/queue-summary.js";
 import type { QueueState } from "../../src/tui/types.js";
+import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const idle: QueueState = {
     running: null,
@@ -13,6 +14,7 @@ const running: QueueState = {
     ...idle,
     running: {
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: "/music/Album",
         recursive: true,
     },
@@ -31,6 +33,7 @@ test("describeQueue names the running target and counts queued ones", () => {
                 pending: [
                     {
                         kind: "file",
+                        settings: DEFAULT_JOB_SETTINGS,
                         path: "/a.mp3",
                     },
                 ],
@@ -56,6 +59,7 @@ test("describeTarget names a file, or a folder with its subfolder choice", () =>
     assert.equal(
         describeTarget({
             kind: "file",
+            settings: DEFAULT_JOB_SETTINGS,
             path: "/a.mp3",
         }),
         "a.mp3"
@@ -63,6 +67,7 @@ test("describeTarget names a file, or a folder with its subfolder choice", () =>
     assert.equal(
         describeTarget({
             kind: "folder",
+            settings: DEFAULT_JOB_SETTINGS,
             path: "/Rock",
             recursive: true,
         }),
@@ -71,9 +76,21 @@ test("describeTarget names a file, or a folder with its subfolder choice", () =>
     assert.equal(
         describeTarget({
             kind: "folder",
+            settings: DEFAULT_JOB_SETTINGS,
             path: "/Rock",
             recursive: false,
         }),
         "Rock (subfolders off)"
+    );
+});
+
+test("describeTarget tells when a target overwrites existing tags", () => {
+    assert.equal(
+        describeTarget({
+            kind: "file",
+            path: "/a.mp3",
+            settings: { overwrite: true },
+        }),
+        "a.mp3 (overwrite on)"
     );
 });

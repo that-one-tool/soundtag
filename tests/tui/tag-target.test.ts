@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { isEntryTargeted } from "../../src/tui/tag-target.js";
 import type { BrowserEntry, TagTarget } from "../../src/tui/types.js";
+import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const root = path.resolve("music");
 const rock = path.join(root, "Rock");
@@ -24,15 +25,18 @@ function file(filePath: string): BrowserEntry {
 
 const fileTarget: TagTarget = {
     kind: "file",
+    settings: DEFAULT_JOB_SETTINGS,
     path: song,
 };
 const flatFolder: TagTarget = {
     kind: "folder",
+    settings: DEFAULT_JOB_SETTINGS,
     path: rock,
     recursive: false,
 };
 const deepFolder: TagTarget = {
     kind: "folder",
+    settings: DEFAULT_JOB_SETTINGS,
     path: rock,
     recursive: true,
 };

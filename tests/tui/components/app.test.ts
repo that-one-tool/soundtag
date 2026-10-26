@@ -32,7 +32,10 @@ import {
     waitForFrame,
     waitForInput,
 } from "../../helpers/ink.js";
-import { createControlledServices } from "../../helpers/tui.js";
+import {
+    createControlledServices,
+    DEFAULT_JOB_SETTINGS,
+} from "../../helpers/tui.js";
 import { useTemporaryDirectories } from "../../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories("soundtag-app-test-");
@@ -133,6 +136,7 @@ test("App queues the hovered file or folder for tagging", async () => {
     await waitForFrame(lastFrame, "Tagging Album · 1 queued");
     assert.deepEqual(jobs[0].target, {
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: path.join(directory, "Album"),
         recursive: true,
     });
@@ -187,6 +191,7 @@ test("App marks queued entries and their folders with a dot", async () => {
 
     services.queue.enqueue({
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: album,
         recursive: true,
     });
@@ -197,6 +202,7 @@ test("App marks queued entries and their folders with a dot", async () => {
 
     services.queue.enqueue({
         kind: "file",
+        settings: DEFAULT_JOB_SETTINGS,
         path: path.join(directory, "song.mp3"),
     });
     await waitFor(() => findFrameLine(lastFrame, "song.mp3").includes("●"));
@@ -530,6 +536,7 @@ test("App tags the folder being browsed with a", async () => {
     await waitFor(() => jobs.length === 1);
     assert.deepEqual(jobs[0].target, {
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: directory,
         recursive: true,
     });
@@ -561,16 +568,19 @@ test("App keeps the subfolder choice of each queued folder", async () => {
         [
             {
                 kind: "folder",
+                settings: DEFAULT_JOB_SETTINGS,
                 path: directory,
                 recursive: true,
             },
             {
                 kind: "folder",
+                settings: DEFAULT_JOB_SETTINGS,
                 path: path.join(directory, "Album"),
                 recursive: true,
             },
             {
                 kind: "folder",
+                settings: DEFAULT_JOB_SETTINGS,
                 path: path.join(directory, "Live"),
                 recursive: false,
             },
@@ -583,6 +593,7 @@ test("App ignores tag keys while quitting", async () => {
     const { lastFrame, stdin, jobs, services } = await renderApp(directory);
     services.queue.enqueue({
         kind: "folder",
+        settings: DEFAULT_JOB_SETTINGS,
         path: path.join(directory, "Album"),
         recursive: true,
     });
@@ -860,4 +871,26 @@ test("App frees the kitty covers before leaving the alternate screen", async () 
     const freed = output.indexOf("a=d,d=I,");
     assert.ok(freed > 0);
     assert.ok(freed < output.lastIndexOf("\u001B[?1049l"));
+});
+
+test("App keeps the overwrite choice of each queued target", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, jobs } = await renderApp(directory);
+    stdin.write("a");
+    await waitFor(() => jobs.length === 1);
+
+    stdin.write("w");
+    await waitForFrame(lastFrame, "overwrite on");
+    stdin.write(KEYS.down);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Black Sabbath");
+    stdin.write("t");
+    await waitForFrame(lastFrame, "1 queued");
+    jobs[0].finish(true);
+    await waitFor(() => jobs.length === 2);
+
+    assert.deepEqual(
+        jobs.map(({ target }) => target.settings.overwrite),
+        [false, true]
+    );
 });

@@ -428,3 +428,47 @@ test("clearCache clears the shared image and batch caches", async () => {
     assert.equal(imageClears, 1);
     assert.equal(await cache.getOrLoad("key", async () => "second"), "second");
 });
+
+test("MetadataChain asks providers for a replacement cover without a fallback", async () => {
+    const provider = new FakeMetadataProvider(
+        createMetadata({ title: "Query" })
+    );
+    const coverProvider = new FakeCoverProvider(cover);
+    const chain = new MetadataChain(
+        [provider],
+        [coverProvider],
+        createProviderServices()
+    );
+
+    const metadata = await chain.find(
+        search,
+        { ...emptyTags, hasCover: true },
+        { replaceCover: true }
+    );
+
+    assert.equal(metadata?.coverData, null);
+    assert.equal(provider.calls[0].needs.cover, true);
+    assert.deepEqual(coverProvider.searches, []);
+});
+test("MetadataChain keeps asking for a replacement cover after complete details", async () => {
+    const complete = createMetadata(
+        { title: "Query", artist: "Artist", album: "Album", year: "2024" },
+        null,
+        requiredExtras
+    );
+    const first = new FakeMetadataProvider(complete);
+    const second = new FakeMetadataProvider(createMetadata({}, cover));
+    const chain = new MetadataChain(
+        [first, second],
+        [],
+        createProviderServices()
+    );
+
+    const metadata = await chain.find(
+        search,
+        { ...emptyTags, hasCover: true },
+        { replaceCover: true }
+    );
+
+    assert.equal(metadata?.coverData, cover);
+});

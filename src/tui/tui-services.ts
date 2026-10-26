@@ -23,6 +23,7 @@ import type { VersionedCache } from "./versioned-cache.js";
 export interface TaggingOptions extends MetadataChainConfig {
     coverMode?: CoverMode;
     recursive: boolean;
+    overwrite: boolean;
     startDirectory: string;
 }
 
@@ -33,6 +34,7 @@ export interface TuiServices {
     redoneFiles: RedoneFiles;
     pathMoves: PathMoves;
     subfolders: ToggleSetting;
+    overwriting: ToggleSetting;
     detailsCache: VersionedCache<EntryDetails>;
     coverCache: VersionedCache<CoverLookup>;
     renamer: EntryRenamer;
@@ -130,6 +132,7 @@ export function createTuiServices(
         renamer: createRenamer(jobServices),
         tagClearer: createTagClearer(jobServices),
         subfolders: new ToggleSetting(options.recursive),
+        overwriting: new ToggleSetting(options.overwrite),
         detailsCache: createDetailsCache(),
         coverCache: createCoverCache(display.mode),
         coverOverlay: new CoverOverlay(display.writeToTerminal),
