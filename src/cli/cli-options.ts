@@ -14,37 +14,12 @@ const enableVerboseOutput: OptionHandler = (options) => {
     options.verbose = true;
 };
 
-const enableRenaming: OptionHandler = (options) => {
-    options.renameFiles = true;
-};
-
-const disableRenaming: OptionHandler = (options) => {
-    options.renameFiles = false;
-};
-
-const enableTagFixing: OptionHandler = (options) => {
-    options.fixTags = true;
-};
-
-const enableCoverReplacing: OptionHandler = (options) => {
-    options.replaceCovers = true;
-};
-
-const enableCoversOnly: OptionHandler = (options) => {
-    options.coversOnly = true;
-};
-
 const OPTION_HANDLERS = new Map<string, OptionHandler>([
     ["--recursive", enableRecursion],
     ["-r", enableRecursion],
     ["--no-recursive", disableRecursion],
     ["--verbose", enableVerboseOutput],
     ["-v", enableVerboseOutput],
-    ["--rename", enableRenaming],
-    ["--no-rename", disableRenaming],
-    ["--fix", enableTagFixing],
-    ["--replace-covers", enableCoverReplacing],
-    ["--covers-only", enableCoversOnly],
 ]);
 
 function setSourcePath(options: CommandLineOptions, sourcePath: string): void {
@@ -73,10 +48,6 @@ export function parseArguments(args: string[]): CommandLineOptions {
     const options: CommandLineOptions = {
         recursive: true,
         verbose: false,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
     };
 
     for (const arg of args) {

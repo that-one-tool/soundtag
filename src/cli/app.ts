@@ -59,7 +59,7 @@ function printBanner(): void {
     console.log("                SOUNDTAG");
     console.log(`${SEPARATOR}\n`);
     console.log(
-        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--rename | --no-rename] [--fix] [--replace-covers] [--covers-only]"
+        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose]"
     );
 }
 
@@ -79,8 +79,6 @@ function printSummary(stats: ProcessingStats, run: TaggingRun): void {
     console.log(`Errors:     ${stats.errors}`);
     printUnprocessedCount(stats, stopped);
     printSection("Failed:", getFailedFiles(run.report));
-    printSection("Renamed:", getRenames(run.report));
-    printSection("Corrected:", getCorrections(run.report));
     console.log(SEPARATOR);
 }
 
@@ -92,16 +90,6 @@ function printUnprocessedCount(stats: ProcessingStats, stopped: boolean): void {
 
 function getFailedFiles({ files }: ProcessingReport): string[] {
     return Object.keys(files).filter((file) => files[file] === "FAILED");
-}
-
-function getRenames({ renamed = {} }: ProcessingReport): string[] {
-    return Object.entries(renamed).map(([from, to]) => `${from} → ${to}`);
-}
-
-function getCorrections({ corrected = {} }: ProcessingReport): string[] {
-    return Object.entries(corrected).map(
-        ([file, corrections]) => `${file}: ${corrections.join(", ")}`
-    );
 }
 
 function printSection(title: string, lines: string[]): void {
@@ -127,21 +115,16 @@ function printProcessingStart(fileCount: number): void {
 function createBatchRun(
     config: AppConfig,
     run: TaggingRun,
-    { chain, corrector, albums }: MetadataLookups
+    { chain }: MetadataLookups
 ): BatchRun {
     return {
         context: {
             sourceRoot: config.sourceRoot,
             metadataChain: chain,
             logger: consoleLogger,
-            corrector: config.fixTags ? corrector : undefined,
-            albums,
-            replaceCovers: config.replaceCovers,
-            coversOnly: config.coversOnly,
         },
         report: run.report,
         stopSignal: run.stopSignal,
-        renameFiles: config.renameFiles,
     };
 }
 

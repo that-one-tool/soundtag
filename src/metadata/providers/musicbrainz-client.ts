@@ -93,10 +93,7 @@ function buildSearchTerm(field: string, value: string): string {
     return `${field}:"${value.replaceAll('"', '\\"')}"`;
 }
 
-function buildRecordingSearchUrl(
-    { title, artist, album }: TrackSearch,
-    limit: number
-): URL {
+function buildRecordingSearchUrl({ title, artist, album }: TrackSearch): URL {
     const terms = [
         buildSearchTerm("recording", title),
         ...(artist ? [buildSearchTerm("artist", artist)] : []),
@@ -105,7 +102,7 @@ function buildRecordingSearchUrl(
     const url = new URL("recording", MUSICBRAINZ_BASE);
     url.searchParams.set("query", terms.join(" AND "));
     url.searchParams.set("fmt", "json");
-    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("limit", "1");
     return url;
 }
 
@@ -148,21 +145,11 @@ export class MusicBrainzClient {
     async searchRecordings(
         search: TrackSearch
     ): Promise<MusicBrainzRecording[]> {
-        const url = buildRecordingSearchUrl(search, 1);
+        const url = buildRecordingSearchUrl(search);
         const data = await this.services.cache.getOrLoad(
             `musicbrainz:search:${url}`,
             () => this.requestJson<MusicBrainzSearchResponse>(url)
         );
-        return data.recordings ?? [];
-    }
-
-    // MusicBrainz ranks a famous song's recordings loosely, so a short page
-    // misses the original's year and albums. Too big to keep for the batch.
-    async searchAllRecordings(
-        search: TrackSearch
-    ): Promise<MusicBrainzRecording[]> {
-        const url = buildRecordingSearchUrl(search, 100);
-        const data = await this.requestJson<MusicBrainzSearchResponse>(url);
         return data.recordings ?? [];
     }
 

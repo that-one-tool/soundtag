@@ -10,7 +10,6 @@ import type {
     BrowserEntry,
     EntryKind,
     FocusedPane,
-    TagJobSettings,
     TagTarget,
 } from "../types.js";
 import type { LogView } from "./use-log-view.js";
@@ -25,10 +24,6 @@ export interface KeyboardControls {
     requestQuit(): void;
     pageSize: number;
     subfolders: ToggleSetting;
-    renaming: ToggleSetting;
-    fixing: ToggleSetting;
-    coverReplacing: ToggleSetting;
-    coversOnly: ToggleSetting;
     logView: LogView;
     logPageSize: number;
     rename: RenameControls;
@@ -40,22 +35,12 @@ type NavigationAction =
 
 type KeyHandlers<Action extends KeyAction> = Record<Action, () => void>;
 
-function getJobSettings(controls: KeyboardControls): TagJobSettings {
-    return {
-        renameFiles: controls.renaming.getSnapshot(),
-        fixTags: controls.fixing.getSnapshot(),
-        replaceCovers: controls.coverReplacing.getSnapshot(),
-        coversOnly: controls.coversOnly.getSnapshot(),
-    };
-}
-
 function getFolderTarget(
     folder: string,
     controls: KeyboardControls
 ): TagTarget {
     const recursive = controls.subfolders.getSnapshot();
-    const settings = getJobSettings(controls);
-    return { kind: "folder", path: folder, recursive, settings };
+    return { kind: "folder", path: folder, recursive };
 }
 
 const TARGET_BUILDERS: Record<
@@ -63,11 +48,7 @@ const TARGET_BUILDERS: Record<
     (entry: BrowserEntry, controls: KeyboardControls) => TagTarget | null
 > = {
     parent: () => null,
-    file: ({ path }, controls) => ({
-        kind: "file",
-        path,
-        settings: getJobSettings(controls),
-    }),
+    file: ({ path }) => ({ kind: "file", path }),
     folder: ({ path }, controls) => getFolderTarget(path, controls),
 };
 
@@ -155,10 +136,6 @@ function createKeyHandlers(controls: KeyboardControls): KeyHandlers<KeyAction> {
             enqueue(getFolderTarget(controls.directory, controls), controls),
         stop: () => controls.queue.stop(),
         toggleSubfolders: () => controls.subfolders.toggle(),
-        toggleRenaming: () => controls.renaming.toggle(),
-        toggleFixing: () => controls.fixing.toggle(),
-        toggleCoverReplacing: () => controls.coverReplacing.toggle(),
-        toggleCoversOnly: () => controls.coversOnly.toggle(),
         rename: () => startRename(controls),
         clearTags: () => requestClear(controls),
         confirmClear: () => confirmClear(controls),
@@ -173,19 +150,11 @@ const CLEAR_ACTIONS: ReadonlySet<KeyAction | undefined> = new Set([
     "confirmClear",
 ]);
 
-// n also answers no to a pending clear, so it must not switch renaming then.
-function getBrowserAction(
+function handleBrowserKey(
     controls: KeyboardControls,
     { input, key }: KeyPress
-): KeyAction | undefined {
+): void {
     const action = getKeyAction(input, key);
-    const answersClear =
-        action === "toggleRenaming" && controls.tagClearer.isArmed();
-    return answersClear ? undefined : action;
-}
-
-function handleBrowserKey(controls: KeyboardControls, keyPress: KeyPress) {
-    const action = getBrowserAction(controls, keyPress);
     if (!CLEAR_ACTIONS.has(action)) {
         controls.tagClearer.disarm();
     }

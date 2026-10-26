@@ -7,12 +7,9 @@ export const STATUS_ORDER: TrackStatus[] = ["TAGGED", "SKIPPED", "FAILED"];
 
 export function recordProcessedTrack(
     statuses: TrackStatuses,
-    { source, status, destination }: ProcessedTrack
+    { source, status }: ProcessedTrack
 ): TrackStatuses {
-    const updated = new Map(statuses);
-    updated.delete(source);
-    updated.set(destination ?? source, status);
-    return updated;
+    return new Map(statuses).set(source, status);
 }
 
 export function moveStatuses(

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { describeQueue, describeTarget } from "../../src/tui/queue-summary.js";
 import type { QueueState } from "../../src/tui/types.js";
-import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const idle: QueueState = {
     running: null,
@@ -16,7 +15,6 @@ const running: QueueState = {
         kind: "folder",
         path: "/music/Album",
         recursive: true,
-        settings: DEFAULT_JOB_SETTINGS,
     },
 };
 
@@ -34,7 +32,6 @@ test("describeQueue names the running target and counts queued ones", () => {
                     {
                         kind: "file",
                         path: "/a.mp3",
-                        settings: DEFAULT_JOB_SETTINGS,
                     },
                 ],
             },
@@ -60,7 +57,6 @@ test("describeTarget names a file, or a folder with its subfolder choice", () =>
         describeTarget({
             kind: "file",
             path: "/a.mp3",
-            settings: DEFAULT_JOB_SETTINGS,
         }),
         "a.mp3"
     );
@@ -69,7 +65,6 @@ test("describeTarget names a file, or a folder with its subfolder choice", () =>
             kind: "folder",
             path: "/Rock",
             recursive: true,
-            settings: DEFAULT_JOB_SETTINGS,
         }),
         "Rock (subfolders on)"
     );
@@ -78,69 +73,7 @@ test("describeTarget names a file, or a folder with its subfolder choice", () =>
             kind: "folder",
             path: "/Rock",
             recursive: false,
-            settings: DEFAULT_JOB_SETTINGS,
         }),
         "Rock (subfolders off)"
-    );
-});
-
-test("describeTarget tells when a target renames files and folders", () => {
-    const renameNames = {
-        renameFiles: true,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
-    };
-
-    assert.equal(
-        describeTarget({ kind: "file", path: "/a.mp3", settings: renameNames }),
-        "a.mp3 (renaming on)"
-    );
-    assert.equal(
-        describeTarget({
-            kind: "folder",
-            path: "/Rock",
-            recursive: true,
-            settings: renameNames,
-        }),
-        "Rock (subfolders on, renaming on)"
-    );
-});
-
-test("describeTarget tells when a target fixes existing tags", () => {
-    assert.equal(
-        describeTarget({
-            kind: "file",
-            path: "/a.mp3",
-            settings: {
-                renameFiles: false,
-                fixTags: true,
-                replaceCovers: false,
-                coversOnly: false,
-            },
-        }),
-        "a.mp3 (fixing on)"
-    );
-});
-
-test("describeTarget tells when a target only tags covers", () => {
-    assert.equal(
-        describeTarget({
-            kind: "file",
-            path: "/a.mp3",
-            settings: { ...DEFAULT_JOB_SETTINGS, coversOnly: true },
-        }),
-        "a.mp3 (covers only on)"
-    );
-});
-
-test("describeTarget tells when a target replaces existing covers", () => {
-    assert.equal(
-        describeTarget({
-            kind: "file",
-            path: "/a.mp3",
-            settings: { ...DEFAULT_JOB_SETTINGS, replaceCovers: true },
-        }),
-        "a.mp3 (replacing covers on)"
     );
 });

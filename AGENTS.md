@@ -25,17 +25,17 @@ npm run build      # compile to dist/
 `tests/tags/audio-tags.test.ts`); the tag stores are tested through
 `tests/tags/audio-tags.test.ts`.
 
-| Folder                    | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/index.ts`            | Entry point and `soundtag` bin: loads `.env` and wires the stop session and browser launcher to `runApp`.                                                                                                                                                                                                                                                                                                                                                                         |
-| `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, Ctrl+C handling, banner, summary, exit codes, and the lazy launch of the TUI.                                                                                                                                                                                                                                                                                                                                     |
-| `src/tui/`                | Ink terminal UI: folder browser reducer, metadata panel, log pane, background `TaggingQueue`, session status dots. React components live in `components/` and hooks in `hooks/`.                                                                                                                                                                                                                                                                                                  |
-| `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file (taking its confirmed folder album and, in fix mode, correcting its tags first, or only its cover in covers-only mode, `cover-only.ts`) and returns its status, tags, corrections and whether a service found the song; `renameTrack` then renames it from those tags; `renameAlbumFolder` renames single-album folders at the end; `track-log` formats each file's log lines. |
-| `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, renames with a per-batch folder name cache, track filenames, search terms derived from filenames and folders, and the `<Artist> - <Album>/<Artist> - <Title>` layout (`parseLibraryPath`).                                                                                                                                                                                                                               |
-| `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                                                                                                                                                                                                                                                                                                                                        |
-| `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `TrackCorrector` finds fix-mode corrections from `CanonicalSource`s; `AlbumFinder` confirms folder albums from `AlbumSource`s; `create-metadata-chain.ts` is the composition root (`createMetadataLookups`); pure merge and correction helpers.                                                                                                                                                            |
-| `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                                                                                                                                                                                                                                                                                                                                               |
-| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, per-batch `ImageCache` and `BatchCache`, rate limiter with an injectable `Clock`, errors, `Logger`, and `LookupLog` (one timed line per lookup step).                                                                                                                                                                                                                                                                 |
+| Folder                    | Responsibility                                                                                                                                                                                                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/index.ts`            | Entry point and `soundtag` bin: loads `.env` and wires the stop session and browser launcher to `runApp`.                                                                                                                                                               |
+| `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, Ctrl+C handling, banner, summary, exit codes, and the lazy launch of the TUI.                                                                                                                           |
+| `src/tui/`                | Ink terminal UI: folder browser reducer, metadata panel, log pane, background `TaggingQueue`, session status dots. React components live in `components/` and hooks in `hooks/`.                                                                                        |
+| `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file (search by library path, then tags, filling only missing fields) and returns its status; `track-log` formats each file's log lines.                                  |
+| `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, case-insensitive name checks for renames, search terms derived from filenames and folders, and the `<Artist> - <Album>/<Artist> - <Title>` layout (`parseLibraryPath`).                                        |
+| `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                                                                                                                              |
+| `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `AlbumSource`s search albums by artist and name (not wired until the album lookup is rebuilt); `create-metadata-chain.ts` is the composition root (`createMetadataLookups`); pure merge helpers. |
+| `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                                                                                                                                     |
+| `src/shared/`             | Domain-free helpers: HTTP with timeouts and image download, per-batch `ImageCache` and `BatchCache`, rate limiter with an injectable `Clock`, errors, `Logger`, and `LookupLog` (one timed line per lookup step).                                                       |
 
 Each domain owns its contracts in its own `types.ts`. Imports only point toward
 lower layers, and a layer may skip levels: `cli` → `tui` → `processing` → `tags` /
@@ -58,8 +58,7 @@ graph free of cycles.
     (consumer key authentication, no user OAuth).
   - `SOUNDTAG_COVER` (`kitty`, `blocks` or `none`) overrides how the TUI draws
     covers; otherwise `src/tui/cover-mode.ts` detects it from the terminal.
-- Runs write no report file: headless runs print failed files and renames in
-  the summary, and the TUI keeps statuses for the session only.
+- Runs write no report file: headless runs print failed files in the summary, and the TUI keeps statuses for the session only.
 
 ## Extending
 
@@ -75,23 +74,12 @@ graph free of cycles.
   `track-matching.ts`), and take track and disc numbers, album artist and
   cover only when `isSameRelease` holds. Providers that share a service share its client, and so its rate
   limit (`MusicBrainzClient` serves MusicBrainz search and the ListenBrainz
-  release lookups). A service trusted for fix mode also implements
-  `CanonicalSource`, and is passed to the `TrackCorrector` in
-  `createMetadataLookups`. Deezer is the corrector's witness: an independent
-  catalogue that must also find the song before an alternative search
-  replaces a title or artist (ListenBrainz matches are MusicBrainz data, so
-  they cannot confirm each other). It only proves the song exists; each
-  alternative replaces only the fields it was built for (`replaces`). Fix mode
-  never corrects albums.
+  release lookups).
 - **New album source:** ListenBrainz's album search is MusicBrainz's
   release-group search, so it is no source of its own.
   Otherwise, a service that can search an album by artist and name
-  implements `AlbumSource` (match with `isSearchedAlbum`) and is added, in
-  order, to `createAlbumSources` in `create-metadata-chain.ts`. The
-  `AlbumFinder` confirms `<Artist> - <Album>` folders with them once per batch;
-  a confirmed album replaces the album tag of every file in the folder. Deezer
-  falls back to the artist's album list (artist searches and lists are cached
-  per batch).
+  implements `AlbumSource` (match with `isSearchedAlbum`). Deezer falls back
+  to the artist's album list (artist searches and lists are cached per batch).
 - **New audio format:** add it to `AUDIO_FORMATS` in `src/library/file.ts`, then
   map it to a `TagStore` in `src/tags/audio-tags.ts`. The compiler enforces that
   every format has a store.
@@ -100,7 +88,7 @@ graph free of cycles.
 - **Output from processing or metadata code:** log through an injected
   `Logger` (`src/shared/logger.ts`), never `console`, so the TUI can route it to
   its log pane. Headless runs pass `consoleLogger`.
-- **Service calls:** the chain and the corrector run each provider call
+- **Service calls:** the chain runs each provider call
   through `services.lookups` (`LookupLog`), which times it and writes one line
   per step. Providers therefore throw search errors instead of logging them,
   report a failure that does not stop the match with

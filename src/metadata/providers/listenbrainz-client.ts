@@ -83,7 +83,6 @@ export class ListenBrainzClient {
         );
     }
 
-    // Fix mode looks up before the chain, with the same terms unless it corrects them.
     async lookUp(search: TrackSearch): Promise<ListenBrainzMatch | null> {
         const url = buildLookupUrl(search);
         const payload = await this.services.cache.getOrLoad(

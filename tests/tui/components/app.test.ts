@@ -32,10 +32,7 @@ import {
     waitForFrame,
     waitForInput,
 } from "../../helpers/ink.js";
-import {
-    createControlledServices,
-    DEFAULT_JOB_SETTINGS,
-} from "../../helpers/tui.js";
+import { createControlledServices } from "../../helpers/tui.js";
 import { useTemporaryDirectories } from "../../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories("soundtag-app-test-");
@@ -138,7 +135,6 @@ test("App queues the hovered file or folder for tagging", async () => {
         kind: "folder",
         path: path.join(directory, "Album"),
         recursive: true,
-        settings: DEFAULT_JOB_SETTINGS,
     });
 });
 
@@ -173,12 +169,10 @@ test("App marks processed files and their folders with a dot", async () => {
     services.statusStore.record({
         source: path.join(directory, "Album", "inside.mp3"),
         status: "FAILED",
-        destination: null,
     });
     services.statusStore.record({
         source: path.join(directory, "song.mp3"),
         status: "TAGGED",
-        destination: null,
     });
 
     await waitFor(() => findFrameLine(lastFrame, "song.mp3").includes("●"));
@@ -195,7 +189,6 @@ test("App marks queued entries and their folders with a dot", async () => {
         kind: "folder",
         path: album,
         recursive: true,
-        settings: DEFAULT_JOB_SETTINGS,
     });
 
     await waitFor(() => findFrameLine(lastFrame, "Album/").includes("●"));
@@ -205,22 +198,17 @@ test("App marks queued entries and their folders with a dot", async () => {
     services.queue.enqueue({
         kind: "file",
         path: path.join(directory, "song.mp3"),
-        settings: DEFAULT_JOB_SETTINGS,
     });
     await waitFor(() => findFrameLine(lastFrame, "song.mp3").includes("●"));
 });
 
-test("App refreshes the listing after a file is renamed", async () => {
+test("App refreshes the listing after a track is processed", async () => {
     const directory = await createLibrary();
     const { lastFrame, services } = await renderApp(directory);
     const renamed = path.join(directory, "Black Sabbath - Paranoid.mp3");
     await fs.rename(path.join(directory, "song.mp3"), renamed);
 
-    services.statusStore.record({
-        source: path.join(directory, "song.mp3"),
-        status: "TAGGED",
-        destination: renamed,
-    });
+    services.statusStore.record({ source: renamed, status: "TAGGED" });
 
     await waitForFrame(lastFrame, "Black Sabbath - Paranoid.mp3");
     assert.equal(findFrameLine(lastFrame, "song.mp3"), "");
@@ -426,9 +414,9 @@ test("App cancels a tag clear on any other key", async () => {
     assert.equal(countLines(services, "Cleared"), 0);
 });
 
-test("App takes n as a no to a pending clear, not a renaming switch", async () => {
+test("App takes n as a no to a pending clear", async () => {
     const directory = await createLibrary();
-    const { lastFrame, stdin, services } = await hoverSong(directory);
+    const { lastFrame, stdin } = await hoverSong(directory);
     const song = path.join(directory, "song.mp3");
 
     stdin.write("D");
@@ -437,7 +425,6 @@ test("App takes n as a no to a pending clear, not a renaming switch", async () =
     stdin.write("y");
     await delay(50);
 
-    assert.equal(services.renaming.getSnapshot(), false);
     const tags = await getTagStore(song).read(song);
     assert.equal(tags.info.artist, "Black Sabbath");
 });
@@ -545,7 +532,6 @@ test("App tags the folder being browsed with a", async () => {
         kind: "folder",
         path: directory,
         recursive: true,
-        settings: DEFAULT_JOB_SETTINGS,
     });
 });
 
@@ -577,109 +563,18 @@ test("App keeps the subfolder choice of each queued folder", async () => {
                 kind: "folder",
                 path: directory,
                 recursive: true,
-                settings: DEFAULT_JOB_SETTINGS,
             },
             {
                 kind: "folder",
                 path: path.join(directory, "Album"),
                 recursive: true,
-                settings: DEFAULT_JOB_SETTINGS,
             },
             {
                 kind: "folder",
                 path: path.join(directory, "Live"),
                 recursive: false,
-                settings: DEFAULT_JOB_SETTINGS,
             },
         ]
-    );
-});
-
-test("App keeps the renaming choice of each queued target", async () => {
-    const directory = await createLibrary();
-    const { lastFrame, stdin, jobs } = await renderApp(directory);
-    stdin.write("a");
-    await waitFor(() => jobs.length === 1);
-
-    stdin.write("n");
-    await waitForFrame(lastFrame, "renaming on");
-    stdin.write(KEYS.down);
-    stdin.write(KEYS.down);
-    await waitForFrame(lastFrame, "Black Sabbath");
-    stdin.write("t");
-    await waitForFrame(lastFrame, "1 queued");
-    jobs[0].finish(true);
-    await waitFor(() => jobs.length === 2);
-
-    assert.deepEqual(
-        jobs.map(({ target }) => target.settings.renameFiles),
-        [false, true]
-    );
-});
-
-test("App keeps the fixing choice of each queued target", async () => {
-    const directory = await createLibrary();
-    const { lastFrame, stdin, jobs } = await renderApp(directory);
-    stdin.write("a");
-    await waitFor(() => jobs.length === 1);
-
-    stdin.write("f");
-    await waitForFrame(lastFrame, "fixing on");
-    stdin.write(KEYS.down);
-    stdin.write(KEYS.down);
-    await waitForFrame(lastFrame, "Black Sabbath");
-    stdin.write("t");
-    await waitForFrame(lastFrame, "1 queued");
-    jobs[0].finish(true);
-    await waitFor(() => jobs.length === 2);
-
-    assert.deepEqual(
-        jobs.map(({ target }) => target.settings.fixTags),
-        [false, true]
-    );
-});
-
-test("App keeps the cover replacing choice of each queued target", async () => {
-    const directory = await createLibrary();
-    const { lastFrame, stdin, jobs } = await renderApp(directory);
-    stdin.write("a");
-    await waitFor(() => jobs.length === 1);
-
-    stdin.write("o");
-    await waitForFrame(lastFrame, "replacing covers on");
-    stdin.write(KEYS.down);
-    stdin.write(KEYS.down);
-    await waitForFrame(lastFrame, "Black Sabbath");
-    stdin.write("t");
-    await waitForFrame(lastFrame, "1 queued");
-    jobs[0].finish(true);
-    await waitFor(() => jobs.length === 2);
-
-    assert.deepEqual(
-        jobs.map(({ target }) => target.settings.replaceCovers),
-        [false, true]
-    );
-});
-
-test("App keeps the covers-only choice of each queued target", async () => {
-    const directory = await createLibrary();
-    const { lastFrame, stdin, jobs } = await renderApp(directory);
-    stdin.write("a");
-    await waitFor(() => jobs.length === 1);
-
-    stdin.write("c");
-    await waitForFrame(lastFrame, "covers only on");
-    stdin.write(KEYS.down);
-    stdin.write(KEYS.down);
-    await waitForFrame(lastFrame, "Black Sabbath");
-    stdin.write("t");
-    await waitForFrame(lastFrame, "1 queued");
-    jobs[0].finish(true);
-    await waitFor(() => jobs.length === 2);
-
-    assert.deepEqual(
-        jobs.map(({ target }) => target.settings.coversOnly),
-        [false, true]
     );
 });
 
@@ -690,7 +585,6 @@ test("App ignores tag keys while quitting", async () => {
         kind: "folder",
         path: path.join(directory, "Album"),
         recursive: true,
-        settings: DEFAULT_JOB_SETTINGS,
     });
     stdin.write("q");
     await waitForFrame(lastFrame, "quitting after the current file");
@@ -725,7 +619,6 @@ test("App re-reads the hovered file once it is processed", async () => {
     services.statusStore.record({
         source: song,
         status: "TAGGED",
-        destination: null,
     });
 
     await waitForFrame(lastFrame, "Iron Man");
@@ -857,7 +750,6 @@ test("App reads the cover of the hovered file again once it is processed", async
     services.statusStore.record({
         source: song,
         status: "TAGGED",
-        destination: null,
     });
 
     await waitFor(

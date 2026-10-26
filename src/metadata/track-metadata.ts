@@ -7,13 +7,6 @@ import type {
 
 const YEAR_PATTERN = /\b\d{4}\b/;
 
-export const EMPTY_TRACK_INFO: TrackInfo = {
-    title: "",
-    artist: "",
-    album: "",
-    year: "",
-};
-
 function pickFilled(value: string, fallback: string): string {
     return value.trim() ? value : fallback;
 }
@@ -216,8 +209,4 @@ export function getAddedFieldNames(
     return NAMED_FIELDS.filter(
         ([, read]) => !read(current) && read(merged)
     ).map(([name]) => name);
-}
-
-export function getEarliestYear(years: string[]): string {
-    return years.filter(Boolean).toSorted()[0] ?? "";
 }

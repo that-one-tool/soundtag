@@ -227,24 +227,6 @@ test("MusicBrainzClient notes a retry and shows its requests when verbose", asyn
     );
 });
 
-test("MusicBrainzClient searches many recordings without keeping them for the batch", async () => {
-    const urls: URL[] = [];
-    globalThis.fetch = async (input) => {
-        urls.push(new URL(input.toString()));
-        return Response.json({ recordings: [{ title: "Title" }] });
-    };
-    const client = createClient();
-
-    await client.searchAllRecordings(search);
-    const found = await client.searchAllRecordings(search);
-
-    assert.equal(found[0].title, "Title");
-    assert.deepEqual(
-        urls.map((url) => url.searchParams.get("limit")),
-        ["100", "100"]
-    );
-});
-
 test("MusicBrainzClient searches release groups by album and artist", async () => {
     const { urls } = mockMusicBrainzResponses([
         () => Response.json({ "release-groups": [{ title: "Discovery" }] }),

@@ -1,12 +1,5 @@
 import { Box, Text } from "ink";
-import {
-    describeFixingChoice,
-    describeCoverReplacingChoice,
-    describeCoversOnlyChoice,
-    describeQueue,
-    describeRenamingChoice,
-    describeSubfolderChoice,
-} from "../queue-summary.js";
+import { describeQueue, describeSubfolderChoice } from "../queue-summary.js";
 import { ACCENT } from "../theme.js";
 import type { QueueState } from "../types.js";
 
@@ -21,10 +14,6 @@ const KEY_HINTS: Hint[] = [
     ["e", "name"],
     ["D", "clear"],
     ["r", "subs"],
-    ["n", "names"],
-    ["f", "fix"],
-    ["o", "covers"],
-    ["c", "only"],
     ["s", "stop"],
     ["q", "quit"],
     ["⇥", "log"],
@@ -50,20 +39,12 @@ export interface StatusBarProps {
     queueState: QueueState;
     quitting: boolean;
     subfoldersIncluded: boolean;
-    renamingEnabled: boolean;
-    fixingEnabled: boolean;
-    coverReplacingEnabled: boolean;
-    coversOnlyEnabled: boolean;
 }
 
 function describeStatus(props: StatusBarProps): string {
     return [
         describeQueue(props.queueState, props.quitting),
         describeSubfolderChoice(props.subfoldersIncluded),
-        describeRenamingChoice(props.renamingEnabled),
-        describeFixingChoice(props.fixingEnabled),
-        describeCoverReplacingChoice(props.coverReplacingEnabled),
-        describeCoversOnlyChoice(props.coversOnlyEnabled),
     ].join(" · ");
 }
 

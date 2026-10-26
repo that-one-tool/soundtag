@@ -8,7 +8,6 @@ import type {
     QueueState,
     TagTarget,
 } from "../../src/tui/types.js";
-import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const root = path.resolve("music");
 const rock = path.join(root, "Rock");
@@ -19,7 +18,6 @@ const rockTarget: TagTarget = {
     kind: "folder",
     path: rock,
     recursive: true,
-    settings: DEFAULT_JOB_SETTINGS,
 };
 
 function file(filePath: string): BrowserEntry {
@@ -85,7 +83,6 @@ test("getEntryDot lets a pending target win over a redone status", () => {
     const pendingSong: TagTarget = {
         kind: "file",
         path: song,
-        settings: DEFAULT_JOB_SETTINGS,
     };
     const sources = makeSources(
         { running: rockTarget, pending: [pendingSong] },
@@ -100,7 +97,6 @@ test("getEntryDot leaves subfolders of a flat running folder alone", () => {
         kind: "folder",
         path: rock,
         recursive: false,
-        settings: DEFAULT_JOB_SETTINGS,
     };
     const sources = makeSources({ running: flat });
 
@@ -114,9 +110,7 @@ test("getEntryDot leaves subfolders of a flat running folder alone", () => {
 test("getEntryDot keeps the status of entries outside the queue", () => {
     const elsewhere = path.join(root, "Jazz", "a.mp3");
     const sources = makeSources({
-        pending: [
-            { kind: "file", path: elsewhere, settings: DEFAULT_JOB_SETTINGS },
-        ],
+        pending: [{ kind: "file", path: elsewhere }],
     });
 
     assert.equal(getEntryDot(sources, file(song)), "TAGGED");

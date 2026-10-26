@@ -5,7 +5,6 @@ import {
     extractYear,
     fillMissingExtras,
     getAddedFieldNames,
-    getEarliestYear,
     getNewExtras,
     hasNewFields,
     fillMissingFields,
@@ -271,9 +270,4 @@ test("getAddedFieldNames names the fields a candidate fills", () => {
         "cover",
     ]);
     assert.deepEqual(getAddedFieldNames(candidate, current), []);
-});
-
-test("getEarliestYear skips unknown years", () => {
-    assert.equal(getEarliestYear(["1996", "", "1978"]), "1978");
-    assert.equal(getEarliestYear([""]), "");
 });

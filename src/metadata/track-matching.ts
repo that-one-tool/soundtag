@@ -164,14 +164,6 @@ export function hasNoteAfterName(name: string, start: string): boolean {
     return Boolean(foldWords(head)) && foldWords(head) === foldWords(start);
 }
 
-// Unlike isSameName, notes such as "(feat. X)" count, so a correction keeps them.
-export function isSameWording(found: string | undefined, searched: string) {
-    const foundWords = splitWords(foldText(found));
-    const searchedWords = splitWords(foldText(searched));
-    const isEqual = foundWords.join("") === searchedWords.join("");
-    return isEqual || isTypo(foundWords, searchedWords);
-}
-
 function splitArtists(credit: string | undefined): string[] {
     return valueOrEmpty(credit)
         .split(ARTIST_SEPARATOR)
@@ -200,23 +192,6 @@ function hasSharedArtist(found: string | undefined, searched: string) {
         foundArtists.some((foundArtist) =>
             isSameArtistName(foundArtist, searchedArtist)
         )
-    );
-}
-
-function hasEveryArtist(artists: string[], others: string[]): boolean {
-    return artists.every((artist) =>
-        others.some((other) => isSameArtistName(other, artist))
-    );
-}
-
-// Unlike isSameTrack, every artist must be on both sides, so a correction keeps them all.
-export function isSameCredit(found: string | undefined, searched: string) {
-    const foundArtists = splitArtists(found);
-    const searchedArtists = splitArtists(searched);
-    return (
-        foundArtists.length === searchedArtists.length &&
-        hasEveryArtist(foundArtists, searchedArtists) &&
-        hasEveryArtist(searchedArtists, foundArtists)
     );
 }
 

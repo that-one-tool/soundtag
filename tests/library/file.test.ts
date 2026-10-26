@@ -8,11 +8,9 @@ import {
     getAudioFormat,
     isDirectory,
     listSubfolders,
-    renameIfFree,
     renameIfNameFree,
     writeTemporaryCopy,
 } from "../../src/library/file.js";
-import { FolderNameCache } from "../../src/library/folder-names.js";
 
 let temporaryDirectory: string;
 
@@ -67,34 +65,6 @@ test("listSubfolders includes symlinks to folders but not to files", async () =>
         "Linked",
         "Target",
     ]);
-});
-
-test("renameIfFree renames into a free name and never overwrites", async () => {
-    const source = path.join(temporaryDirectory, "old.mp3");
-    const taken = path.join(temporaryDirectory, "taken.mp3");
-    const free = path.join(temporaryDirectory, "new.mp3");
-    await fs.writeFile(source, "source");
-    await fs.writeFile(taken, "taken");
-    const folderNames = new FolderNameCache([source]);
-
-    assert.equal(await renameIfFree(source, taken, folderNames), false);
-    assert.equal(await fs.readFile(taken, "utf8"), "taken");
-    assert.equal(await renameIfFree(source, free, folderNames), true);
-    assert.equal(await fs.readFile(free, "utf8"), "source");
-    await assert.rejects(fs.access(source));
-});
-
-test("renameIfFree records the rename so the new name stays taken", async () => {
-    const first = path.join(temporaryDirectory, "first.mp3");
-    const second = path.join(temporaryDirectory, "second.mp3");
-    const target = path.join(temporaryDirectory, "Artist - Title.mp3");
-    await fs.writeFile(first, "first");
-    await fs.writeFile(second, "second");
-    const folderNames = new FolderNameCache([first, second]);
-
-    assert.equal(await renameIfFree(first, target, folderNames), true);
-    assert.equal(await renameIfFree(second, target, folderNames), false);
-    assert.equal(await fs.readFile(target, "utf8"), "first");
 });
 
 test("renameIfNameFree refuses a name twin and never overwrites", async () => {

@@ -85,7 +85,7 @@ test("CLI --no-recursive excludes nested audio files", async () => {
     assert.match(stdout, /No supported audio files found/);
 });
 
-test("CLI skips and renames a properly tagged file", async () => {
+test("CLI skips a properly tagged file and keeps its name", async () => {
     const workingDirectory = await createTemporaryDirectory();
     const sourceDirectory = path.join(workingDirectory, "source");
     const source = path.join(sourceDirectory, "already-tagged.mp3");
@@ -114,14 +114,12 @@ test("CLI skips and renames a properly tagged file", async () => {
     const { exitCode, stdout, stderr } = await runCli(workingDirectory, [
         sourceDirectory,
         "--no-recursive",
-        "--rename",
     ]);
 
     assert.equal(exitCode, 0);
     assert.equal(stderr, "");
     assert.match(stdout, /Skipped: {4}1/);
-    assert.match(stdout, /already-tagged\.mp3 → Artist - Title\.mp3/);
-    await fs.access(path.join(sourceDirectory, "Artist - Title.mp3"));
+    await fs.access(source);
 });
 
 test("CLI reports invalid options", async () => {

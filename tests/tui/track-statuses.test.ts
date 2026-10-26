@@ -31,21 +31,9 @@ test("recordProcessedTrack stores the status under the file path", () => {
     const statuses = recordProcessedTrack(new Map(), {
         source: song,
         status: "TAGGED",
-        destination: null,
     });
 
     assert.equal(getEntryStatus(statuses, file(song)), "TAGGED");
-});
-
-test("recordProcessedTrack moves the status to the renamed path", () => {
-    const renamed = path.join(rock, "Artist - Title.mp3");
-    const statuses = recordProcessedTrack(new Map(), {
-        source: song,
-        status: "SKIPPED",
-        destination: renamed,
-    });
-
-    assert.deepEqual([...statuses], [[renamed, "SKIPPED"]]);
 });
 
 test("recordProcessedTrack leaves the previous map untouched", () => {
@@ -54,7 +42,6 @@ test("recordProcessedTrack leaves the previous map untouched", () => {
     recordProcessedTrack(previous, {
         source: song,
         status: "TAGGED",
-        destination: null,
     });
 
     assert.equal(previous.size, 0);
@@ -138,9 +125,9 @@ test("TrackStatusStore notifies subscribers with a new snapshot", () => {
     let notifications = 0;
     const unsubscribe = store.subscribe(() => notifications++);
 
-    store.record({ source: song, status: "FAILED", destination: null });
+    store.record({ source: song, status: "FAILED" });
     unsubscribe();
-    store.record({ source: song, status: "TAGGED", destination: null });
+    store.record({ source: song, status: "TAGGED" });
 
     assert.equal(notifications, 1);
     assert.notEqual(store.getSnapshot(), before);
@@ -171,7 +158,7 @@ test("moveStatuses moves the statuses of a renamed folder", () => {
 
 test("TrackStatusStore notifies subscribers of a moved folder", () => {
     const store = new TrackStatusStore();
-    store.record({ source: song, status: "TAGGED", destination: null });
+    store.record({ source: song, status: "TAGGED" });
     let notifications = 0;
     store.subscribe(() => notifications++);
     const renamed = path.join(root, "Artist - Album");

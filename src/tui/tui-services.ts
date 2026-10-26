@@ -23,10 +23,6 @@ import type { VersionedCache } from "./versioned-cache.js";
 export interface TaggingOptions extends MetadataChainConfig {
     coverMode?: CoverMode;
     recursive: boolean;
-    renameFiles: boolean;
-    fixTags: boolean;
-    replaceCovers: boolean;
-    coversOnly: boolean;
     startDirectory: string;
 }
 
@@ -37,10 +33,6 @@ export interface TuiServices {
     redoneFiles: RedoneFiles;
     pathMoves: PathMoves;
     subfolders: ToggleSetting;
-    renaming: ToggleSetting;
-    fixing: ToggleSetting;
-    coverReplacing: ToggleSetting;
-    coversOnly: ToggleSetting;
     detailsCache: VersionedCache<EntryDetails>;
     coverCache: VersionedCache<CoverLookup>;
     renamer: EntryRenamer;
@@ -77,27 +69,24 @@ function clearRedoneFilesAfterJob(
 function createLookupDependencies(
     options: TaggingOptions,
     logBuffer: LogBuffer
-): Pick<TagJobDependencies, "metadataChain" | "corrector" | "albums"> {
+): Pick<TagJobDependencies, "metadataChain"> {
     const lookups = createMetadataLookups(options, systemClock, logBuffer);
-    const { chain, corrector, albums } = lookups;
-    return { metadataChain: chain, corrector, albums };
+    return { metadataChain: lookups.chain };
 }
 
 function createJobRunner(
     options: TaggingOptions,
     logBuffer: LogBuffer,
-    services: Pick<TuiServices, "statusStore" | "redoneFiles" | "pathMoves">
+    services: Pick<TuiServices, "statusStore" | "redoneFiles">
 ) {
-    const { statusStore, redoneFiles, pathMoves } = services;
+    const { statusStore, redoneFiles } = services;
     const runJob = createTagJobRunner({
         ...createLookupDependencies(options, logBuffer),
         logger: logBuffer,
-        libraryRoot: options.startDirectory,
         onTrackProcessed: (result) => {
             statusStore.record(result);
-            redoneFiles.add(result.destination ?? result.source);
+            redoneFiles.add(result.source);
         },
-        onFolderRenamed: (move) => pathMoves.record(move),
     });
     return clearRedoneFilesAfterJob(runJob, redoneFiles);
 }
@@ -141,10 +130,6 @@ export function createTuiServices(
         renamer: createRenamer(jobServices),
         tagClearer: createTagClearer(jobServices),
         subfolders: new ToggleSetting(options.recursive),
-        renaming: new ToggleSetting(options.renameFiles),
-        fixing: new ToggleSetting(options.fixTags),
-        coverReplacing: new ToggleSetting(options.replaceCovers),
-        coversOnly: new ToggleSetting(options.coversOnly),
         detailsCache: createDetailsCache(),
         coverCache: createCoverCache(display.mode),
         coverOverlay: new CoverOverlay(display.writeToTerminal),

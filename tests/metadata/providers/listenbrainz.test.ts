@@ -292,28 +292,3 @@ test("ListenBrainzProvider keeps the match when the release lookup fails", async
         "         ListenBrainz ✓ (release lookup failed: HTTP 500) 0.0s",
     ]);
 });
-
-test("ListenBrainzProvider gives the canonical spelling without a release lookup", async () => {
-    const requested = mockServices();
-
-    const canonical = await createListenBrainz().findCanonical({
-        title: "comfortably numb",
-        artist: "pink floyd",
-        album: "",
-    });
-
-    assert.deepEqual(canonical, {
-        title: "Comfortably Numb",
-        artist: "Pink Floyd",
-        firstReleaseYear: "",
-    });
-    assert.deepEqual(requested, ["api.listenbrainz.org/1/metadata/lookup/"]);
-});
-
-test("ListenBrainzProvider gives no canonical track for another song", async () => {
-    mockServices({
-        match: { ...lookupMatch, recording_name: "Crazy Love" },
-    });
-
-    assert.equal(await createListenBrainz().findCanonical(search), null);
-});

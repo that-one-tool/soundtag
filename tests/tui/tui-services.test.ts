@@ -2,13 +2,10 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { test } from "node:test";
-import { getTagStore } from "../../src/tags/audio-tags.js";
 import { createTuiServices } from "../../src/tui/tui-services.js";
-import type { PathMove } from "../../src/shared/paths.js";
 import type { BrowserEntry } from "../../src/tui/types.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
-import { DEFAULT_JOB_SETTINGS, RENAMING_JOB_SETTINGS } from "../helpers/tui.js";
 
 restoreFetchAfterEach();
 const createTemporaryDirectory = useTemporaryDirectories(
@@ -24,10 +21,6 @@ test("createTuiServices routes job results to the status store and logs", async 
         lastFmApiKey: "key",
         verbose: false,
         recursive: true,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
         musicBrainzUserAgent: " ",
         startDirectory: directory,
     });
@@ -35,7 +28,6 @@ test("createTuiServices routes job results to the status store and logs", async 
     services.queue.enqueue({
         kind: "file",
         path: source,
-        settings: DEFAULT_JOB_SETTINGS,
     });
     await services.queue.whenIdle();
 
@@ -58,16 +50,11 @@ test("createTuiServices marks files as redone only once their new status is reco
         lastFmApiKey: "key",
         verbose: false,
         recursive: true,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
         startDirectory: directory,
     });
     services.statusStore.record({
         source,
         status: "FAILED",
-        destination: null,
     });
     const seen: string[] = [];
     const isRedone = () => services.redoneFiles.getSnapshot().has(source);
@@ -81,7 +68,6 @@ test("createTuiServices marks files as redone only once their new status is reco
     services.queue.enqueue({
         kind: "file",
         path: source,
-        settings: DEFAULT_JOB_SETTINGS,
     });
     await services.queue.whenIdle();
 
@@ -94,10 +80,6 @@ test("createTuiServices forgets redone files when a job fails", async () => {
         lastFmApiKey: "key",
         verbose: false,
         recursive: true,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
         startDirectory: directory,
     });
     services.redoneFiles.add(path.join(directory, "song.mp3"));
@@ -106,7 +88,6 @@ test("createTuiServices forgets redone files when a job fails", async () => {
         kind: "folder",
         path: path.join(directory, "missing"),
         recursive: true,
-        settings: DEFAULT_JOB_SETTINGS,
     });
     await services.queue.whenIdle();
 
@@ -118,10 +99,6 @@ test("createTuiServices starts the subfolder choice from the options", () => {
         lastFmApiKey: "key",
         verbose: false,
         recursive: false,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
         startDirectory: process.cwd(),
     });
 
@@ -133,10 +110,6 @@ test("createTuiServices logs tag clears and checks them against the queue", asyn
         lastFmApiKey: "key",
         verbose: false,
         recursive: false,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
         startDirectory: process.cwd(),
     });
     const folder = path.join(await createTemporaryDirectory(), "missing");
@@ -149,7 +122,6 @@ test("createTuiServices logs tag clears and checks them against the queue", asyn
         kind: "folder",
         path: folder,
         recursive: false,
-        settings: DEFAULT_JOB_SETTINGS,
     });
 
     await services.tagClearer.request(song);
@@ -159,62 +131,29 @@ test("createTuiServices logs tag clears and checks them against the queue", asyn
     assert.ok(lines.includes("Not cleared: song.mp3 is queued for tagging."));
 });
 
-test("createTuiServices moves statuses and queued targets of a renamed album folder", async () => {
+test("createTuiServices moves the statuses of a renamed folder", async () => {
     const directory = await createTemporaryDirectory();
     const album = path.join(directory, "old");
-    const [source, other] = ["Title", "Other"].map((title) =>
-        path.join(album, `Artist - ${title}.mp3`)
-    );
+    const source = path.join(album, "Artist - Title.mp3");
     await fs.mkdir(album);
-    for (const [file, title] of [
-        [source, "Title"],
-        [other, "Other"],
-    ]) {
-        await fs.writeFile(file, "audio bytes");
-        await getTagStore(file).write(file, {
-            info: { title, artist: "Artist", album: "Album", year: "2024" },
-            extras: {},
-            coverData: Buffer.from("cover"),
-        });
-    }
+    await fs.writeFile(source, "audio bytes");
     globalThis.fetch = async () => new Response(null, { status: 500 });
     const services = createTuiServices({
         lastFmApiKey: "key",
         verbose: false,
         recursive: false,
-        renameFiles: true,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
         startDirectory: directory,
     });
-    const moves: PathMove[] = [];
-    services.pathMoves.subscribe((move) => moves.push(move));
-
-    services.queue.enqueue({
-        kind: "folder",
-        path: album,
-        recursive: false,
-        settings: RENAMING_JOB_SETTINGS,
-    });
-    services.queue.enqueue({
-        kind: "file",
-        path: source,
-        settings: RENAMING_JOB_SETTINGS,
-    });
+    services.queue.enqueue({ kind: "folder", path: album, recursive: false });
     await services.queue.whenIdle();
-
     const renamed = path.join(directory, "Artist - Album");
-    assert.deepEqual(moves, [{ source: album, destination: renamed }]);
+
+    services.pathMoves.record({ source: album, destination: renamed });
+
     assert.deepEqual(
-        [...services.statusStore.getSnapshot().keys()].toSorted(),
-        [
-            path.join(renamed, "Artist - Other.mp3"),
-            path.join(renamed, "Artist - Title.mp3"),
-        ]
+        [...services.statusStore.getSnapshot().keys()],
+        [path.join(renamed, "Artist - Title.mp3")]
     );
-    const logText = services.logBuffer.getSnapshot().map((line) => line.text);
-    assert.ok(!logText.some((text) => text.includes("no longer exists")));
 });
 
 test("createTuiServices draws no covers by default", async () => {
@@ -222,10 +161,6 @@ test("createTuiServices draws no covers by default", async () => {
         lastFmApiKey: "key",
         verbose: false,
         recursive: false,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
         startDirectory: process.cwd(),
     });
     const entry = {
@@ -254,10 +189,6 @@ test("createTuiServices takes the cell shape from the cover display", () => {
         lastFmApiKey: "key",
         verbose: false,
         recursive: false,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
         startDirectory: process.cwd(),
     };
     const display = {
@@ -268,50 +199,4 @@ test("createTuiServices takes the cell shape from the cover display", () => {
 
     assert.equal(createTuiServices(options).cellRatio, 2);
     assert.equal(createTuiServices(options, display).cellRatio, 2.25);
-});
-
-test("createTuiServices starts the renaming choice from the options", () => {
-    const services = createTuiServices({
-        lastFmApiKey: "key",
-        verbose: false,
-        recursive: true,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
-        startDirectory: process.cwd(),
-    });
-
-    assert.equal(services.renaming.getSnapshot(), false);
-});
-
-test("createTuiServices starts the fixing choice from the options", () => {
-    const services = createTuiServices({
-        lastFmApiKey: "key",
-        verbose: false,
-        recursive: true,
-        renameFiles: true,
-        fixTags: true,
-        replaceCovers: false,
-        coversOnly: false,
-        startDirectory: process.cwd(),
-    });
-
-    assert.equal(services.fixing.getSnapshot(), true);
-});
-
-test("createTuiServices starts the cover choices from the options", () => {
-    const services = createTuiServices({
-        lastFmApiKey: "key",
-        verbose: false,
-        recursive: true,
-        renameFiles: true,
-        fixTags: true,
-        replaceCovers: true,
-        coversOnly: false,
-        startDirectory: process.cwd(),
-    });
-
-    assert.equal(services.coverReplacing.getSnapshot(), true);
-    assert.equal(services.coversOnly.getSnapshot(), false);
 });

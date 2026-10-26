@@ -9,7 +9,6 @@ function moveTarget(target: TagTarget, move: PathMove): TagTarget {
     return { ...target, path: movePath(target.path, move) };
 }
 
-// A file job may also rename its folder once done, which moves its siblings.
 const OCCUPIED_PATHS: Record<TagTarget["kind"], (target: string) => string> = {
     file: (target) => dirname(target),
     folder: (target) => target,

@@ -1,9 +1,6 @@
-import { AlbumFinder } from "./album-finder.js";
-import { DeezerAlbumSource } from "./providers/deezer-album.js";
 import { DeezerClient } from "./providers/deezer-client.js";
 import { DeezerCoverProvider } from "./providers/deezer-cover.js";
 import { DeezerProvider } from "./providers/deezer.js";
-import { DiscogsAlbumSource } from "./providers/discogs-album.js";
 import { DiscogsClient } from "./providers/discogs-client.js";
 import {
     DiscogsAlbumProvider,
@@ -16,8 +13,6 @@ import { ListenBrainzClient } from "./providers/listenbrainz-client.js";
 import { ListenBrainzProvider } from "./providers/listenbrainz.js";
 import { trimOrEmpty } from "./track-metadata.js";
 import { MetadataChain } from "./metadata-chain.js";
-import { TrackCorrector } from "./track-corrector.js";
-import { MusicBrainzAlbumSource } from "./providers/musicbrainz-album.js";
 import { MusicBrainzClient } from "./providers/musicbrainz-client.js";
 import { MusicBrainzProvider } from "./providers/musicbrainz.js";
 import { BatchCache } from "../shared/batch-cache.js";
@@ -26,8 +21,6 @@ import type { Logger } from "../shared/logger.js";
 import { LookupLog } from "../shared/lookup-log.js";
 import type { Clock } from "../shared/rate-limiter.js";
 import type {
-    AlbumSource,
-    CanonicalSource,
     CoverProvider,
     MetadataProvider,
     ProviderServices,
@@ -46,11 +39,7 @@ export interface MetadataChainConfig {
 
 export interface MetadataLookups {
     chain: MetadataChain;
-    corrector: TrackCorrector;
-    albums: AlbumFinder;
 }
-
-type BrainzProvider = MetadataProvider & CanonicalSource;
 
 interface ProviderKeys {
     lastFmApiKey: string;
@@ -126,7 +115,7 @@ function createListenBrainzProviders(
     keys: ProviderKeys,
     musicBrainz: MusicBrainzClient,
     services: ProviderServices
-): BrainzProvider[] {
+): MetadataProvider[] {
     const { listenBrainzToken: token, musicBrainzUserAgent: userAgent } = keys;
 
     if (!token || !userAgent) {
@@ -141,7 +130,7 @@ function createMusicBrainzProviders(
     keys: ProviderKeys,
     musicBrainz: MusicBrainzClient,
     services: ProviderServices
-): BrainzProvider[] {
+): MetadataProvider[] {
     return keys.musicBrainzUserAgent
         ? [new MusicBrainzProvider(musicBrainz, services)]
         : [];
@@ -170,7 +159,7 @@ function createBrainzProviders(
     keys: ProviderKeys,
     musicBrainz: MusicBrainzClient,
     services: ProviderServices
-): BrainzProvider[] {
+): MetadataProvider[] {
     return [
         ...createListenBrainzProviders(keys, musicBrainz, services),
         ...createMusicBrainzProviders(keys, musicBrainz, services),
@@ -252,7 +241,7 @@ function createServices(
 }
 
 interface ChainProviders {
-    brainz: BrainzProvider[];
+    brainz: MetadataProvider[];
     deezer: DeezerProvider;
     discogs: DiscogsClient | null;
 }
@@ -269,7 +258,7 @@ function orderProviders(
 }
 
 interface ChainParts {
-    brainz: BrainzProvider[];
+    brainz: MetadataProvider[];
     clients: ServiceClients;
 }
 
@@ -277,33 +266,15 @@ function createChain(
     config: MetadataChainConfig,
     { brainz, clients }: ChainParts,
     services: ProviderServices
-): { chain: MetadataChain; deezer: DeezerProvider } {
+): MetadataChain {
     const deezer = new DeezerProvider(clients.deezer, services);
     const keys = getProviderKeys(config);
     const providers = { brainz, deezer, discogs: clients.discogs };
-    const chain = new MetadataChain(
+    return new MetadataChain(
         orderProviders(keys, providers, services),
         createCoverProviders(config, clients.deezer, services),
         services
     );
-    return { chain, deezer };
-}
-
-// ListenBrainz searches albums through MusicBrainz; Deezer's covers back up the others'.
-function createAlbumFinder(
-    keys: ProviderKeys,
-    { deezer, musicBrainz, discogs }: ServiceClients,
-    services: ProviderServices
-): AlbumFinder {
-    const deezerAlbums = new DeezerAlbumSource(deezer);
-    const sources: AlbumSource[] = [
-        ...(keys.musicBrainzUserAgent
-            ? [new MusicBrainzAlbumSource(musicBrainz)]
-            : []),
-        deezerAlbums,
-        ...(discogs ? [new DiscogsAlbumSource(discogs)] : []),
-    ];
-    return new AlbumFinder(sources, [deezerAlbums], services);
 }
 
 export function createMetadataLookups(
@@ -316,12 +287,6 @@ export function createMetadataLookups(
     warnAboutMissingKeys(keys, logger);
     const clients = createClients(keys, services);
     const brainz = createBrainzProviders(keys, clients.musicBrainz, services);
-    const { chain, deezer } = createChain(
-        config,
-        { brainz, clients },
-        services
-    );
-    const corrector = new TrackCorrector(brainz, deezer, services.lookups);
-    const albums = createAlbumFinder(keys, clients, services);
-    return { chain, corrector, albums };
+    const chain = createChain(config, { brainz, clients }, services);
+    return { chain };
 }

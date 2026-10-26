@@ -10,19 +10,7 @@ import { ToggleSetting } from "../../src/tui/toggle-setting.js";
 import { RedoneFiles } from "../../src/tui/redone-files.js";
 import { TrackStatusStore } from "../../src/tui/track-status-store.js";
 import type { TuiServices } from "../../src/tui/tui-services.js";
-import type { TagJobSettings, TagTarget } from "../../src/tui/types.js";
-
-export const DEFAULT_JOB_SETTINGS: TagJobSettings = {
-    renameFiles: false,
-    fixTags: false,
-    replaceCovers: false,
-    coversOnly: false,
-};
-
-export const RENAMING_JOB_SETTINGS: TagJobSettings = {
-    ...DEFAULT_JOB_SETTINGS,
-    renameFiles: true,
-};
+import type { TagTarget } from "../../src/tui/types.js";
 
 export interface ControlledJob {
     target: TagTarget;
@@ -53,10 +41,6 @@ export function createControlledServices(): {
             redoneFiles: new RedoneFiles(),
             pathMoves,
             subfolders: new ToggleSetting(true),
-            renaming: new ToggleSetting(false),
-            fixing: new ToggleSetting(false),
-            coverReplacing: new ToggleSetting(false),
-            coversOnly: new ToggleSetting(false),
             detailsCache: createDetailsCache(),
             coverCache: createCoverCache("blocks"),
             coverOverlay: new CoverOverlay(() => {}),

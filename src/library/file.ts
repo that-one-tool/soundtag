@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { constants, type Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { isSameFilename, type FolderNameCache } from "./folder-names.js";
+import { isSameFilename } from "./folder-names.js";
 
 const AUDIO_FORMATS = ["mp3", "ogg", "flac", "wav"] as const;
 
@@ -113,20 +113,6 @@ export async function listSubfolders(directory: string): Promise<string[]> {
         .filter((_entry, index) => folderFlags[index])
         .map((entry) => entry.name)
         .toSorted((first, second) => first.localeCompare(second));
-}
-
-export async function renameIfFree(
-    source: string,
-    destination: string,
-    folderNames: FolderNameCache
-): Promise<boolean> {
-    if (await folderNames.isTaken(destination)) {
-        return false;
-    }
-
-    await fs.rename(source, destination);
-    folderNames.recordRename(source, destination);
-    return true;
 }
 
 // The source itself is skipped so that a case-only rename stays allowed.

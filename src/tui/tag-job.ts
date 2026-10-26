@@ -1,30 +1,22 @@
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { findAudioFiles } from "../library/file.js";
-import type { AlbumFinder } from "../metadata/album-finder.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
-import type { TrackCorrector } from "../metadata/track-corrector.js";
 import {
     countStatuses,
     createReport,
     MAX_FILES_PER_RUN,
     processBatch,
 } from "../processing/batch.js";
-import type { ProcessingContext } from "../processing/processing.js";
 import type { ProcessedTrack, ProcessingReport } from "../processing/types.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
-import type { PathMove } from "../shared/paths.js";
-import type { TagJobRunner, TagJobSettings, TagTarget } from "./types.js";
+import type { TagJobRunner, TagTarget } from "./types.js";
 
 export interface TagJobDependencies {
     metadataChain: MetadataChain;
-    corrector: TrackCorrector;
-    albums: AlbumFinder;
     logger: Logger;
-    libraryRoot: string;
     onTrackProcessed: (result: ProcessedTrack) => void;
-    onFolderRenamed: (move: PathMove) => void;
 }
 
 interface TargetFiles {
@@ -32,7 +24,7 @@ interface TargetFiles {
     files: string[];
 }
 
-// A queued file may have been renamed by an earlier run in the meantime.
+// A queued file may have been moved or deleted outside SoundTag in the meantime.
 async function findFile(file: string, logger: Logger): Promise<TargetFiles> {
     const exists = await fs.access(file).then(
         () => true,
@@ -67,66 +59,38 @@ function findTargetFiles(
     return findFolderFiles(target.path, target.recursive);
 }
 
-interface TagRun {
-    stopSignal: AbortSignal;
-    settings: TagJobSettings;
-}
-
-function buildContext(
-    sourceRoot: string,
-    settings: TagJobSettings,
-    { metadataChain, corrector, albums, logger }: TagJobDependencies
-): ProcessingContext {
-    const fixing = settings.fixTags ? corrector : undefined;
-    const { replaceCovers, coversOnly } = settings;
-    return {
-        sourceRoot,
-        metadataChain,
-        logger,
-        replaceCovers,
-        coversOnly,
-        corrector: fixing,
-        albums,
-    };
-}
-
 async function runBatch(
     { sourceRoot, files }: TargetFiles,
-    { stopSignal, settings }: TagRun,
-    dependencies: TagJobDependencies
+    stopSignal: AbortSignal,
+    { metadataChain, logger, onTrackProcessed }: TagJobDependencies
 ): Promise<ProcessingReport> {
-    const { logger, libraryRoot, onTrackProcessed, onFolderRenamed } =
-        dependencies;
     logger.info(`Tagging ${files.length} audio files in ${sourceRoot}`);
     const report = createReport(files, sourceRoot);
     await processBatch(files, {
-        context: buildContext(sourceRoot, settings, dependencies),
+        context: { sourceRoot, metadataChain, logger },
         report,
         stopSignal,
-        renameFiles: settings.renameFiles,
-        libraryRoot,
         onTrackProcessed,
-        onFolderRenamed,
     });
     return report;
 }
 
 async function tagFiles(
     targetFiles: TargetFiles,
-    run: TagRun,
+    stopSignal: AbortSignal,
     dependencies: TagJobDependencies
 ): Promise<boolean> {
-    const report = await runBatch(targetFiles, run, dependencies);
+    const report = await runBatch(targetFiles, stopSignal, dependencies);
     return countStatuses(report).errors === 0;
 }
 
 async function tagFoundFiles(
     targetFiles: TargetFiles,
-    run: TagRun,
+    stopSignal: AbortSignal,
     dependencies: TagJobDependencies
 ): Promise<boolean> {
     if (targetFiles.files.length > 0) {
-        return tagFiles(targetFiles, run, dependencies);
+        return tagFiles(targetFiles, stopSignal, dependencies);
     }
 
     dependencies.logger.info(
@@ -142,8 +106,7 @@ async function runTagJob(
 ): Promise<boolean> {
     try {
         const targetFiles = await findTargetFiles(target, dependencies.logger);
-        const run = { stopSignal, settings: target.settings };
-        return await tagFoundFiles(targetFiles, run, dependencies);
+        return await tagFoundFiles(targetFiles, stopSignal, dependencies);
     } catch (error) {
         dependencies.logger.error(`Error: ${getErrorMessage(error)}`);
         return false;

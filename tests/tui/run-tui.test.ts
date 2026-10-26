@@ -14,10 +14,7 @@ import {
     waitFor,
     waitForInput,
 } from "../helpers/ink.js";
-import {
-    createControlledServices,
-    DEFAULT_JOB_SETTINGS,
-} from "../helpers/tui.js";
+import { createControlledServices } from "../helpers/tui.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
@@ -55,7 +52,6 @@ test("renderTui reports a failure when a job failed", async () => {
         kind: "folder",
         path: directory,
         recursive: true,
-        settings: DEFAULT_JOB_SETTINGS,
     });
     jobs[0].finish(false);
     await services.queue.whenIdle();
@@ -71,7 +67,6 @@ test("renderTui waits for the current file before quitting", async () => {
         kind: "folder",
         path: directory,
         recursive: true,
-        settings: DEFAULT_JOB_SETTINGS,
     });
     let settled = false;
     void outcome.then(() => (settled = true));
@@ -91,7 +86,6 @@ test("renderTui forces the quit when asked twice during a run", async () => {
         kind: "folder",
         path: directory,
         recursive: true,
-        settings: DEFAULT_JOB_SETTINGS,
     });
 
     stdin.write("q");
@@ -111,10 +105,6 @@ test("runTui wires the services and browses the start directory", async () => {
             lastFmApiKey: "key",
             verbose: false,
             recursive: true,
-            renameFiles: true,
-            fixTags: false,
-            replaceCovers: false,
-            coversOnly: false,
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
         },
         streams
@@ -164,10 +154,6 @@ const COVER_OPTIONS = {
     lastFmApiKey: "key",
     verbose: false,
     recursive: true,
-    renameFiles: true,
-    fixTags: false,
-    replaceCovers: false,
-    coversOnly: false,
 };
 
 test("createCoverDisplay detects the mode, measures cells and writes images to stdout", async () => {

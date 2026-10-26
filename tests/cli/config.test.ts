@@ -13,14 +13,7 @@ test("loadSessionConfig reads arguments and environment", async () => {
     const workingDirectory = await createTemporaryDirectory();
 
     const config = loadSessionConfig({
-        argv: [
-            "music",
-            "--no-recursive",
-            "-v",
-            "--no-rename",
-            "--fix",
-            "--covers-only",
-        ],
+        argv: ["music", "--no-recursive", "-v"],
         env: {
             LASTFM_API_KEY: "lastfm-key",
             MUSICBRAINZ_USER_AGENT: "SoundTag/1.0",
@@ -39,10 +32,6 @@ test("loadSessionConfig reads arguments and environment", async () => {
             lastFmApiKey: "lastfm-key",
             recursive: false,
             verbose: true,
-            renameFiles: false,
-            fixTags: true,
-            replaceCovers: false,
-            coversOnly: true,
             musicBrainzUserAgent: "SoundTag/1.0",
             youtubeApiKey: "youtube-key",
             listenBrainzToken: "listenbrainz-token",

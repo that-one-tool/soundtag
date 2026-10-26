@@ -144,29 +144,24 @@ to). Inside tmux, screen or Zellij the kitty protocol is not detected. Set
 `SOUNDTAG_COVER` to `kitty`, `blocks` or `none` to choose instead, for example
 `kitty` in WezTerm with its kitty graphics enabled. Processing messages appear in the log pane below.
 
-| Key                    | Action                                                                |
-| ---------------------- | --------------------------------------------------------------------- |
-| `↑` `↓`, PgUp, PgDn    | Move the cursor                                                       |
-| Enter, `→`             | Open the folder under the cursor                                      |
-| `←`, Backspace, Delete | Go up one folder                                                      |
-| `t`                    | Tag the file or folder under the cursor                               |
-| `a`                    | Tag the folder being browsed                                          |
-| `e`                    | Rename the file or folder under the cursor                            |
-| `D` (Shift+d)          | Remove all tags and the cover of the file under the cursor            |
-| `r`                    | Include or exclude subfolders in folder runs                          |
-| `n`                    | Turn file and folder renaming on or off for the next runs             |
-| `f`                    | Turn fix mode (`--fix`) on or off for the next runs                   |
-| `o`                    | Turn cover replacing (`--replace-covers`) on or off for the next runs |
-| `c`                    | Turn covers-only mode (`--covers-only`) on or off for the next runs   |
-| `s`                    | Stop the current run after the file in progress                       |
-| `q`, Ctrl+C            | Quit (press again during a run to quit at once)                       |
-| Tab                    | Switch between the browser and the log pane                           |
+| Key                    | Action                                                     |
+| ---------------------- | ---------------------------------------------------------- |
+| `↑` `↓`, PgUp, PgDn    | Move the cursor                                            |
+| Enter, `→`             | Open the folder under the cursor                           |
+| `←`, Backspace, Delete | Go up one folder                                           |
+| `t`                    | Tag the file or folder under the cursor                    |
+| `a`                    | Tag the folder being browsed                               |
+| `e`                    | Rename the file or folder under the cursor                 |
+| `D` (Shift+d)          | Remove all tags and the cover of the file under the cursor |
+| `r`                    | Include or exclude subfolders in folder runs               |
+| `s`                    | Stop the current run after the file in progress            |
+| `q`, Ctrl+C            | Quit (press again during a run to quit at once)            |
+| Tab                    | Switch between the browser and the log pane                |
 
 `e` edits the name in place: Enter saves it, Esc or Ctrl+C cancels. A file
 keeps its extension. A name already used in the folder (ignoring case) is
 refused, and so is renaming a file or folder that a queued or running tag job
-works on, including the other entries in the folder of a queued file (its job
-may rename that folder).
+works on, including the other entries in the folder of a queued file.
 
 `D` asks for confirmation in the log pane: press `y` to remove every tag and
 the embedded cover (on MP3, ID3v1 and APE tags too); any other key cancels. Like a rename, it is refused for a file that a queued or running tag
@@ -180,14 +175,10 @@ presses are queued and run one after another, and are ignored once you quit.
 Once processed in this session, files get a colored dot: green for `TAGGED`,
 yellow for `SKIPPED`, red for `FAILED`. A folder shows the worst status of the
 files inside it. Folder runs include subfolders unless `--no-recursive` was
-passed; `r` switches this for the folders queued next. Likewise, runs keep
-file and folder names unless `--rename` was passed; `n` switches this for the
-files and folders queued next. The status bar shows these choices and whether
-fix mode, cover replacing and covers-only mode are on (`f`, `o` and `c` switch
-them for the files and folders queued next). A file or
-folder that is already queued or running is not queued again, even with a
-different choice; the log says so. A file renamed by
-an earlier run before its own queued run starts is skipped. Quitting during a
+passed; `r` switches this for the folders queued next, and the status bar
+shows the choice. A file or folder that is already queued or running is not
+queued again, even with a different choice; the log says so. A file moved or
+removed outside SoundTag before its queued run starts is skipped. Quitting during a
 run waits for the file in progress; quitting again exits immediately with
 code 130. Symlinked folders are listed too. The browser needs an interactive
 terminal; for scripted runs, pass the source folder as an argument.
@@ -222,89 +213,8 @@ file failed), otherwise 0. Stopped runs do not count as failures. Without an
 interactive terminal and without a source folder, SoundTag exits with code 1
 before asking for anything.
 
-Renaming is off by default. With `--rename`, after a file is tagged, or
-skipped because it was already fully tagged, SoundTag renames it to `<Artist> - <Title>.<extension>` from its tags when the
-name differs (letter case is ignored). Files no service found (skipped, or only given a cover or a folder
-album) keep their name unless fully tagged, since their tags are unverified; a
-title or artist fixed by `--fix` counts as found. Characters that
-filenames cannot hold, such as `/` or `?`, become `_`, a leading `.` becomes
-`_`, and names are shortened to 200 bytes. An existing file is never
-overwritten, even one whose name differs only in letter case.
-
-At the end of a run that was not stopped, each folder holding processed tracks
-is renamed to `<Artist> - <Album>` when all its audio files share the same
-artist and album tags (ignoring case). The album artist is used when a track
-has one, so soundtracks and albums with guest artists count as one album. The
-folder needs at least two tracks, all processed in the same run and trusted
-enough to be renamed themselves. Other files, such as images, and subfolders
-without audio files do not matter, but a subfolder holding tracks keeps the
-folder as it is.
-
-A disc folder such as `CD1` or `Disc 2` becomes `<Artist> - <Album> - CD1`,
-unless the album title already ends with that disc. When sibling folders hold
-the same album, each is suffixed with its disc number tag (`- CD3`); without a
-distinct disc for each, they all keep their names and the log says so. A lone
-folder of a multi-disc album also gets its disc number. The source folder and
-its parents keep their names; in the browser, this is the folder it started
-in. Runs of spaces in generated names are collapsed, so files whose tags hold
-such spaces are renamed once. Pass `--rename` to rename files and folders
-(in the browser, `n` switches this); `--no-rename` keeps the names, as by
-default:
-
-```sh
-soundtag /path/to/music --rename
-```
-
-Pass `--replace-covers` to replace embedded covers too: even fully tagged files
-are then searched, and a cover a service finds for the song replaces the
-embedded one, unless it is the same image. Other tags are only filled. The
-Deezer album and YouTube cover fallbacks never replace an embedded cover.
-
-Pass `--covers-only` to write nothing but covers: files in a confirmed album
-folder (see below) get the album's cover, other files the cover the services
-find for the song. Files that already have a cover are skipped, unless
-`--replace-covers` is passed too:
-
-```sh
-soundtag /path/to/music --covers-only --replace-covers
-```
-
-Pass `--fix` to also correct existing tags, not only fill empty ones (in the
-browser, `f` switches this for the files and folders queued next):
-
-```sh
-soundtag /path/to/music --fix
-```
-
-Fix mode looks up every file, even fully tagged ones, on ListenBrainz and
-MusicBrainz, so it needs `MUSICBRAINZ_USER_AGENT` (and `LISTENBRAINZ_TOKEN`
-for ListenBrainz); without the User-Agent, runs only fill missing tags. It respells the title and artist when the service names the same
-song differently: case, accents, punctuation, one typo, or featured artists
-written another way (`Beyonce ft Shakira` becomes `Beyoncé feat. Shakira`). A
-different word, note or artist is only changed when the tags look wrong
-(`Various Artists` or no artist, the artist inside the title, an
-`Artist - Title` label without a known artist) or lead to no
-song: it then searches again from the title split at its separator
-(`Alfa Rococo - Lever L'ancre`), from the file and folder names, and with the
-two words of the artist swapped (`Marley Bob`). A match replaces only the
-fields that looked wrong (the split title both, the swap only the artist),
-only when the fields it keeps name the same song, and only when Deezer also
-finds that song. It also replaces the year
-with the song's first release year from MusicBrainz when that is earlier, such
-as the year of a compilation or reissue. That year is the earliest among the
-top 100 MusicBrainz recordings of the same title by the same credit, so
-different songs sharing a generic title ("Intro") by one artist can get the
-earliest of their years, and an early demo or live recording can make it a
-little earlier than the album release.
-
-Fix mode makes one more MusicBrainz request
-per file than filling alone (about 3.5 seconds), since its search leaves out the
-album. Each correction is logged as
-`field: "old" → "new"`, the corrected tags are used for the search that fills
-the remaining gaps, and renaming follows the corrected tags.
-
-Each file gets one log line per step: its current `tags`, the folder
-`album` lookup (logged once per folder), each fix-mode `check`, the `fix`es (a confirmed folder album too), each `search`, then `write`, `skip` or `rename`. A step
+Each file gets one log line per step: its current `tags`, each `search`, then
+`write` or `skip`. A step
 lists every service it asked, with its result (`✓` and the fields it added,
 `no match`, or `✗` and the error) and its time, then any wait for the
 service's request spacing (MusicBrainz takes one request every 3.5 seconds), and
@@ -312,11 +222,8 @@ names the song a service matched when it is not the searched one:
 
 ```text
 [3/3] marley.flac (FLAC)
-  tags   Is This Love · Marley Bob · Legend · 2002
-  check  ListenBrainz no match 0.5s · MusicBrainz no match 0.3s (+2.1s wait)
-  check  swapped artist "Is This Love" · Bob Marley: ListenBrainz ✓ 0.6s · MusicBrainz ✓ (MusicBrainz HTTP 503, retried) 0.3s (+5.9s wait) · Deezer ✓ 0.2s
-  fix    artist: "Marley Bob" → "Bob Marley"
-  search ListenBrainz ✓ genre, cover 0.4s · MusicBrainz ✓ track number 0.4s
+  tags   Is This Love · Bob Marley · Legend · 2002
+  search ListenBrainz no match 0.5s · MusicBrainz ✓ (MusicBrainz HTTP 503, retried) track number 0.4s (+5.9s wait) · Deezer ✓ genre, cover 0.2s
   write  genre "Reggae" · track 3 · cover
 ```
 
@@ -357,45 +264,7 @@ the studio song's details.
 The folder album fills an empty album tag and is never replaced by a service,
 so a best-of or a compilation keeps all its tracks on one album; release
 details (track and disc numbers, album artist, cover) are only taken from that
-album. With `--fix`, a title or artist that names something else than the path
-is replaced by the path's. A tag that only adds a note to it (`Song (Live)`)
-or a featured artist is kept, empty tags are left to
-the search (file names lose characters such as `?`), and the services then
-check the corrected tags.
-
-Before its songs are searched, a folder named `<Artist> - <Album>` (disc and
-artwork folders in between are skipped, so are a year before the album and rip
-notes after it) is looked up as an album, once per folder and batch: on
-MusicBrainz (release groups, with `MUSICBRAINZ_USER_AGENT`), then on Deezer
-(its album search, then the first 200 albums of the artist when that misses,
-except for various artists), then on Discogs (masters, then releases, with its
-keys). ListenBrainz searches albums through MusicBrainz, so it is not asked
-again. A service that fails is asked again for the next file of the folder.
-The first service that has the album by that artist confirms
-it: case, accents, punctuation and a remaster note are ignored, but
-`(Deluxe Edition)` is another album; `Various`, `VA` and `Various Artists` are
-the same artist. Every audio file of a confirmed folder, whatever its name,
-then gets the album as that service spells it, in every mode, unless its tag
-already names that album (`Abbey Road` is kept over `Abbey Road (Remastered
-2009)`). A different album drops the old track and disc numbers and album
-artist: they are looked up again for the new album, and those not found are
-cleared (the log names them). The old cover gives way to the confirmed
-album's cover, or, when the service has none, to one found for the song
-(fallbacks included); with neither, it stays. An album no service confirms
-leaves the tags as they are.
-
-The confirmed album's cover is the service's largest: 1200 px from the Cover
-Art Archive (500 px when it has no larger), Deezer's 1000×1000 artwork or
-Discogs' primary image. When it cannot be downloaded, Deezer's cover for the
-album is taken instead (logged as a `cover` step). The cover chosen for a
-folder is kept for the batch, so an image the service does not have (HTTP 404
-or 410) is asked for once; after any other failure, the next file asks again.
-Deezer is not asked again when it confirmed the album itself.
-
-When the tags look wrong (no artist, or a title holding " - " or the artist's
-name) and lead to nothing, SoundTag searches again from the file and folder
-names alone. A song found this way replaces the suspect title; the file's other
-tags are kept and only its empty fields are filled.
+album.
 
 ## Output
 
@@ -403,9 +272,8 @@ Files are updated in place; no tagged copies are created. A source file is
 skipped as already tagged only when it has a title, artist, year, genre, and
 embedded cover art. If any of these are missing, SoundTag attempts to process
 the file, so files tagged before genre support are processed again. An
-embedded cover is kept unless covers are replaced, and a genre, album artist,
-track or disc number already in the file is only rewritten when a confirmed
-folder album replaces the album.
+embedded cover, genre, album artist, track or disc number already in the file
+is kept.
 If the services return a title and artist but cannot find optional fields such
 as the album, year, genre, track number, or cover art, SoundTag still writes
 the fields it found.
@@ -413,11 +281,6 @@ Fields that the services did not find are left unchanged if the source file
 already has values for them.
 When the services add nothing the file lacks, it is not rewritten and is
 reported as skipped.
-After all files are processed, a track still without cover art takes the cover
-of another track in the same folder with the same artist and album (ignoring
-case), even when the services did not find the track itself. A skipped track
-that gets a cover this way is reported as tagged, and is renamed only when it
-also has a title, artist and year.
 Because the file is not considered fully tagged until year, genre and cover
 art are present, later runs can retry to fill those gaps. SoundTag prefers the
 year the song was first released, from ListenBrainz or MusicBrainz, and
@@ -427,10 +290,8 @@ large lossless files therefore need temporary free space comparable to the
 file size and can require substantial additional disk or NAS I/O.
 
 With a source folder argument, a summary is printed at the end of the run:
-the number of tagged, skipped and failed files, then each failed file, each
-rename (`old → new`) and each corrected file with its changes (fix-mode
-corrections and confirmed folder albums),
-with paths relative to the source folder. SoundTag writes
+the number of tagged, skipped and failed files, then each failed file, with
+paths relative to the source folder. SoundTag writes
 no report file; `soundtag_output.json` files left by older versions can be
 deleted.
 

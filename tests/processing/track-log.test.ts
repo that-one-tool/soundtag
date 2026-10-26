@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-    formatCorrectionsLine,
     formatSearchSubject,
     formatSkipLine,
     formatTagsLine,
@@ -24,16 +23,6 @@ test("formatSearchSubject lists the filled search terms", () => {
     );
 });
 
-test("formatCorrectionsLine lists every correction on one line", () => {
-    assert.equal(
-        formatCorrectionsLine([
-            { field: "artist", from: "Marley Bob", to: "Bob Marley" },
-            { field: "year", from: "2002", to: "1978" },
-        ]),
-        '  fix    artist: "Marley Bob" → "Bob Marley" · year: "2002" → "1978"'
-    );
-});
-
 test("formatWriteLine lists the new fields and what is still missing", () => {
     const metadata = {
         info: { ...info, artist: "Bob Marley", year: "1978" },
@@ -44,15 +33,6 @@ test("formatWriteLine lists the new fields and what is still missing", () => {
     assert.equal(
         formatWriteLine({ existing: info, metadata, missing: ["disc number"] }),
         '  write  artist "Bob Marley" · year "1978" · genre "Reggae" · track 3 · cover (missing: disc number)'
-    );
-});
-
-test("formatWriteLine names a write of corrections only", () => {
-    const metadata = { info, extras: {}, coverData: null };
-
-    assert.equal(
-        formatWriteLine({ existing: info, metadata, missing: [] }),
-        "  write  corrected tags"
     );
 });
 

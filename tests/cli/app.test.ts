@@ -64,147 +64,36 @@ test("runApp tags a library and prints a summary", async () => {
     const source = path.join(workingDirectory, "tagged.mp3");
     await writeFullyTaggedMp3(source);
 
-    assert.equal(await runAppIn(workingDirectory, [".", "--rename"]), 0);
+    assert.equal(await runAppIn(workingDirectory, ["."]), 0);
     assert.equal(output.logs[1], "                SOUNDTAG");
     assert.ok(
-        output.logs.some((line) =>
-            line.includes("[--fix] [--replace-covers] [--covers-only]")
+        output.logs.includes(
+            "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose]"
         )
     );
     assert.ok(output.logs.includes("Skipped:    1"));
     assert.ok(output.logs.includes("PROCESSING COMPLETE"));
-    assert.deepEqual(output.logs.slice(-4), [
-        "Renamed:",
-        "  tagged.mp3 → Artist - Title.mp3",
+    assert.deepEqual(output.logs.slice(-2), [
         "========================================",
         "Done!",
     ]);
+    await fs.access(source);
     assert.ok(!output.logs.includes("Failed:"));
     assert.ok(!output.logs.some((line) => line.startsWith("Not processed:")));
     await assertNoReport(workingDirectory);
 });
 
-test("runApp corrects existing tags with --fix and lists the corrections", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    await writeFullyTaggedMp3(path.join(workingDirectory, "tagged.mp3"));
-    globalThis.fetch = async (input) =>
-        new URL(input.toString()).hostname === "musicbrainz.org"
-            ? Response.json({
-                  recordings: [
-                      {
-                          title: "Title",
-                          "artist-credit": [{ name: "Artist" }],
-                          "first-release-date": "1999-05-01",
-                      },
-                  ],
-              })
-            : Response.json({});
-
-    assert.equal(
-        await runAppIn(workingDirectory, [".", "--fix", "--no-rename"]),
-        0
-    );
-
-    assert.ok(output.logs.includes("Successful: 1"));
-    assert.deepEqual(output.logs.slice(-4), [
-        "Corrected:",
-        '  tagged.mp3: year: "2024" → "1999"',
-        "========================================",
-        "Done!",
-    ]);
-});
-
-test("runApp takes the folder album that Deezer confirms", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    await writeFullyTaggedMp3(
-        path.join(workingDirectory, "Artist - the album", "tagged.mp3")
-    );
-    globalThis.fetch = async (input) =>
-        new URL(input.toString()).pathname === "/search/album"
-            ? Response.json({
-                  data: [{ title: "The Album", artist: { name: "Artist" } }],
-              })
-            : Response.json({});
-
-    assert.equal(await runAppIn(workingDirectory, ["."]), 0);
-
-    assert.deepEqual(output.logs.slice(-4), [
-        "Corrected:",
-        '  Artist - the album/tagged.mp3: album: "" → "The Album"',
-        "========================================",
-        "Done!",
-    ]);
-});
-
-test("runApp replaces only covers with --covers-only --replace-covers", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    const source = path.join(
-        workingDirectory,
-        "Artist - the album",
-        "tagged.mp3"
-    );
-    await writeFullyTaggedMp3(source);
-    globalThis.fetch = async (input) => {
-        const url = new URL(input.toString());
-        if (url.hostname !== "api.deezer.com") {
-            return new Response("album cover", {
-                headers: { "content-type": "image/jpeg" },
-            });
-        }
-        return url.pathname === "/search/album"
-            ? Response.json({
-                  data: [
-                      {
-                          title: "The Album",
-                          artist: { name: "Artist" },
-                          cover_xl: "https://cdn.deezer.test/cover.jpg",
-                      },
-                  ],
-              })
-            : Response.json({});
-    };
-
-    assert.equal(
-        await runAppIn(workingDirectory, [
-            ".",
-            "--covers-only",
-            "--replace-covers",
-        ]),
-        0
-    );
-
-    const tags = NodeID3.read(source);
-    assert.equal(tags.album, undefined);
-    assert.deepEqual(
-        typeof tags.image === "object" && tags.image.imageBuffer,
-        Buffer.from("album cover")
-    );
-    assert.ok(output.logs.includes("Successful: 1"));
-});
-
-test("runApp keeps file names by default", async () => {
-    const workingDirectory = await createTemporaryDirectory();
-    const source = path.join(workingDirectory, "tagged.mp3");
-    await writeFullyTaggedMp3(source);
-
-    assert.equal(await runAppIn(workingDirectory, ["."]), 0);
-    await fs.access(source);
-    assert.ok(!output.logs.includes("Renamed:"));
-});
-
-test("runApp lists failed files, then renames, relative to the source", async () => {
+test("runApp lists failed files relative to the source", async () => {
     const workingDirectory = await createTemporaryDirectory();
     const disc = path.join(workingDirectory, "Disc 2");
     await writeFullyTaggedMp3(path.join(disc, "tagged.mp3"));
     await fs.writeFile(path.join(disc, "broken.flac"), "bytes");
 
-    assert.equal(await runAppIn(workingDirectory, [".", "--rename"]), 0);
+    assert.equal(await runAppIn(workingDirectory, ["."]), 0);
     assert.ok(output.logs.includes("Errors:     1"));
-    assert.deepEqual(output.logs.slice(-6), [
+    assert.deepEqual(output.logs.slice(-4), [
         "Failed:",
         `  ${path.join("Disc 2", "broken.flac")}`,
-        "Renamed:",
-        `  ${path.join("Disc 2", "tagged.mp3")} → ${path.join("Disc 2", "Artist - Title.mp3")}`,
         "========================================",
         "Done!",
     ]);
@@ -261,7 +150,7 @@ function browseWith(
     openBrowser: AppEnvironment["openBrowser"]
 ): Promise<number> {
     return runApp({
-        argv: ["--no-recursive", "--no-rename"],
+        argv: ["--no-recursive"],
         env: environment,
         workingDirectory,
         renewStopSignal: () => new AbortController().signal,
@@ -286,10 +175,6 @@ test("runApp opens the folder browser in the working directory", async () => {
             lastFmApiKey: "test-key",
             recursive: false,
             verbose: false,
-            renameFiles: false,
-            fixTags: false,
-            replaceCovers: false,
-            coversOnly: false,
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
             youtubeApiKey: undefined,
             listenBrainzToken: "test-token",

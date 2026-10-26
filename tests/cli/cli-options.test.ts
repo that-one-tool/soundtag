@@ -7,26 +7,15 @@ test("parseArguments keeps the recursive default and reads a source path", () =>
         sourcePath: "./music",
         recursive: true,
         verbose: false,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
     });
 });
 
 test("parseArguments supports scan and verbose options", () => {
-    assert.deepEqual(
-        parseArguments(["./music", "--no-recursive", "-v", "--no-rename"]),
-        {
-            sourcePath: "./music",
-            recursive: false,
-            verbose: true,
-            renameFiles: false,
-            fixTags: false,
-            replaceCovers: false,
-            coversOnly: false,
-        }
-    );
+    assert.deepEqual(parseArguments(["./music", "--no-recursive", "-v"]), {
+        sourcePath: "./music",
+        recursive: false,
+        verbose: true,
+    });
     assert.equal(
         parseArguments(["--no-recursive", "--recursive"]).recursive,
         true
@@ -50,28 +39,17 @@ test("parseArguments accepts the long and short option aliases", () => {
     assert.deepEqual(parseArguments(["--no-recursive", "-r", "--verbose"]), {
         recursive: true,
         verbose: true,
-        renameFiles: false,
-        fixTags: false,
-        replaceCovers: false,
-        coversOnly: false,
     });
 });
 
-test("parseArguments turns renaming on with --rename, and off again with --no-rename", () => {
-    assert.equal(parseArguments(["--rename"]).renameFiles, true);
-    assert.equal(
-        parseArguments(["--rename", "--no-rename"]).renameFiles,
-        false
-    );
-});
-
-test("parseArguments turns fix mode on with --fix", () => {
-    assert.equal(parseArguments(["./music", "--fix"]).fixTags, true);
-});
-
-test("parseArguments turns cover replacing and covers-only mode on", () => {
-    const options = parseArguments(["--replace-covers", "--covers-only"]);
-
-    assert.equal(options.replaceCovers, true);
-    assert.equal(options.coversOnly, true);
+test("parseArguments rejects the removed renaming, fix and cover options", () => {
+    for (const option of [
+        "--rename",
+        "--no-rename",
+        "--fix",
+        "--replace-covers",
+        "--covers-only",
+    ]) {
+        assert.throws(() => parseArguments([option]), /Unknown option/);
+    }
 });

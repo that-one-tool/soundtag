@@ -4,10 +4,6 @@ export interface TaggingSettings {
     lastFmApiKey?: string;
     recursive: boolean;
     verbose: boolean;
-    renameFiles: boolean;
-    fixTags: boolean;
-    replaceCovers: boolean;
-    coversOnly: boolean;
     musicBrainzUserAgent?: string;
     youtubeApiKey?: string;
     listenBrainzToken?: string;
@@ -29,8 +25,4 @@ export interface CommandLineOptions {
     sourcePath?: string;
     recursive: boolean;
     verbose: boolean;
-    renameFiles: boolean;
-    fixTags: boolean;
-    replaceCovers: boolean;
-    coversOnly: boolean;
 }

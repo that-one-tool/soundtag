@@ -1,7 +1,5 @@
-import { describeCorrection } from "../metadata/track-corrections.js";
 import { TRACK_FIELDS } from "../metadata/track-metadata.js";
 import type {
-    TagCorrection,
     TrackExtras,
     TrackInfo,
     TrackMetadata,
@@ -39,13 +37,6 @@ export function formatTagsLine(info: TrackInfo): string {
 export function formatSearchSubject({ title, artist, album }: TrackSearch) {
     const terms = [title && `"${title}"`, artist, album];
     return terms.filter(Boolean).join(SEPARATOR);
-}
-
-export function formatCorrectionsLine(corrections: TagCorrection[]): string {
-    return formatLogLine(
-        "fix",
-        corrections.map(describeCorrection).join(SEPARATOR)
-    );
 }
 
 export function formatSkipLine(reason: string): string {
@@ -94,6 +85,6 @@ export function formatWriteLine(written: WrittenTrack): string {
         ...cover,
         ...describeCleared(written),
     ];
-    const text = fields.join(SEPARATOR) || "corrected tags";
+    const text = fields.join(SEPARATOR);
     return formatLogLine("write", `${text}${describeMissing(written.missing)}`);
 }

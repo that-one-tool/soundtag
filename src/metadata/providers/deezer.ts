@@ -6,8 +6,6 @@ import {
     valueOrEmpty,
 } from "../track-metadata.js";
 import type {
-    CanonicalSource,
-    CanonicalTrack,
     MetadataProvider,
     ProviderNeeds,
     ProviderServices,
@@ -141,21 +139,12 @@ function isReleaseOfTrack(
     return isSameRelease(release, searchedAlbum);
 }
 
-function getCanonicalTrack(track: DeezerTrack): CanonicalTrack {
-    return {
-        title: valueOrEmpty(track.title),
-        artist: valueOrEmpty(track.artist?.name),
-        firstReleaseYear: "",
-    };
-}
-
 function getGenreDetails(album: DeezerAlbum): DeezerDetails {
     const extras = removeUnknownValues({ genre: getGenre(album) });
     return { extras, isRelease: false };
 }
 
-// Its catalogue is independent of MusicBrainz, so fix mode takes it as a witness.
-export class DeezerProvider implements MetadataProvider, CanonicalSource {
+export class DeezerProvider implements MetadataProvider {
     readonly name = "Deezer";
 
     constructor(
@@ -182,11 +171,6 @@ export class DeezerProvider implements MetadataProvider, CanonicalSource {
                 needs.cover && details.isRelease
             ),
         };
-    }
-
-    async findCanonical(search: TrackSearch): Promise<CanonicalTrack | null> {
-        const track = await this.searchTrack(search);
-        return track && getCanonicalTrack(track);
     }
 
     private async searchTrack(

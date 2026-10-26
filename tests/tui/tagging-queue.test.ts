@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { TaggingQueue } from "../../src/tui/tagging-queue.js";
 import type { TagTarget } from "../../src/tui/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
-import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 interface ControlledJob {
     target: TagTarget;
@@ -28,12 +27,10 @@ const album: TagTarget = {
     kind: "folder",
     path: "/music/Album",
     recursive: true,
-    settings: DEFAULT_JOB_SETTINGS,
 };
 const single: TagTarget = {
     kind: "file",
     path: "/music/single.mp3",
-    settings: DEFAULT_JOB_SETTINGS,
 };
 
 test("TaggingQueue runs targets one at a time in order", async () => {
@@ -151,12 +148,10 @@ test("TaggingQueue moves the queued targets inside a renamed folder", () => {
     const inside: TagTarget = {
         kind: "file",
         path: "/music/Album/a.mp3",
-        settings: DEFAULT_JOB_SETTINGS,
     };
     const other: TagTarget = {
         kind: "file",
         path: "/music/Albums/a.mp3",
-        settings: DEFAULT_JOB_SETTINGS,
     };
     queue.enqueue(album);
     queue.enqueue(getDiscTarget());
@@ -176,12 +171,10 @@ test("TaggingQueue moves the queued targets inside a renamed folder", () => {
             kind: "folder",
             path: "/music/A - B/CD1",
             recursive: false,
-            settings: DEFAULT_JOB_SETTINGS,
         },
         {
             kind: "file",
             path: "/music/A - B/a.mp3",
-            settings: DEFAULT_JOB_SETTINGS,
         },
         other,
     ]);
@@ -193,7 +186,6 @@ function getDiscTarget(): TagTarget {
         kind: "folder",
         path: "/music/Album/CD1",
         recursive: false,
-        settings: DEFAULT_JOB_SETTINGS,
     };
 }
 
@@ -224,7 +216,6 @@ test("TaggingQueue is busy with the folder of a queued file", () => {
     queue.enqueue({
         kind: "file",
         path: "/music/Album/a.mp3",
-        settings: DEFAULT_JOB_SETTINGS,
     });
 
     assert.equal(queue.isBusyWith("/music/Album/b.mp3"), true);

@@ -9,7 +9,6 @@ import { TrackStatusStore } from "../../src/tui/track-status-store.js";
 import type { BrowserEntry } from "../../src/tui/types.js";
 import { createRecordingLogger } from "../helpers/logger.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
-import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-tag-clearer-test-"
@@ -71,7 +70,6 @@ test("TagClearer forgets the session status of a cleared file", async () => {
     statusStore.record({
         source: song.path,
         status: "TAGGED",
-        destination: null,
     });
 
     clearer.request(song);
@@ -169,7 +167,6 @@ test("TagClearer refuses files the tagging queue works on", async () => {
     queue.enqueue({
         kind: "file",
         path: song.path,
-        settings: DEFAULT_JOB_SETTINGS,
     });
 
     clearer.request(song);

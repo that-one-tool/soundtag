@@ -63,10 +63,6 @@ function useBrowsing(startDirectory: string, services: TuiServices) {
 function useSettingChoices(services: TuiServices) {
     return {
         subfoldersIncluded: useStore(services.subfolders),
-        renamingEnabled: useStore(services.renaming),
-        fixingEnabled: useStore(services.fixing),
-        coverReplacingEnabled: useStore(services.coverReplacing),
-        coversOnlyEnabled: useStore(services.coversOnly),
     };
 }
 

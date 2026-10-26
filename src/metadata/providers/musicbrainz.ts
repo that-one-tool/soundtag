@@ -1,8 +1,6 @@
-import { isSameCredit, isSameRelease, isSameTrack } from "../track-matching.js";
-import { extractYear, getEarliestYear } from "../track-metadata.js";
+import { isSameRelease, isSameTrack } from "../track-matching.js";
+import { extractYear } from "../track-metadata.js";
 import type {
-    CanonicalSource,
-    CanonicalTrack,
     MetadataProvider,
     ProviderNeeds,
     ProviderServices,
@@ -73,54 +71,6 @@ function getRecordingInfo(
     };
 }
 
-function getCredit(recording: MusicBrainzRecording): string {
-    return getMusicBrainzArtist(recording["artist-credit"]);
-}
-
-// The original of a remix credits fewer artists, so its year is not the remix's.
-function keepSameCredit(
-    recordings: MusicBrainzRecording[],
-    artist: string
-): MusicBrainzRecording[] {
-    return recordings.filter((recording) =>
-        isSameCredit(getCredit(recording), artist)
-    );
-}
-
-function getFirstReleaseYear(recordings: MusicBrainzRecording[]): string {
-    return getEarliestYear(
-        recordings.map((recording) =>
-            extractYear(recording["first-release-date"])
-        )
-    );
-}
-
-// A shared artist also matches the original of a remix, which ranks first at times.
-function pickNamedRecording(
-    recordings: MusicBrainzRecording[],
-    { artist }: TrackSearch
-): MusicBrainzRecording {
-    const sameCredit = recordings.find((recording) =>
-        isSameCredit(getCredit(recording), artist)
-    );
-    return sameCredit ?? recordings[0];
-}
-
-// A remaster or compilation is another recording with a later first release.
-function getCanonicalTrack(
-    recordings: MusicBrainzRecording[],
-    search: TrackSearch
-): CanonicalTrack {
-    const named = pickNamedRecording(recordings, search);
-    const artist = getCredit(named);
-    const sameCredit = keepSameCredit(recordings, artist);
-    return {
-        title: named.title ?? "",
-        artist,
-        firstReleaseYear: getFirstReleaseYear(sameCredit),
-    };
-}
-
 function isSearchedRecording(
     recording: MusicBrainzRecording,
     search: TrackSearch
@@ -143,7 +93,7 @@ function keepSearchedRecording(
     return isSearchedRecording(recording, search) ? recording : null;
 }
 
-export class MusicBrainzProvider implements MetadataProvider, CanonicalSource {
+export class MusicBrainzProvider implements MetadataProvider {
     readonly name = "MusicBrainz";
 
     constructor(
@@ -167,19 +117,6 @@ export class MusicBrainzProvider implements MetadataProvider, CanonicalSource {
             extras: {},
             coverData: needsCover ? await this.downloadCover(releases) : null,
         };
-    }
-
-    // Any song of that title would match without an artist.
-    async findCanonical(search: TrackSearch): Promise<CanonicalTrack | null> {
-        if (!search.artist) {
-            return null;
-        }
-
-        const recordings = await this.client.searchAllRecordings(search);
-        const matching = recordings.filter((recording) =>
-            isSearchedRecording(recording, search)
-        );
-        return matching.length > 0 ? getCanonicalTrack(matching, search) : null;
     }
 
     private async searchRecording(

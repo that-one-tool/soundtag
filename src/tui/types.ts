@@ -50,21 +50,9 @@ export type TrackStatuses = ReadonlyMap<string, TrackStatus>;
 
 export type EntryDot = TrackStatus | "QUEUED";
 
-export interface TagJobSettings {
-    renameFiles: boolean;
-    fixTags: boolean;
-    replaceCovers: boolean;
-    coversOnly: boolean;
-}
-
 export type TagTarget =
-    | { kind: "file"; path: string; settings: TagJobSettings }
-    | {
-          kind: "folder";
-          path: string;
-          recursive: boolean;
-          settings: TagJobSettings;
-      };
+    | { kind: "file"; path: string }
+    | { kind: "folder"; path: string; recursive: boolean };
 
 export type TagJobRunner = (
     target: TagTarget,
