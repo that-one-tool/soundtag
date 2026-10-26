@@ -1,3 +1,4 @@
+import { TimeoutError } from "../../shared/errors.js";
 import {
     fetchWithTimeout,
     getRetryAfterDelay,
@@ -207,7 +208,7 @@ export class MusicBrainzClient {
     }
 
     private async fetchWithRetry(url: URL): Promise<Response> {
-        const response = await this.scheduleFetch(url);
+        const response = await this.fetchRetryingTimeout(url);
 
         if (response.status !== SERVICE_UNAVAILABLE) {
             return response;
@@ -224,6 +225,18 @@ export class MusicBrainzClient {
         const { clock, lookups } = this.services;
         await sleepAndReport(clock, delay, lookups.noteWait);
         return this.scheduleFetch(url);
+    }
+
+    // MusicBrainz sometimes stalls on a request it answers at once when asked again.
+    private fetchRetryingTimeout(url: URL): Promise<Response> {
+        return this.scheduleFetch(url).catch((error: unknown) => {
+            if (!(error instanceof TimeoutError)) {
+                throw error;
+            }
+
+            this.services.lookups.note("MusicBrainz timed out, retried");
+            return this.scheduleFetch(url);
+        });
     }
 
     private scheduleFetch(url: URL): Promise<Response> {

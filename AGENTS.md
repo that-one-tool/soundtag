@@ -83,11 +83,15 @@ graph free of cycles.
   they cannot confirm each other). It only proves the song exists; each
   alternative replaces only the fields it was built for (`replaces`). Fix mode
   never corrects albums.
-- **New album source:** a service that can search an album by artist and name
+- **New album source:** ListenBrainz's album search is MusicBrainz's
+  release-group search, so it is no source of its own.
+  Otherwise, a service that can search an album by artist and name
   implements `AlbumSource` (match with `isSearchedAlbum`) and is added, in
   order, to `createAlbumSources` in `create-metadata-chain.ts`. The
   `AlbumFinder` confirms `<Artist> - <Album>` folders with them once per batch;
-  a confirmed album replaces the album tag of every file in the folder.
+  a confirmed album replaces the album tag of every file in the folder. Deezer
+  falls back to the artist's album list (artist searches and lists are cached
+  per batch).
 - **New audio format:** add it to `AUDIO_FORMATS` in `src/library/file.ts`, then
   map it to a `TagStore` in `src/tags/audio-tags.ts`. The compiler enforces that
   every format has a store.
@@ -181,7 +185,8 @@ Not enforced by tooling, but expected:
 - Files are rewritten through a hidden temporary copy (`.<name>.<uuid>.<ext>`).
   The scan skips hidden files and folders so leftovers are never tagged.
 - MusicBrainz needs `MUSICBRAINZ_USER_AGENT` and allows 1 request/s; SoundTag
-  spaces requests 3 s apart (2 s and 2.5 s still drew 503s). ListenBrainz
+  spaces requests 3 s apart (2 s and 2.5 s still drew 503s) and retries once
+  after a 503 or a timeout (`TimeoutError`). ListenBrainz
   lookups need a user token and an artist, allow about 1 request/s and are spaced
   1 s apart; no match is `{}` with HTTP 200. Last.fm API calls are
   spaced 2 s apart, Deezer 500 ms apart (no key or OAuth needed for its public

@@ -1,4 +1,4 @@
-import { getErrorMessage, ServiceError } from "./errors.js";
+import { getErrorMessage, ServiceError, TimeoutError } from "./errors.js";
 
 // Services that stall would hold up every file, while covers are larger downloads.
 const API_REQUEST_TIMEOUT = 6_000;
@@ -12,7 +12,9 @@ export interface ImageRequest {
 
 function toServiceError(error: unknown): ServiceError {
     const isTimeout = error instanceof Error && error.name === "TimeoutError";
-    return new ServiceError(isTimeout ? "timed out" : getErrorMessage(error));
+    return isTimeout
+        ? new TimeoutError()
+        : new ServiceError(getErrorMessage(error));
 }
 
 function rethrowAsServiceError(error: unknown): never {

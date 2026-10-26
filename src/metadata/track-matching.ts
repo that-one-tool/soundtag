@@ -185,7 +185,7 @@ function removeLeadingArticle(name: string | undefined): string {
 }
 
 // Services disagree on "The Black Eyed Peas" versus "Black Eyed Peas".
-function isSameArtistName(found: string | undefined, searched: string) {
+export function isSameArtistName(found: string | undefined, searched: string) {
     const withoutArticles = [found, searched].map(removeLeadingArticle);
     return (
         isSameName(found, searched) ||
@@ -247,7 +247,7 @@ export function isVariousArtists(artist: string): boolean {
 // Folders and Discogs shorten it.
 const VARIOUS_CREDITS = new Set([VARIOUS_ARTISTS, "various", "va"]);
 
-function isVariousCredit(artist: string | undefined): boolean {
+export function isVariousCredit(artist: string | undefined): boolean {
     return VARIOUS_CREDITS.has(getWords(artist).join(""));
 }
 

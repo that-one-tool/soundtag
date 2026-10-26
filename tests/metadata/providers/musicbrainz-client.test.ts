@@ -254,3 +254,46 @@ test("getMusicBrainzArtist joins the credited names", () => {
     assert.equal(getMusicBrainzArtist([{}]), "");
     assert.equal(getMusicBrainzArtist(), "");
 });
+
+// Each call answers with the next step: a timeout or a response.
+function mockTimeouts(steps: ("timeout" | Response)[]): URL[] {
+    const urls: URL[] = [];
+    globalThis.fetch = async (input) => {
+        urls.push(new URL(input.toString()));
+        const step = steps[urls.length - 1];
+        if (step === "timeout") {
+            throw new DOMException("aborted", "TimeoutError");
+        }
+        return step;
+    };
+    return urls;
+}
+
+test("MusicBrainzClient retries once after a timeout and notes it", async () => {
+    const logger = createRecordingLogger();
+    const lookups = new LookupLog({
+        logger,
+        clock: createFakeClock(),
+        verbose: false,
+    });
+    const urls = mockTimeouts([
+        "timeout",
+        Response.json({ recordings: [{ title: "Retried title" }] }),
+    ]);
+    const client = createClient({ lookups });
+
+    const found = await lookups.call("MusicBrainz", () =>
+        client.searchRecordings(search)
+    );
+
+    assert.equal(found?.[0].title, "Retried title");
+    assert.equal(urls.length, 2);
+    assert.match(logger.infos[0], /MusicBrainz timed out, retried/);
+});
+
+test("MusicBrainzClient gives up after a second timeout", async () => {
+    const urls = mockTimeouts(["timeout", "timeout"]);
+
+    await assert.rejects(createClient().searchRecordings(search), /timed out/);
+    assert.equal(urls.length, 2);
+});

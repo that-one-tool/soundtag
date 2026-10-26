@@ -92,7 +92,8 @@ album.
    needs no API key, but a meaningful User-Agent: set `MUSICBRAINZ_USER_AGENT`
    to identify your SoundTag installation and provide contact information.
    MusicBrainz allows one request per second; SoundTag spaces its requests,
-   release lookups included, three seconds apart.
+   release lookups included, three seconds apart, and asks once more when a
+   request times out.
 4. **Deezer** needs no key or account. Among its results, it prefers the
    searched song on the track's album, and gives the genre, the track and disc
    numbers and counts, the album artist and the 1000×1000 artwork. Its release
@@ -365,9 +366,10 @@ check the corrected tags.
 Before its songs are searched, a folder named `<Artist> - <Album>` (disc and
 artwork folders in between are skipped, so are a year before the album and rip
 notes after it) is looked up as an album, once per folder and batch: on
-Deezer, then on MusicBrainz (release groups, with `MUSICBRAINZ_USER_AGENT`),
-then on Discogs (masters, then releases, with its keys). ListenBrainz cannot
-search albums. A service that fails is asked again for the next file of the
+Deezer (its album search, then the first 200 albums of the artist when that misses,
+except for various artists), then on MusicBrainz (release groups, with `MUSICBRAINZ_USER_AGENT`),
+then on Discogs (masters, then releases, with its keys). ListenBrainz searches
+albums through MusicBrainz, so it is not asked again. A service that fails is asked again for the next file of the
 folder. The first service that has the album by that artist confirms
 it: case, accents, punctuation and a remaster note are ignored, but
 `(Deluxe Edition)` is another album; `Various`, `VA` and `Various Artists` are

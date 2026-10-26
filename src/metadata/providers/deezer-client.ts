@@ -11,8 +11,14 @@ const DEEZER_API_URL = "https://api.deezer.com/";
 const DEEZER_REQUEST_INTERVAL = 500;
 const SEARCH_LIMIT = "5";
 const ALBUM_TRACKS_LIMIT = "1000";
+const ARTIST_ALBUMS_LIMIT = "200";
 
 interface DeezerNamed {
+    name?: string;
+}
+
+export interface DeezerArtist {
+    id?: number;
     name?: string;
 }
 
@@ -93,6 +99,23 @@ export class DeezerClient {
     searchAlbums(query: string): Promise<DeezerAlbumSummary[]> {
         const params = { q: query, limit: SEARCH_LIMIT };
         return this.requestList("search/album", params);
+    }
+
+    searchArtists(name: string): Promise<DeezerArtist[]> {
+        const params = { q: name, limit: SEARCH_LIMIT };
+        return this.services.cache.getOrLoad(`deezer:artists:${name}`, () =>
+            this.requestList("search/artist", params)
+        );
+    }
+
+    getArtistAlbums(artistId: number): Promise<DeezerAlbumSummary[]> {
+        return this.services.cache.getOrLoad(
+            `deezer:artist-albums:${artistId}`,
+            () =>
+                this.requestList(`artist/${artistId}/albums`, {
+                    limit: ARTIST_ALBUMS_LIMIT,
+                })
+        );
     }
 
     getAlbum(albumId: number): Promise<DeezerAlbum> {

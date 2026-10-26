@@ -6,7 +6,7 @@ import {
     getRetryAfterDelay,
     readJsonResponse,
 } from "../../src/shared/http.js";
-import { ServiceError } from "../../src/shared/errors.js";
+import { ServiceError, TimeoutError } from "../../src/shared/errors.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 
 restoreFetchAfterEach();
@@ -194,10 +194,12 @@ test("fetchWithTimeout reports network failures and timeouts as service errors",
     globalThis.fetch = async () => {
         throw new DOMException("aborted", "TimeoutError");
     };
-    await assert.rejects(
-        fetchWithTimeout("https://example.test/"),
-        new ServiceError("timed out")
-    );
+    await assert.rejects(fetchWithTimeout("https://example.test/"), (error) => {
+        assert.ok(error instanceof TimeoutError);
+        assert.ok(error instanceof ServiceError);
+        assert.equal(error.message, "timed out");
+        return true;
+    });
 });
 
 test("readJsonResponse reports failures and unreadable bodies as service errors", async () => {
