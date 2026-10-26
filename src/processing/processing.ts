@@ -539,12 +539,11 @@ function findFolderAlbum(
 }
 
 function findFolderCover(
-    folderAlbum: FoundAlbum | null,
+    source: string,
     albums: AlbumFinder | undefined
 ): Promise<Buffer | null> {
-    return folderAlbum && albums
-        ? albums.findCover(folderAlbum)
-        : Promise.resolve(null);
+    const terms = parseAlbumFolder(source);
+    return terms && albums ? albums.findCover(terms) : Promise.resolve(null);
 }
 
 interface ReadTrack {
@@ -560,7 +559,7 @@ function readCorrectedTags(
     const plan = {
         pathTerms: parseLibraryPath(source),
         folderAlbum,
-        findFolderCover: () => findFolderCover(folderAlbum, context.albums),
+        findFolderCover: () => findFolderCover(source, context.albums),
         buildRequest: (info: TrackInfo) =>
             buildCorrectionRequest(source, context.sourceRoot, info),
     };
@@ -638,8 +637,8 @@ async function coverReadTrack(
     context: ProcessingContext
 ): Promise<TrackResult> {
     const search = buildTrackSearch(source, context.sourceRoot, stored.info);
-    const findAlbum = () => findFolderAlbum(source, context.albums);
-    const track = { stored, search, findFolderAlbum: findAlbum };
+    const findCover = () => findFolderCover(source, context.albums);
+    const track = { stored, search, findFolderCover: findCover };
     const status = await tagCoverOnly(source, track, context);
     const tags = await getResultTags(
         source,

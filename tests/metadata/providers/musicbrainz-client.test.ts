@@ -267,11 +267,14 @@ test("MusicBrainzClient searches release groups by album and artist", async () =
 });
 
 test("MusicBrainzClient builds release group cover requests", () => {
-    const request = createClient().getReleaseGroupCoverRequest("group id");
+    const request = createClient().getReleaseGroupCoverRequest(
+        "group id",
+        1200
+    );
 
     assert.equal(
         request.url.toString(),
-        "https://coverartarchive.org/release-group/group%20id/front-500"
+        "https://coverartarchive.org/release-group/group%20id/front-1200"
     );
     assert.deepEqual(request.headers, { "User-Agent": userAgent });
 });

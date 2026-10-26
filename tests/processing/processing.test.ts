@@ -1475,7 +1475,7 @@ function createAlbumFinder(
             return album === null ? null : { album, covers };
         },
     };
-    return new AlbumFinder([source], createProviderServices());
+    return new AlbumFinder([source], [], createProviderServices());
 }
 
 async function createAlbumFolderTrack(folder: string): Promise<string> {

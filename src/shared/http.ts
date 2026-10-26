@@ -1,4 +1,9 @@
-import { getErrorMessage, ServiceError, TimeoutError } from "./errors.js";
+import {
+    getErrorMessage,
+    HttpStatusError,
+    ServiceError,
+    TimeoutError,
+} from "./errors.js";
 
 // Services that stall would hold up every file, while covers are larger downloads.
 const API_REQUEST_TIMEOUT = 6_000;
@@ -56,7 +61,10 @@ export async function readJsonResponse<T>(
 
 function assertSuccessfulImageResponse(response: Response): void {
     if (!response.ok) {
-        throw new ServiceError(`Image request failed: HTTP ${response.status}`);
+        throw new HttpStatusError(
+            response.status,
+            `Image request failed: HTTP ${response.status}`
+        );
     }
 }
 

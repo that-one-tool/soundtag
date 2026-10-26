@@ -192,10 +192,10 @@ export class MusicBrainzClient {
         };
     }
 
-    getReleaseGroupCoverRequest(groupId: string): ImageRequest {
+    getReleaseGroupCoverRequest(groupId: string, size: number): ImageRequest {
         return {
             url: new URL(
-                `${encodeURIComponent(groupId)}/front-500`,
+                `${encodeURIComponent(groupId)}/front-${size}`,
                 COVER_ART_ARCHIVE_GROUP_BASE
             ),
             headers: { "User-Agent": this.userAgent },

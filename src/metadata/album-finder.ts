@@ -1,4 +1,9 @@
-import { ignoreServiceError, ServiceError } from "../shared/errors.js";
+import {
+    HttpStatusError,
+    ignoreServiceError,
+    ServiceError,
+} from "../shared/errors.js";
+import type { ImageRequest } from "../shared/http.js";
 import type {
     AlbumSearch,
     AlbumSource,
@@ -8,6 +13,30 @@ import type {
 
 interface LookupState {
     failed: boolean;
+}
+
+interface ConfirmedAlbum {
+    found: FoundAlbum;
+    source: AlbumSource;
+}
+
+// Rate limits (429) and slow answers (408) are worth asking again.
+const MISSING_IMAGE_STATUSES: ReadonlySet<number> = new Set([404, 410]);
+
+function isMissingImage(error: unknown): boolean {
+    return (
+        error instanceof HttpStatusError &&
+        MISSING_IMAGE_STATUSES.has(error.status)
+    );
+}
+
+// Only a missing image is kept as missing; a slow or failing service is asked again.
+function noteDownloadFailure(error: unknown, state: LookupState): null {
+    if (!isMissingImage(error)) {
+        state.failed = true;
+    }
+
+    return ignoreServiceError(error);
 }
 
 // A service that failed may have the album, so the batch cache must not keep the miss.
@@ -31,21 +60,112 @@ function describeSearch({ artist, album }: AlbumSearch): string {
 export class AlbumFinder {
     constructor(
         readonly sources: AlbumSource[],
+        // Asked for a cover when the confirmed album's cannot be downloaded.
+        readonly coverSources: AlbumSource[],
         private readonly services: ProviderServices
     ) {}
 
-    findAlbum(search: AlbumSearch): Promise<FoundAlbum | null> {
+    async findAlbum(search: AlbumSearch): Promise<FoundAlbum | null> {
+        const confirmed = await this.confirmAlbum(search);
+        return confirmed && confirmed.found;
+    }
+
+    private confirmAlbum(search: AlbumSearch): Promise<ConfirmedAlbum | null> {
         const key = `album:${getSearchKey(search)}`;
         return this.services.cache
             .getOrLoad(key, () => this.lookUp(search))
             .catch(ignoreServiceError);
     }
 
-    findCover({ covers }: FoundAlbum): Promise<Buffer | null> {
-        return this.services.images.downloadFirst(covers);
+    // The chosen image is kept for the batch, so a missing cover is not asked for by every file.
+    async findCover(search: AlbumSearch): Promise<Buffer | null> {
+        const key = `album-cover:${getSearchKey(search)}`;
+        const request = await this.services.cache
+            .getOrLoad(key, () => this.pickCover(search))
+            .catch(ignoreServiceError);
+        return request ? this.downloadCover(request) : null;
     }
 
-    private lookUp(search: AlbumSearch): Promise<FoundAlbum | null> {
+    private downloadCover(request: ImageRequest): Promise<Buffer | null> {
+        return this.services.images.download(request).catch(ignoreServiceError);
+    }
+
+    // An album not confirmed yet may be after a service failure, so it is not kept.
+    private async pickCover(search: AlbumSearch): Promise<ImageRequest | null> {
+        const confirmed = await this.confirmAlbum(search);
+        if (!confirmed) {
+            throw new ServiceError("No confirmed album.");
+        }
+
+        return this.pickConfirmedCover(search, confirmed);
+    }
+
+    private async pickConfirmedCover(
+        search: AlbumSearch,
+        { found, source }: ConfirmedAlbum
+    ): Promise<ImageRequest | null> {
+        const state = { failed: false };
+        const request =
+            (await this.findWorkingCover(found.covers, state)) ??
+            (await this.findBackupCover(search, source, state));
+        return request ?? getMiss(state);
+    }
+
+    private findBackupCover(
+        search: AlbumSearch,
+        confirmedBy: AlbumSource,
+        state: LookupState
+    ): Promise<ImageRequest | null> {
+        const step = { label: "cover", subject: describeSearch(search) };
+        const backups = this.coverSources.filter(
+            (source) => source !== confirmedBy
+        );
+        return this.services.lookups.step(step, () =>
+            this.findFirstBackupCover(backups, search, state)
+        );
+    }
+
+    private async findFirstBackupCover(
+        backups: AlbumSource[],
+        search: AlbumSearch,
+        state: LookupState
+    ): Promise<ImageRequest | null> {
+        for (const source of backups) {
+            const request = await this.findSourceCover(source, search, state);
+            if (request) {
+                return request;
+            }
+        }
+
+        return null;
+    }
+
+    private async findSourceCover(
+        source: AlbumSource,
+        search: AlbumSearch,
+        state: LookupState
+    ): Promise<ImageRequest | null> {
+        const found = await this.findInSource(source, search, state);
+        return found && this.findWorkingCover(found.covers, state);
+    }
+
+    private async findWorkingCover(
+        covers: ImageRequest[],
+        state: LookupState
+    ): Promise<ImageRequest | null> {
+        for (const request of covers) {
+            const image = await this.services.images
+                .download(request)
+                .catch((error: unknown) => noteDownloadFailure(error, state));
+            if (image) {
+                return request;
+            }
+        }
+
+        return null;
+    }
+
+    private lookUp(search: AlbumSearch): Promise<ConfirmedAlbum | null> {
         const step = { label: "album", subject: describeSearch(search) };
         return this.services.lookups.step(step, () =>
             this.findInSources(search)
@@ -54,12 +174,12 @@ export class AlbumFinder {
 
     private async findInSources(
         search: AlbumSearch
-    ): Promise<FoundAlbum | null> {
+    ): Promise<ConfirmedAlbum | null> {
         const state = { failed: false };
         for (const source of this.sources) {
             const found = await this.findInSource(source, search, state);
             if (found) {
-                return found;
+                return { found, source };
             }
         }
 

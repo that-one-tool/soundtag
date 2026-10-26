@@ -104,6 +104,7 @@ function createRunner(overrides: { libraryRoot?: string } = {}) {
                     }),
                 },
             ],
+            [],
             createProviderServices()
         ),
         logger,

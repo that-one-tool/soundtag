@@ -384,6 +384,14 @@ album's cover, or, when the service has none, to one found for the song
 (fallbacks included); with neither, it stays. An album no service confirms
 leaves the tags as they are.
 
+The confirmed album's cover is the service's largest: 1200 px from the Cover
+Art Archive (500 px when it has no larger), Deezer's 1000×1000 artwork or
+Discogs' primary image. When it cannot be downloaded, Deezer's cover for the
+album is taken instead (logged as a `cover` step). The cover chosen for a
+folder is kept for the batch, so an image the service does not have (HTTP 404
+or 410) is asked for once; after any other failure, the next file asks again.
+Deezer is not asked again when it confirmed the album itself.
+
 When the tags look wrong (no artist, or a title holding " - " or the artist's
 name) and lead to nothing, SoundTag searches again from the file and folder
 names alone. A song found this way replaces the suspect title; the file's other

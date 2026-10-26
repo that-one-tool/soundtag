@@ -1,3 +1,4 @@
+import type { ImageRequest } from "../../shared/http.js";
 import { isSearchedAlbum } from "../track-matching.js";
 import { valueOrEmpty } from "../track-metadata.js";
 import type { AlbumSearch, AlbumSource, FoundAlbum } from "../types.js";
@@ -6,6 +7,8 @@ import {
     type MusicBrainzClient,
     type MusicBrainzReleaseGroup,
 } from "./musicbrainz-client.js";
+
+const COVER_SIZES = [1200, 500];
 
 function isSearched(
     group: MusicBrainzReleaseGroup,
@@ -26,8 +29,15 @@ export class MusicBrainzAlbumSource implements AlbumSource {
         return group ? this.describeAlbum(group) : null;
     }
 
+    // Like Deezer's 1000 px artwork; the 500 px one when the archive has no larger.
+    private getCoverRequests(groupId: string): ImageRequest[] {
+        return COVER_SIZES.map((size) =>
+            this.client.getReleaseGroupCoverRequest(groupId, size)
+        );
+    }
+
     private describeAlbum({ id, title }: MusicBrainzReleaseGroup): FoundAlbum {
-        const covers = id ? [this.client.getReleaseGroupCoverRequest(id)] : [];
+        const covers = id ? this.getCoverRequests(id) : [];
         return { album: valueOrEmpty(title), covers };
     }
 }

@@ -2,9 +2,8 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { test } from "node:test";
-import { AlbumFinder } from "../../src/metadata/album-finder.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
-import type { FoundAlbum, TrackSearch } from "../../src/metadata/types.js";
+import type { TrackSearch } from "../../src/metadata/types.js";
 import { tagCoverOnly } from "../../src/processing/cover-only.js";
 import { getTagStore } from "../../src/tags/audio-tags.js";
 import type { StoredTags } from "../../src/tags/types.js";
@@ -32,11 +31,6 @@ const search: TrackSearch = {
     artist: "Band",
     album: "Real Album",
 };
-const realAlbum: FoundAlbum = {
-    album: "Real Album",
-    covers: [{ url: "https://covers.test/album.jpg" }],
-};
-
 async function createTrack(cover: string | null): Promise<string> {
     const source = path.join(await createTemporaryDirectory(), "track.mp3");
     await fs.writeFile(source, "audio bytes");
@@ -68,17 +62,10 @@ function createChain(cover: string | null, searches: TrackSearch[] = []) {
     );
 }
 
-function serveImages(): void {
-    globalThis.fetch = async (input) =>
-        new Response(`image ${new URL(input.toString()).pathname}`, {
-            headers: { "content-type": "image/jpeg" },
-        });
-}
-
 async function runCoverOnly(
     source: string,
     options: {
-        folderAlbum?: FoundAlbum | null;
+        folderCover?: string;
         replaceCovers?: boolean;
         chain?: MetadataChain;
     } = {}
@@ -86,16 +73,16 @@ async function runCoverOnly(
     const logger = createRecordingLogger();
     const stored: StoredTags = await getTagStore(source).read(source);
     const albumLookups: string[] = [];
-    const findFolderAlbum = async () => {
+    const findFolderCover = async () => {
         albumLookups.push(source);
-        return options.folderAlbum ?? null;
+        const { folderCover } = options;
+        return folderCover === undefined ? null : Buffer.from(folderCover);
     };
     const status = await tagCoverOnly(
         source,
-        { stored, search, findFolderAlbum },
+        { stored, search, findFolderCover },
         {
             metadataChain: options.chain ?? createChain("found cover"),
-            albums: new AlbumFinder([], createProviderServices()),
             logger,
             replaceCovers: options.replaceCovers,
         }
@@ -104,12 +91,11 @@ async function runCoverOnly(
 }
 
 test("tagCoverOnly writes the confirmed album's cover and nothing else", async () => {
-    serveImages();
     const source = await createTrack(null);
     const searches: TrackSearch[] = [];
 
     const { status, logger } = await runCoverOnly(source, {
-        folderAlbum: realAlbum,
+        folderCover: "album cover",
         chain: createChain("found cover", searches),
     });
 
@@ -120,12 +106,12 @@ test("tagCoverOnly writes the confirmed album's cover and nothing else", async (
     assert.deepEqual(tags.extras, { genre: "Rock" });
     assert.deepEqual(
         await getTagStore(source).readCover(source),
-        Buffer.from("image /album.jpg")
+        Buffer.from("album cover")
     );
     assert.deepEqual(logger.infos, ["  write  cover"]);
 });
 
-test("tagCoverOnly searches the services without a confirmed album", async () => {
+test("tagCoverOnly searches the services without a folder album cover", async () => {
     const source = await createTrack(null);
     const searches: TrackSearch[] = [];
 
@@ -145,23 +131,12 @@ test("tagCoverOnly searches the services without a confirmed album", async () =>
     );
 });
 
-test("tagCoverOnly searches the services when the album has no cover", async () => {
-    const source = await createTrack(null);
-
-    await runCoverOnly(source, { folderAlbum: { ...realAlbum, covers: [] } });
-
-    assert.deepEqual(
-        await getTagStore(source).readCover(source),
-        Buffer.from("found cover")
-    );
-});
-
 test("tagCoverOnly keeps an existing cover unless replacing covers", async () => {
     const source = await createTrack("old cover");
     const before = await fs.readFile(source);
 
     const { status, logger, albumLookups } = await runCoverOnly(source, {
-        folderAlbum: realAlbum,
+        folderCover: "album cover",
     });
 
     assert.equal(status, "SKIPPED");

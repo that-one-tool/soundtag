@@ -1,7 +1,6 @@
-import type { AlbumFinder } from "../metadata/album-finder.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
 import { EMPTY_TRACK_INFO } from "../metadata/track-metadata.js";
-import type { FoundAlbum, TrackSearch } from "../metadata/types.js";
+import type { TrackSearch } from "../metadata/types.js";
 import type { Logger } from "../shared/logger.js";
 import { getTagStore } from "../tags/audio-tags.js";
 import type { StoredTags } from "../tags/types.js";
@@ -13,12 +12,11 @@ export interface CoverTrack {
     stored: StoredTags;
     search: TrackSearch;
     // Lazy, so files that keep their cover cost no album lookup.
-    findFolderAlbum(): Promise<FoundAlbum | null>;
+    findFolderCover(): Promise<Buffer | null>;
 }
 
 export interface CoverTools {
     metadataChain: MetadataChain;
-    albums?: AlbumFinder;
     logger: Logger;
     replaceCovers?: boolean;
 }
@@ -30,14 +28,6 @@ function skipTrack(logger: Logger, reason: string): TrackStatus {
 
 function keepsCover({ stored }: CoverTrack, tools: CoverTools): boolean {
     return stored.hasCover && !tools.replaceCovers;
-}
-
-async function findAlbumCover(
-    track: CoverTrack,
-    albums: AlbumFinder | undefined
-): Promise<Buffer | null> {
-    const folderAlbum = await track.findFolderAlbum();
-    return folderAlbum && albums ? albums.findCover(folderAlbum) : null;
 }
 
 async function findServiceCover(
@@ -56,7 +46,7 @@ async function findNewCover(
     tools: CoverTools
 ): Promise<Buffer | null> {
     const cover =
-        (await findAlbumCover(track, tools.albums)) ??
+        (await track.findFolderCover()) ??
         (await findServiceCover(track, tools));
     const isSame = await isStoredCover(source, track.stored, cover);
     return isSame ? null : cover;

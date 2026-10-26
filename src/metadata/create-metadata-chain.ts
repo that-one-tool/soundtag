@@ -289,18 +289,21 @@ function createChain(
     return { chain, deezer };
 }
 
-// ListenBrainz cannot search an album by its name.
-function createAlbumSources(
+// ListenBrainz searches albums through MusicBrainz; Deezer's covers back up the others'.
+function createAlbumFinder(
     keys: ProviderKeys,
-    { deezer, musicBrainz, discogs }: ServiceClients
-): AlbumSource[] {
-    return [
+    { deezer, musicBrainz, discogs }: ServiceClients,
+    services: ProviderServices
+): AlbumFinder {
+    const deezerAlbums = new DeezerAlbumSource(deezer);
+    const sources: AlbumSource[] = [
         ...(keys.musicBrainzUserAgent
             ? [new MusicBrainzAlbumSource(musicBrainz)]
             : []),
-        new DeezerAlbumSource(deezer),
+        deezerAlbums,
         ...(discogs ? [new DiscogsAlbumSource(discogs)] : []),
     ];
+    return new AlbumFinder(sources, [deezerAlbums], services);
 }
 
 export function createMetadataLookups(
@@ -319,6 +322,6 @@ export function createMetadataLookups(
         services
     );
     const corrector = new TrackCorrector(brainz, deezer, services.lookups);
-    const albums = new AlbumFinder(createAlbumSources(keys, clients), services);
+    const albums = createAlbumFinder(keys, clients, services);
     return { chain, corrector, albums };
 }

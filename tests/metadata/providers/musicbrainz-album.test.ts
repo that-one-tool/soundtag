@@ -40,7 +40,10 @@ test("MusicBrainzAlbumSource gives the searched release group and its cover", as
     assert.equal(found?.album, "Discovery");
     assert.deepEqual(
         found?.covers.map(({ url }) => url.toString()),
-        ["https://coverartarchive.org/release-group/group/front-500"]
+        [
+            "https://coverartarchive.org/release-group/group/front-1200",
+            "https://coverartarchive.org/release-group/group/front-500",
+        ]
     );
 });
 

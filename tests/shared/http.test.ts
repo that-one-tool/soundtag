@@ -6,7 +6,11 @@ import {
     getRetryAfterDelay,
     readJsonResponse,
 } from "../../src/shared/http.js";
-import { ServiceError, TimeoutError } from "../../src/shared/errors.js";
+import {
+    HttpStatusError,
+    ServiceError,
+    TimeoutError,
+} from "../../src/shared/errors.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 
 restoreFetchAfterEach();
@@ -92,6 +96,15 @@ test("downloadImage returns image bytes and sends request headers", async () => 
 
     assert.deepEqual(image, Buffer.from("image-bytes"));
     assert.equal(userAgent, "SoundTag");
+});
+
+test("downloadImage keeps the status of a failed image response", async () => {
+    globalThis.fetch = async () => new Response(null, { status: 404 });
+
+    await assert.rejects(
+        downloadImage({ url: "https://example.test/cover.jpg" }),
+        (error) => error instanceof HttpStatusError && error.status === 404
+    );
 });
 
 test("downloadImage rejects failed, non-image, and empty responses", async () => {

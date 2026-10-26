@@ -62,6 +62,8 @@ test("createMetadataLookups orders every configured provider", () => {
         albums.sources.map((source) => source.constructor),
         [MusicBrainzAlbumSource, DeezerAlbumSource, DiscogsAlbumSource]
     );
+    assert.equal(albums.coverSources[0], albums.sources[1]);
+    assert.equal(albums.coverSources.length, 1);
 });
 
 test("createMetadataLookups warns and skips unconfigured optional providers", () => {
