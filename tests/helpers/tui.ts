@@ -15,7 +15,8 @@ import type { TagJobSettings, TagTarget } from "../../src/tui/types.js";
 export const DEFAULT_JOB_SETTINGS: TagJobSettings = {
     renameFiles: false,
     fixTags: false,
-    overwriteTags: false,
+    replaceCovers: false,
+    coversOnly: false,
 };
 
 export const RENAMING_JOB_SETTINGS: TagJobSettings = {
@@ -54,7 +55,8 @@ export function createControlledServices(): {
             subfolders: new ToggleSetting(true),
             renaming: new ToggleSetting(false),
             fixing: new ToggleSetting(false),
-            overwriting: new ToggleSetting(false),
+            coverReplacing: new ToggleSetting(false),
+            coversOnly: new ToggleSetting(false),
             detailsCache: createDetailsCache(),
             coverCache: createCoverCache("blocks"),
             coverOverlay: new CoverOverlay(() => {}),

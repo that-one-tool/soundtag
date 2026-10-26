@@ -30,8 +30,16 @@ async function renameAlone(
     status: TrackStatus,
     tags?: StoredTags
 ) {
+    const read = tags ?? (await readTagsOrNull(source));
     return renameTrack(
-        { source, status, tags: tags ?? (await readTagsOrNull(source)) },
+        { source, status, tags: read, songFound: true },
+        { folderNames: new FolderNameCache([source]), logger: consoleLogger }
+    );
+}
+
+function renameUnfound(source: string, tags: StoredTags) {
+    return renameTrack(
+        { source, status: "TAGGED", tags, songFound: false },
         { folderNames: new FolderNameCache([source]), logger: consoleLogger }
     );
 }
@@ -185,7 +193,12 @@ test("renameTrack logs to the injected logger", async () => {
     const logger = createRecordingLogger();
 
     await renameTrack(
-        { source, status: "TAGGED", tags: await readTagsOrNull(source) },
+        {
+            source,
+            status: "TAGGED",
+            tags: await readTagsOrNull(source),
+            songFound: true,
+        },
         { folderNames: new FolderNameCache([source]), logger }
     );
 
@@ -204,4 +217,22 @@ test("renameTrack names the file from the given tags without reading it", async 
     });
 
     assert.equal(renamed, path.join(directory, "AC_DC - Back In Black.mp3"));
+});
+
+test("renameTrack trusts a tagged file no service found only once fully tagged", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = await createTaggedMp3(directory, "01 track.mp3");
+    const tags = await getTagStore(source).read(source);
+    const fullyTagged = {
+        ...tags,
+        info: { ...tags.info, year: "1990" },
+        extras: { genre: "Rock" },
+        hasCover: true,
+    };
+
+    assert.equal(await renameUnfound(source, tags), null);
+    assert.equal(
+        await renameUnfound(source, fullyTagged),
+        path.join(directory, "AC_DC - Thunderstruck.mp3")
+    );
 });

@@ -26,6 +26,14 @@ const enableTagFixing: OptionHandler = (options) => {
     options.fixTags = true;
 };
 
+const enableCoverReplacing: OptionHandler = (options) => {
+    options.replaceCovers = true;
+};
+
+const enableCoversOnly: OptionHandler = (options) => {
+    options.coversOnly = true;
+};
+
 const OPTION_HANDLERS = new Map<string, OptionHandler>([
     ["--recursive", enableRecursion],
     ["-r", enableRecursion],
@@ -35,6 +43,8 @@ const OPTION_HANDLERS = new Map<string, OptionHandler>([
     ["--rename", enableRenaming],
     ["--no-rename", disableRenaming],
     ["--fix", enableTagFixing],
+    ["--replace-covers", enableCoverReplacing],
+    ["--covers-only", enableCoversOnly],
 ]);
 
 function setSourcePath(options: CommandLineOptions, sourcePath: string): void {
@@ -65,6 +75,8 @@ export function parseArguments(args: string[]): CommandLineOptions {
         verbose: false,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
     };
 
     for (const arg of args) {

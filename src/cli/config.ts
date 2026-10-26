@@ -30,16 +30,13 @@ export async function resolveSourceRoot(
 }
 
 export function loadSessionConfig(sources: ConfigSources): SessionConfig {
-    const options = parseArguments(sources.argv);
+    const { sourcePath, ...options } = parseArguments(sources.argv);
 
     return {
-        sourcePath: options.sourcePath,
+        sourcePath,
         settings: {
             lastFmApiKey: sources.env.LASTFM_API_KEY,
-            recursive: options.recursive,
-            verbose: options.verbose,
-            renameFiles: options.renameFiles,
-            fixTags: options.fixTags,
+            ...options,
             musicBrainzUserAgent: sources.env.MUSICBRAINZ_USER_AGENT,
             youtubeApiKey: sources.env.YOUTUBE_API_KEY,
             listenBrainzToken: sources.env.LISTENBRAINZ_TOKEN,

@@ -964,8 +964,6 @@ test("processBatch reports the corrections of each file", async () => {
                     title: "Dancing Queen",
                     artist: "ABBA",
                     firstReleaseYear: "1976",
-                    albums: [],
-                    artistAlbums: [],
                 }),
             },
         ],

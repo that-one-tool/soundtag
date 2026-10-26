@@ -19,15 +19,18 @@ import {
     createTestChain,
     emptyInfo,
 } from "../helpers/metadata-chain.js";
+import { AlbumFinder } from "../../src/metadata/album-finder.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import { TrackCorrector } from "../../src/metadata/track-corrector.js";
 import type {
+    AlbumSearch,
     CanonicalTrack,
     ProviderNeeds,
     TrackExtras,
     TrackMetadata,
     TrackSearch,
 } from "../../src/metadata/types.js";
+import type { ImageRequest } from "../../src/shared/http.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
 
 restoreFetchAfterEach();
@@ -618,6 +621,7 @@ test("processTrack returns the tags it read from a skipped track", async () => {
     assert.deepEqual(result, {
         status: "SKIPPED",
         tags: await getTagStore(source).read(source),
+        songFound: false,
         corrections: [],
     });
 });
@@ -661,6 +665,7 @@ test("processTrack still reports a tagged track whose tags cannot be read back",
     assert.deepEqual(result, {
         status: "TAGGED",
         tags: null,
+        songFound: true,
         corrections: [],
     });
     assert.deepEqual(logger.errors, [
@@ -810,8 +815,6 @@ const dancingQueen: CanonicalTrack = {
     title: "Dancing Queen",
     artist: "ABBA",
     firstReleaseYear: "1976",
-    albums: [],
-    artistAlbums: [],
 };
 
 async function createCompilationTrack(
@@ -860,6 +863,7 @@ test("processTrack corrects a properly tagged file in fix mode", async () => {
         corrector,
     });
 
+    assert.equal(result.songFound, true);
     assert.equal(result.status, "TAGGED");
     assert.deepEqual(result.tags?.info, {
         title: "Dancing Queen",
@@ -951,6 +955,7 @@ test("processTrack writes the corrections when the services find nothing else", 
     });
 
     assert.equal(result.status, "TAGGED");
+    assert.equal(result.songFound, true);
     assert.equal(result.tags?.info.title, "Dancing Queen");
     assert.equal(output.logs.includes("  skip   not found"), false);
 });
@@ -988,8 +993,6 @@ test("processTrack keeps multi-value fields of a FLAC it only corrects", async (
     const { corrector } = createFakeCorrector({
         ...dancingQueen,
         firstReleaseYear: "",
-        albums: [],
-        artistAlbums: [],
     });
     const nothingChain = new MetadataChain(
         [{ name: "Fake", findMetadata: async () => null }],
@@ -1097,8 +1100,6 @@ test("processTrack replaces a wrong artist and title that two services confirm",
         title: "Stepping Out",
         artist: "Eric Clapton & The Powerhouse",
         firstReleaseYear: "1966",
-        albums: [],
-        artistAlbums: [],
     };
     const findSplitTitle = async ({ artist }: TrackSearch) =>
         artist === "Eric Clapton And The Powerhouse" ? steppingOut : null;
@@ -1127,80 +1128,6 @@ test("processTrack replaces a wrong artist and title that two services confirm",
         album: "Blues",
         year: "1966",
     });
-});
-
-test("processTrack replaces a wrong album and the cover and numbers that came with it", async () => {
-    const directory = await createTemporaryDirectory();
-    const albumDirectory = path.join(directory, "Band", "Real Album");
-    await fs.mkdir(albumDirectory, { recursive: true });
-    const source = path.join(albumDirectory, "track.mp3");
-    await fs.writeFile(source, "audio bytes");
-    await getTagStore(source).write(source, {
-        info: {
-            title: "Madison",
-            artist: "Band",
-            album: "The Half of It: A Memoir",
-            year: "2001",
-        },
-        extras: { genre: "Rock", trackNumber: 7 },
-        coverData: Buffer.from("old cover"),
-    });
-    const corrector = new TrackCorrector(
-        [
-            {
-                name: "Fake",
-                findCanonical: async () => ({
-                    title: "Madison",
-                    artist: "Band",
-                    firstReleaseYear: "",
-                    albums: ["Real Album"],
-                    artistAlbums: ["Real Album"],
-                }),
-            },
-        ],
-        { name: "Witness", findCanonical: async () => null },
-        createProviderServices().lookups
-    );
-    const searches: TrackSearch[] = [];
-    const releaseChain = new MetadataChain(
-        [
-            {
-                name: "Fake",
-                findMetadata: async (search) => {
-                    searches.push(search);
-                    return {
-                        info: {
-                            ...emptyInfo,
-                            title: "Madison",
-                            artist: "Band",
-                        },
-                        extras: { trackNumber: 2 },
-                        coverData: Buffer.from("new cover"),
-                    };
-                },
-            },
-        ],
-        [],
-        createProviderServices()
-    );
-
-    const result = await processTrack(source, {
-        sourceRoot: directory,
-        logger: consoleLogger,
-        metadataChain: releaseChain,
-        corrector,
-    });
-
-    assert.equal(result.status, "TAGGED");
-    assert.equal(searches[0].album, "Real Album");
-    assert.equal(result.tags?.info.album, "Real Album");
-    assert.equal(result.tags?.extras.trackNumber, 2);
-    assert.equal(result.tags?.extras.genre, "Rock");
-    const tags = await NodeID3.Promise.read(source);
-    assert.deepEqual(
-        typeof tags.image === "object" && tags.image.imageBuffer,
-        Buffer.from("new cover")
-    );
 });
 
 async function createFullyTaggedTrack(): Promise<string> {
@@ -1253,77 +1180,48 @@ const newMetadata: TrackMetadata = {
     coverData: Buffer.from("new cover"),
 };
 
-function overwriteTrack(
-    source: string,
-    metadataChain: MetadataChain,
-    corrector?: TrackCorrector
-) {
+function replaceCovers(source: string, metadataChain: MetadataChain) {
     return processTrack(source, {
         sourceRoot: path.dirname(source),
         logger: consoleLogger,
         metadataChain,
-        corrector,
-        overwriteTags: true,
+        replaceCovers: true,
     });
 }
 
-test("processTrack overwrites existing tags with what the services find", async () => {
+test("processTrack replaces the cover of a tagged file and fills only missing tags", async () => {
     const source = await createFullyTaggedTrack();
     const calls: ProviderCall[] = [];
 
-    const result = await overwriteTrack(
+    const result = await replaceCovers(
         source,
         createRecordingChain(newMetadata, calls)
     );
 
     assert.equal(result.status, "TAGGED");
-    assert.deepEqual(calls, [
-        {
-            search: {
-                title: "Old Title",
-                artist: "Old Artist",
-                album: "Old Album",
-            },
-            needs: { cover: true, details: true },
-        },
-    ]);
-    assert.deepEqual(result.tags?.info, newMetadata.info);
-    assert.deepEqual(result.tags?.extras, newMetadata.extras);
+    assert.deepEqual(calls[0].needs, { cover: true, details: true });
+    assert.equal(result.tags?.info.title, "Old Title");
+    assert.equal(result.tags?.extras.genre, "Old Genre");
     assert.deepEqual(
         await getTagStore(source).readCover(source),
         Buffer.from("new cover")
     );
+    assert.ok(output.logs.includes("  write  cover"));
 });
 
-test("processTrack keeps the existing tags when overwriting finds nothing", async () => {
+test("processTrack leaves a file whose cover is the one found", async () => {
     const source = await createFullyTaggedTrack();
     const before = await fs.readFile(source);
+    const sameCover = { ...newMetadata, coverData: Buffer.from("old cover") };
 
-    const result = await overwriteTrack(source, createRecordingChain(null));
-
-    assert.equal(result.status, "SKIPPED");
-    assert.deepEqual(await fs.readFile(source), before);
-    assert.ok(output.logs.includes("  skip   not found"));
-});
-
-test("processTrack leaves a file unchanged when overwriting finds the same tags", async () => {
-    const source = await createFullyTaggedTrack();
-    const before = await fs.readFile(source);
-    const same = await getTagStore(source).read(source);
-    const found = {
-        info: same.info,
-        extras: same.extras,
-        coverData: Buffer.from("old cover"),
-    };
-
-    const result = await overwriteTrack(source, createRecordingChain(found));
+    const result = await replaceCovers(source, createRecordingChain(sameCover));
 
     assert.equal(result.status, "SKIPPED");
     assert.deepEqual(await fs.readFile(source), before);
     assert.ok(output.logs.includes("  skip   nothing new"));
 });
 
-test("processTrack keeps the existing cover over a fallback cover when overwriting", async () => {
+test("processTrack never replaces a cover with a fallback cover", async () => {
     const source = await createFullyTaggedTrack();
     const withoutCover = { ...newMetadata, coverData: null };
     const chain = createRecordingChain(
@@ -1332,67 +1230,13 @@ test("processTrack keeps the existing cover over a fallback cover when overwriti
         Buffer.from("fallback")
     );
 
-    await overwriteTrack(source, chain);
+    const result = await replaceCovers(source, chain);
 
+    assert.equal(result.status, "SKIPPED");
     assert.deepEqual(
         await getTagStore(source).readCover(source),
         Buffer.from("old cover")
     );
-    assert.ok(
-        output.logs.includes(
-            '  write  title "New Title" · artist "New Artist" · album "New Album" · year "2001" · genre "New Genre" · track 5 · cleared disc'
-        )
-    );
-});
-
-test("processTrack keeps fix-mode corrections over what overwriting finds", async () => {
-    const source = await createCompilationTrack();
-    const { corrector } = createFakeCorrector(dancingQueen);
-    const remaster = {
-        ...newMetadata,
-        info: { ...newMetadata.info, title: "Dancing Queen", year: "2011" },
-    };
-
-    const result = await overwriteTrack(
-        source,
-        createRecordingChain(remaster),
-        corrector
-    );
-
-    assert.equal(result.status, "TAGGED");
-    assert.deepEqual(result.tags?.info, {
-        title: "Dancing Queen",
-        artist: "ABBA",
-        album: "New Album",
-        year: "1976",
-    });
-});
-
-test("processTrack writes the corrections when overwriting finds nothing", async () => {
-    const source = await createCompilationTrack();
-    const { corrector } = createFakeCorrector(dancingQueen);
-
-    const result = await overwriteTrack(
-        source,
-        createRecordingChain(null),
-        corrector
-    );
-
-    assert.equal(result.status, "TAGGED");
-    assert.equal(result.tags?.info.year, "1976");
-});
-
-test("processTrack counts the kept tags as found when overwriting", async () => {
-    const source = await createFullyTaggedTrack();
-    const titleOnly = {
-        info: { ...emptyInfo, title: "New Title", artist: "Old Artist" },
-        extras: {},
-        coverData: null,
-    };
-
-    await overwriteTrack(source, createRecordingChain(titleOnly));
-
-    assert.ok(output.logs.includes('  write  title "New Title"'));
 });
 
 async function createLibraryTrack(
@@ -1541,10 +1385,9 @@ test("processTrack corrects the tags from the library path in fix mode", async (
     });
     assert.deepEqual(result.corrections, [
         { field: "title", from: "Fernando", to: "Dancing Queen" },
-        { field: "album", from: "Arrival", to: "Gold" },
         { field: "artist", from: "Abba", to: "ABBA" },
     ]);
-    assert.equal(result.tags?.info.album, "Gold");
+    assert.equal(result.tags?.info.album, "Arrival");
 });
 
 test("processTrack searches with the tags when they name another version than the path", async () => {
@@ -1585,22 +1428,6 @@ test("processTrack searches once when the path only spells the tags differently"
     assert.equal(searches.length, 1);
 });
 
-test("processTrack does not pin the folder album over a stored one when overwriting", async () => {
-    const source = await createLibraryTrack(
-        ["Old Artist", "Old Artist - Best Of"],
-        "Old Artist - Old Title.mp3",
-        { title: "Old Title", artist: "Old Artist", album: "Old Album" }
-    );
-    const calls: ProviderCall[] = [];
-
-    const result = await overwriteTrack(
-        source,
-        createRecordingChain(newMetadata, calls)
-    );
-
-    assert.equal(result.tags?.info.album, newMetadata.info.album);
-});
-
 test("processTrack takes the path song over a placeholder tag title", async () => {
     const source = await createLibraryTrack(
         ["Alfa Rococo"],
@@ -1634,4 +1461,208 @@ test("processTrack does not search a messier file name after the path", async ()
     });
 
     assert.equal(searches.length, 2);
+});
+
+function createAlbumFinder(
+    album: string | null,
+    searches: AlbumSearch[] = [],
+    covers: ImageRequest[] = []
+) {
+    const source = {
+        name: "FakeAlbums",
+        findAlbum: async (search: AlbumSearch) => {
+            searches.push(search);
+            return album === null ? null : { album, covers };
+        },
+    };
+    return new AlbumFinder([source], createProviderServices());
+}
+
+async function createAlbumFolderTrack(folder: string): Promise<string> {
+    const directory = path.join(await createTemporaryDirectory(), folder);
+    await fs.mkdir(directory, { recursive: true });
+    const source = path.join(directory, "07 Madison.mp3");
+    await fs.writeFile(source, "audio bytes");
+    await getTagStore(source).write(source, {
+        info: {
+            title: "Madison",
+            artist: "Band",
+            album: "The Half of It",
+            year: "2001",
+        },
+        extras: {
+            genre: "Rock",
+            albumArtist: "Old Artist",
+            trackNumber: 7,
+            discNumber: 2,
+        },
+        coverData: Buffer.from("old cover"),
+    });
+    return source;
+}
+
+test("processTrack takes the folder album a service confirms and looks its release up again", async () => {
+    const source = await createAlbumFolderTrack("Band - real album");
+    const albumSearches: AlbumSearch[] = [];
+    const calls: ProviderCall[] = [];
+    const found = {
+        info: { ...emptyInfo, title: "Madison", artist: "Band" },
+        extras: { trackNumber: 2 },
+        coverData: Buffer.from("new cover"),
+    };
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createRecordingChain(found, calls),
+        albums: createAlbumFinder("Real Album", albumSearches),
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.equal(result.songFound, true);
+    assert.deepEqual(albumSearches, [{ artist: "Band", album: "real album" }]);
+    assert.equal(calls[0].search.album, "Real Album");
+    assert.deepEqual(result.corrections, [
+        { field: "album", from: "The Half of It", to: "Real Album" },
+    ]);
+    assert.equal(result.tags?.info.album, "Real Album");
+    assert.deepEqual(result.tags?.extras, { genre: "Rock", trackNumber: 2 });
+    assert.deepEqual(
+        await getTagStore(source).readCover(source),
+        Buffer.from("new cover")
+    );
+    assert.ok(
+        output.logs.includes(
+            "  write  track 2 · cover · cleared album artist, disc"
+        )
+    );
+});
+
+test("processTrack clears the old release when nothing is found for the folder album", async () => {
+    const source = await createAlbumFolderTrack("Band - Real Album");
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createRecordingChain(null),
+        albums: createAlbumFinder("Real Album"),
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.equal(result.songFound, false);
+    assert.equal(result.tags?.info.album, "Real Album");
+    assert.deepEqual(result.tags?.extras, { genre: "Rock" });
+});
+
+test("processTrack keeps the album when no service confirms the folder", async () => {
+    const source = await createAlbumFolderTrack("Band - Real Album");
+    const before = await fs.readFile(source);
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createRecordingChain(null),
+        albums: createAlbumFinder(null),
+    });
+
+    assert.equal(result.status, "SKIPPED");
+    assert.deepEqual(await fs.readFile(source), before);
+});
+
+test("processTrack looks no album up outside an artist album folder", async () => {
+    const source = await createAlbumFolderTrack("Band");
+    const albumSearches: AlbumSearch[] = [];
+
+    await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createRecordingChain(null),
+        albums: createAlbumFinder("Real Album", albumSearches),
+    });
+
+    assert.deepEqual(albumSearches, []);
+});
+
+test("processTrack only replaces the cover in covers-only mode", async () => {
+    const source = await createAlbumFolderTrack("Band - real album");
+    const before = await getTagStore(source).read(source);
+    const found = {
+        info: { ...emptyInfo, title: "Other", artist: "Band" },
+        extras: { trackNumber: 2 },
+        coverData: Buffer.from("new cover"),
+    };
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createRecordingChain(found),
+        albums: createAlbumFinder("Real Album"),
+        coversOnly: true,
+        replaceCovers: true,
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.equal(result.songFound, false);
+    assert.deepEqual(result.corrections, []);
+    assert.deepEqual(result.tags?.info, before.info);
+    assert.deepEqual(result.tags?.extras, before.extras);
+    assert.deepEqual(
+        await getTagStore(source).readCover(source),
+        Buffer.from("new cover")
+    );
+});
+
+test("processTrack gives a new album the folder album's cover", async () => {
+    const source = await createAlbumFolderTrack("Band - Real Album");
+    globalThis.fetch = async () =>
+        new Response("album cover", {
+            headers: { "content-type": "image/jpeg" },
+        });
+    const albumCover = [{ url: "https://covers.test/album.jpg" }];
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createRecordingChain(null),
+        albums: createAlbumFinder("Real Album", [], albumCover),
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.deepEqual(
+        await getTagStore(source).readCover(source),
+        Buffer.from("album cover")
+    );
+});
+
+test("processTrack still looks up the release of a new album that has a folder cover", async () => {
+    const source = await createAlbumFolderTrack("Band - Real Album");
+    globalThis.fetch = async () =>
+        new Response("album cover", {
+            headers: { "content-type": "image/jpeg" },
+        });
+    const calls: ProviderCall[] = [];
+    const found = {
+        info: { ...emptyInfo, title: "Madison", artist: "Band" },
+        extras: { trackNumber: 2 },
+        coverData: null,
+    };
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createRecordingChain(found, calls),
+        albums: createAlbumFinder(
+            "Real Album",
+            [],
+            [{ url: "https://covers.test/album.jpg" }]
+        ),
+    });
+
+    assert.equal(calls.length, 1);
+    assert.equal(result.songFound, true);
+    assert.deepEqual(result.tags?.extras, { genre: "Rock", trackNumber: 2 });
+    assert.deepEqual(
+        await getTagStore(source).readCover(source),
+        Buffer.from("album cover")
+    );
 });

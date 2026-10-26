@@ -66,6 +66,11 @@ test("runApp tags a library and prints a summary", async () => {
 
     assert.equal(await runAppIn(workingDirectory, [".", "--rename"]), 0);
     assert.equal(output.logs[1], "                SOUNDTAG");
+    assert.ok(
+        output.logs.some((line) =>
+            line.includes("[--fix] [--replace-covers] [--covers-only]")
+        )
+    );
     assert.ok(output.logs.includes("Skipped:    1"));
     assert.ok(output.logs.includes("PROCESSING COMPLETE"));
     assert.deepEqual(output.logs.slice(-4), [
@@ -107,6 +112,74 @@ test("runApp corrects existing tags with --fix and lists the corrections", async
         "========================================",
         "Done!",
     ]);
+});
+
+test("runApp takes the folder album that Deezer confirms", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    await writeFullyTaggedMp3(
+        path.join(workingDirectory, "Artist - the album", "tagged.mp3")
+    );
+    globalThis.fetch = async (input) =>
+        new URL(input.toString()).pathname === "/search/album"
+            ? Response.json({
+                  data: [{ title: "The Album", artist: { name: "Artist" } }],
+              })
+            : Response.json({});
+
+    assert.equal(await runAppIn(workingDirectory, ["."]), 0);
+
+    assert.deepEqual(output.logs.slice(-4), [
+        "Corrected:",
+        '  Artist - the album/tagged.mp3: album: "" → "The Album"',
+        "========================================",
+        "Done!",
+    ]);
+});
+
+test("runApp replaces only covers with --covers-only --replace-covers", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const source = path.join(
+        workingDirectory,
+        "Artist - the album",
+        "tagged.mp3"
+    );
+    await writeFullyTaggedMp3(source);
+    globalThis.fetch = async (input) => {
+        const url = new URL(input.toString());
+        if (url.hostname !== "api.deezer.com") {
+            return new Response("album cover", {
+                headers: { "content-type": "image/jpeg" },
+            });
+        }
+        return url.pathname === "/search/album"
+            ? Response.json({
+                  data: [
+                      {
+                          title: "The Album",
+                          artist: { name: "Artist" },
+                          cover_xl: "https://cdn.deezer.test/cover.jpg",
+                      },
+                  ],
+              })
+            : Response.json({});
+    };
+
+    assert.equal(
+        await runAppIn(workingDirectory, [
+            ".",
+            "--covers-only",
+            "--replace-covers",
+        ]),
+        0
+    );
+
+    const tags = NodeID3.read(source);
+    assert.equal(tags.album, undefined);
+    assert.deepEqual(
+        typeof tags.image === "object" && tags.image.imageBuffer,
+        Buffer.from("album cover")
+    );
+    assert.ok(output.logs.includes("Successful: 1"));
 });
 
 test("runApp keeps file names by default", async () => {
@@ -215,6 +288,8 @@ test("runApp opens the folder browser in the working directory", async () => {
             verbose: false,
             renameFiles: false,
             fixTags: false,
+            replaceCovers: false,
+            coversOnly: false,
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
             youtubeApiKey: undefined,
             listenBrainzToken: "test-token",

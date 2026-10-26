@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import * as path from "node:path";
 import { test } from "node:test";
-import { parseLibraryPath } from "../../src/library/library-path.js";
+import {
+    parseAlbumFolder,
+    parseLibraryPath,
+} from "../../src/library/library-path.js";
 
 const library = path.resolve("library");
 
@@ -130,4 +133,36 @@ test("parseLibraryPath keeps numbers that name the album", () => {
         parseIn("Queen - Innuendo (320 kbps)", "Queen - Bicycle.mp3")?.album,
         "Innuendo"
     );
+});
+
+function parseAlbumIn(...parts: string[]) {
+    return parseAlbumFolder(path.join(library, ...parts));
+}
+
+test("parseAlbumFolder reads the artist and album whatever the file name", () => {
+    assert.deepEqual(
+        parseAlbumIn("Daft Punk - Discovery", "03 Digital Love.mp3"),
+        { artist: "Daft Punk", album: "Discovery" }
+    );
+    assert.deepEqual(
+        parseAlbumIn("Various - Hits 90", "Haddaway - What Is Love.mp3"),
+        { artist: "Various", album: "Hits 90" }
+    );
+});
+
+test("parseAlbumFolder skips disc folders, years and rip notes", () => {
+    assert.deepEqual(
+        parseAlbumIn(
+            "Daft Punk - 2001 - Discovery (2001) [FLAC]",
+            "CD1",
+            "Digital Love.mp3"
+        ),
+        { artist: "Daft Punk", album: "Discovery" }
+    );
+});
+
+test("parseAlbumFolder needs an artist and an album in the folder name", () => {
+    assert.equal(parseAlbumIn("Daft Punk", "Digital Love.mp3"), null);
+    assert.equal(parseAlbumIn("Daft Punk - Singles", "Digital Love.mp3"), null);
+    assert.equal(parseAlbumIn(" - Discovery", "Digital Love.mp3"), null);
 });

@@ -1,6 +1,5 @@
 import type { LibraryPathTerms } from "../library/types.js";
 import {
-    isSameAlbum,
     isSameArtist,
     isSameName,
     hasNoteAfterName,
@@ -15,7 +14,6 @@ type SameValueCheck = (current: string, pathValue: string) => boolean;
 const PATH_FIELD_CHECKS: [PathField, SameValueCheck[]][] = [
     ["title", [isSameName, hasNoteAfterName]],
     ["artist", [isSameArtist]],
-    ["album", [isSameAlbum, hasNoteAfterName]],
 ];
 
 // Empty fields are left to the search, since file names lose characters such as "?".

@@ -59,7 +59,7 @@ function printBanner(): void {
     console.log("                SOUNDTAG");
     console.log(`${SEPARATOR}\n`);
     console.log(
-        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--rename | --no-rename] [--fix]"
+        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--rename | --no-rename] [--fix] [--replace-covers] [--covers-only]"
     );
 }
 
@@ -127,7 +127,7 @@ function printProcessingStart(fileCount: number): void {
 function createBatchRun(
     config: AppConfig,
     run: TaggingRun,
-    { chain, corrector }: MetadataLookups
+    { chain, corrector, albums }: MetadataLookups
 ): BatchRun {
     return {
         context: {
@@ -135,6 +135,9 @@ function createBatchRun(
             metadataChain: chain,
             logger: consoleLogger,
             corrector: config.fixTags ? corrector : undefined,
+            albums,
+            replaceCovers: config.replaceCovers,
+            coversOnly: config.coversOnly,
         },
         report: run.report,
         stopSignal: run.stopSignal,

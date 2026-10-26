@@ -306,8 +306,6 @@ test("ListenBrainzProvider gives the canonical spelling without a release lookup
         title: "Comfortably Numb",
         artist: "Pink Floyd",
         firstReleaseYear: "",
-        albums: [],
-        artistAlbums: [],
     });
     assert.deepEqual(requested, ["api.listenbrainz.org/1/metadata/lookup/"]);
 });

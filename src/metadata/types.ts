@@ -1,4 +1,5 @@
 import type { BatchCache } from "../shared/batch-cache.js";
+import type { ImageRequest } from "../shared/http.js";
 import type { ImageCache } from "../shared/image-cache.js";
 import type { Logger } from "../shared/logger.js";
 import type { LookupLog } from "../shared/lookup-log.js";
@@ -38,6 +39,22 @@ export interface TrackSearch {
     album: string;
 }
 
+export interface AlbumSearch {
+    artist: string;
+    album: string;
+}
+
+// The album as the service spells it.
+export interface FoundAlbum {
+    album: string;
+    covers: ImageRequest[];
+}
+
+export interface AlbumSource {
+    readonly name: string;
+    findAlbum(search: AlbumSearch): Promise<FoundAlbum | null>;
+}
+
 // details: the year or an extra is still missing.
 export interface ProviderNeeds {
     cover: boolean;
@@ -62,10 +79,6 @@ export interface CanonicalTrack {
     title: string;
     artist: string;
     firstReleaseYear: string;
-    // Albums the service lists the song on; empty when it does not say.
-    albums: string[];
-    // Of those, the albums the song's own artist released (no compilations).
-    artistAlbums: string[];
 }
 
 export interface CanonicalSource {
@@ -87,7 +100,6 @@ export interface CorrectionRequest {
     tagSearch: TrackSearch;
     alternatives: AlternativeSearch[];
     hasSuspectTags: boolean;
-    folderAlbum: string;
 }
 
 export interface TagCorrection {

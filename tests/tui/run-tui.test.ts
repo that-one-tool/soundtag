@@ -113,6 +113,8 @@ test("runTui wires the services and browses the start directory", async () => {
             recursive: true,
             renameFiles: true,
             fixTags: false,
+            replaceCovers: false,
+            coversOnly: false,
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
         },
         streams
@@ -164,6 +166,8 @@ const COVER_OPTIONS = {
     recursive: true,
     renameFiles: true,
     fixTags: false,
+    replaceCovers: false,
+    coversOnly: false,
 };
 
 test("createCoverDisplay detects the mode, measures cells and writes images to stdout", async () => {

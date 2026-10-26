@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { test } from "node:test";
 import { createTagJobRunner } from "../../src/tui/tag-job.js";
+import { AlbumFinder } from "../../src/metadata/album-finder.js";
 import { MetadataChain } from "../../src/metadata/metadata-chain.js";
 import { TrackCorrector } from "../../src/metadata/track-corrector.js";
 import { getTagStore } from "../../src/tags/audio-tags.js";
@@ -49,8 +50,6 @@ const firstReleaseCorrector = new TrackCorrector(
                 title: "",
                 artist: "",
                 firstReleaseYear: "1999",
-                albums: [],
-                artistAlbums: [],
             }),
         },
     ],
@@ -84,7 +83,8 @@ async function createTaggedTrack(
 const RENAMING_OFF = {
     renameFiles: false,
     fixTags: false,
-    overwriteTags: false,
+    replaceCovers: false,
+    coversOnly: false,
 };
 
 function createRunner(overrides: { libraryRoot?: string } = {}) {
@@ -94,6 +94,18 @@ function createRunner(overrides: { libraryRoot?: string } = {}) {
     const runJob = createTagJobRunner({
         metadataChain: foundChain,
         corrector: firstReleaseCorrector,
+        albums: new AlbumFinder(
+            [
+                {
+                    name: "FakeAlbums",
+                    findAlbum: async () => ({
+                        album: "Real Album",
+                        covers: [],
+                    }),
+                },
+            ],
+            createProviderServices()
+        ),
         logger,
         libraryRoot: path.parse(process.cwd()).root,
         onTrackProcessed: (result) => processed.push(result),
@@ -362,15 +374,28 @@ test("a job corrects existing tags only when fixing is on", async () => {
     assert.equal((await getTagStore(kept).read(kept)).info.year, "2024");
 });
 
-test("a job overwrites existing tags only when overwriting is on", async () => {
+async function createFullyTaggedTrack(
+    directory: string,
+    filename: string
+): Promise<string> {
+    const source = await createTrack(directory, filename);
+    await getTagStore(source).write(source, {
+        info: { title: "Old Title", artist: "Artist", album: "", year: "1999" },
+        extras: { genre: "Rock" },
+        coverData: Buffer.from("old cover"),
+    });
+    return source;
+}
+
+test("a job replaces existing covers only when replacing covers is on", async () => {
     const directory = await createTemporaryDirectory();
-    const overwritten = await createTaggedTrack(directory, "overwritten.mp3");
-    const kept = await createTaggedTrack(directory, "kept.mp3");
+    const replaced = await createFullyTaggedTrack(directory, "replaced.mp3");
+    const kept = await createFullyTaggedTrack(directory, "kept.mp3");
     const { runJob } = createRunner();
-    const overwriting = { ...RENAMING_OFF, overwriteTags: true };
+    const replacing = { ...RENAMING_OFF, replaceCovers: true };
 
     await runJob(
-        { kind: "file", path: overwritten, settings: overwriting },
+        { kind: "file", path: replaced, settings: replacing },
         new AbortController().signal
     );
     await runJob(
@@ -378,7 +403,46 @@ test("a job overwrites existing tags only when overwriting is on", async () => {
         new AbortController().signal
     );
 
-    const store = getTagStore(overwritten);
-    assert.equal((await store.read(overwritten)).info.title, "Title");
-    assert.equal((await store.read(kept)).info.title, "Old Title");
+    const store = getTagStore(replaced);
+    assert.deepEqual(await store.readCover(replaced), Buffer.from("cover"));
+    assert.deepEqual(await store.readCover(kept), Buffer.from("old cover"));
+    assert.equal((await store.read(replaced)).info.title, "Old Title");
+});
+
+test("a job takes the folder album a service confirms", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = await createTaggedTrack(
+        path.join(directory, "Artist - real album"),
+        "song.mp3"
+    );
+    const { runJob } = createRunner();
+
+    await runJob(
+        { kind: "file", path: source, settings: RENAMING_OFF },
+        new AbortController().signal
+    );
+
+    assert.equal(
+        (await getTagStore(source).read(source)).info.album,
+        "Real Album"
+    );
+});
+
+test("a job only writes covers when covers-only is on", async () => {
+    const directory = await createTemporaryDirectory();
+    const source = await createTrack(directory, "song.mp3");
+    const { runJob } = createRunner();
+
+    await runJob(
+        {
+            kind: "file",
+            path: source,
+            settings: { ...RENAMING_OFF, coversOnly: true },
+        },
+        new AbortController().signal
+    );
+
+    const store = getTagStore(source);
+    assert.deepEqual(await store.readCover(source), Buffer.from("cover"));
+    assert.equal((await store.read(source)).info.title, "");
 });

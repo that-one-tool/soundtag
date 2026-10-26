@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MusicBrainzClient } from "../../../src/metadata/providers/musicbrainz-client.js";
+import {
+    getMusicBrainzArtist,
+    MusicBrainzClient,
+} from "../../../src/metadata/providers/musicbrainz-client.js";
 import type { ProviderServices } from "../../../src/metadata/types.js";
 import { createFakeClock } from "../../helpers/clock.js";
 import { restoreFetchAfterEach } from "../../helpers/fetch.js";
@@ -207,4 +210,47 @@ test("MusicBrainzClient searches many recordings without keeping them for the ba
         urls.map((url) => url.searchParams.get("limit")),
         ["100", "100"]
     );
+});
+
+test("MusicBrainzClient searches release groups by album and artist", async () => {
+    const { urls } = mockMusicBrainzResponses([
+        () => Response.json({ "release-groups": [{ title: "Discovery" }] }),
+        () => Response.json({}),
+    ]);
+    const client = createClient();
+    const albumSearch = { artist: "Daft Punk", album: 'Dis"covery' };
+
+    const groups = await client.searchReleaseGroups(albumSearch);
+    const missing = await client.searchReleaseGroups(albumSearch);
+
+    assert.deepEqual(groups, [{ title: "Discovery" }]);
+    assert.deepEqual(missing, []);
+    assert.equal(urls[0].pathname, "/ws/2/release-group");
+    assert.equal(
+        urls[0].searchParams.get("query"),
+        'releasegroup:"Dis\\"covery" AND artist:"Daft Punk"'
+    );
+    assert.equal(urls[0].searchParams.get("limit"), "5");
+});
+
+test("MusicBrainzClient builds release group cover requests", () => {
+    const request = createClient().getReleaseGroupCoverRequest("group id");
+
+    assert.equal(
+        request.url.toString(),
+        "https://coverartarchive.org/release-group/group%20id/front-500"
+    );
+    assert.deepEqual(request.headers, { "User-Agent": userAgent });
+});
+
+test("getMusicBrainzArtist joins the credited names", () => {
+    assert.equal(
+        getMusicBrainzArtist([
+            { name: "Daft Punk", joinphrase: " feat. " },
+            { artist: { name: "Pharrell Williams" } },
+        ]),
+        "Daft Punk feat. Pharrell Williams"
+    );
+    assert.equal(getMusicBrainzArtist([{}]), "");
+    assert.equal(getMusicBrainzArtist(), "");
 });

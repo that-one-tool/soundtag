@@ -639,14 +639,14 @@ test("App keeps the fixing choice of each queued target", async () => {
     );
 });
 
-test("App keeps the overwriting choice of each queued target", async () => {
+test("App keeps the cover replacing choice of each queued target", async () => {
     const directory = await createLibrary();
     const { lastFrame, stdin, jobs } = await renderApp(directory);
     stdin.write("a");
     await waitFor(() => jobs.length === 1);
 
     stdin.write("o");
-    await waitForFrame(lastFrame, "overwriting on");
+    await waitForFrame(lastFrame, "replacing covers on");
     stdin.write(KEYS.down);
     stdin.write(KEYS.down);
     await waitForFrame(lastFrame, "Black Sabbath");
@@ -656,7 +656,29 @@ test("App keeps the overwriting choice of each queued target", async () => {
     await waitFor(() => jobs.length === 2);
 
     assert.deepEqual(
-        jobs.map(({ target }) => target.settings.overwriteTags),
+        jobs.map(({ target }) => target.settings.replaceCovers),
+        [false, true]
+    );
+});
+
+test("App keeps the covers-only choice of each queued target", async () => {
+    const directory = await createLibrary();
+    const { lastFrame, stdin, jobs } = await renderApp(directory);
+    stdin.write("a");
+    await waitFor(() => jobs.length === 1);
+
+    stdin.write("c");
+    await waitForFrame(lastFrame, "covers only on");
+    stdin.write(KEYS.down);
+    stdin.write(KEYS.down);
+    await waitForFrame(lastFrame, "Black Sabbath");
+    stdin.write("t");
+    await waitForFrame(lastFrame, "1 queued");
+    jobs[0].finish(true);
+    await waitFor(() => jobs.length === 2);
+
+    assert.deepEqual(
+        jobs.map(({ target }) => target.settings.coversOnly),
         [false, true]
     );
 });

@@ -26,6 +26,8 @@ test("createTuiServices routes job results to the status store and logs", async 
         recursive: true,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
         musicBrainzUserAgent: " ",
         startDirectory: directory,
     });
@@ -58,6 +60,8 @@ test("createTuiServices marks files as redone only once their new status is reco
         recursive: true,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
         startDirectory: directory,
     });
     services.statusStore.record({
@@ -92,6 +96,8 @@ test("createTuiServices forgets redone files when a job fails", async () => {
         recursive: true,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
         startDirectory: directory,
     });
     services.redoneFiles.add(path.join(directory, "song.mp3"));
@@ -114,6 +120,8 @@ test("createTuiServices starts the subfolder choice from the options", () => {
         recursive: false,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
         startDirectory: process.cwd(),
     });
 
@@ -127,6 +135,8 @@ test("createTuiServices logs tag clears and checks them against the queue", asyn
         recursive: false,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
         startDirectory: process.cwd(),
     });
     const folder = path.join(await createTemporaryDirectory(), "missing");
@@ -174,6 +184,8 @@ test("createTuiServices moves statuses and queued targets of a renamed album fol
         recursive: false,
         renameFiles: true,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
         startDirectory: directory,
     });
     const moves: PathMove[] = [];
@@ -212,6 +224,8 @@ test("createTuiServices draws no covers by default", async () => {
         recursive: false,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
         startDirectory: process.cwd(),
     });
     const entry = {
@@ -242,6 +256,8 @@ test("createTuiServices takes the cell shape from the cover display", () => {
         recursive: false,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
         startDirectory: process.cwd(),
     };
     const display = {
@@ -261,6 +277,8 @@ test("createTuiServices starts the renaming choice from the options", () => {
         recursive: true,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
         startDirectory: process.cwd(),
     });
 
@@ -274,21 +292,26 @@ test("createTuiServices starts the fixing choice from the options", () => {
         recursive: true,
         renameFiles: true,
         fixTags: true,
+        replaceCovers: false,
+        coversOnly: false,
         startDirectory: process.cwd(),
     });
 
     assert.equal(services.fixing.getSnapshot(), true);
 });
 
-test("createTuiServices starts with overwriting off", () => {
+test("createTuiServices starts the cover choices from the options", () => {
     const services = createTuiServices({
         lastFmApiKey: "key",
         verbose: false,
         recursive: true,
         renameFiles: true,
         fixTags: true,
+        replaceCovers: true,
+        coversOnly: false,
         startDirectory: process.cwd(),
     });
 
-    assert.equal(services.overwriting.getSnapshot(), false);
+    assert.equal(services.coverReplacing.getSnapshot(), true);
+    assert.equal(services.coversOnly.getSnapshot(), false);
 });

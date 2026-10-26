@@ -18,7 +18,6 @@ test("getPathCorrections replaces the fields that name something else", () => {
     assert.deepEqual(getPathCorrections(info, terms), [
         { field: "title", from: "Love Digital", to: "Digital Love" },
         { field: "artist", from: "Justice", to: "Daft Punk" },
-        { field: "album", from: "Discovery", to: "Best Of" },
     ]);
 });
 
@@ -103,6 +102,6 @@ test("getPathCorrections replaces tags that only start like the path", () => {
 
     assert.deepEqual(
         getPathCorrections(info, terms).map(({ field }) => field),
-        ["title", "album"]
+        ["title"]
     );
 });

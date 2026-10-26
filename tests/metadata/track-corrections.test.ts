@@ -3,10 +3,6 @@ import { test } from "node:test";
 import {
     applyCorrections,
     describeCorrection,
-    findAlbumReplacement,
-    getFolderCandidate,
-    isDisputedAlbum,
-    isWrongAlbum,
     getCorrections,
     getIdentityCorrections,
     mergeCanonicalTracks,
@@ -24,8 +20,6 @@ const canonical: CanonicalTrack = {
     title: "Dancing Queen",
     artist: "ABBA",
     firstReleaseYear: "1976",
-    albums: [],
-    artistAlbums: [],
 };
 
 test("getCorrections respells the title and artist and takes the first release year", () => {
@@ -65,8 +59,6 @@ test("getCorrections ignores empty canonical values and identical ones", () => {
         title: "",
         artist: "",
         firstReleaseYear: "",
-        albums: [],
-        artistAlbums: [],
     };
 
     assert.deepEqual(getCorrections(info, empty), []);
@@ -107,8 +99,6 @@ test("getIdentityCorrections keeps identical and empty canonical values", () => 
         title: "",
         artist: "",
         firstReleaseYear: "",
-        albums: [],
-        artistAlbums: [],
     };
     const right = { ...info, title: "Dancing Queen", artist: "ABBA" };
 
@@ -157,86 +147,25 @@ test("mergeCanonicalTracks takes the first spelling and the earliest year", () =
                 title: "",
                 artist: "",
                 firstReleaseYear: "1980",
-                albums: ["Arrival"],
-                artistAlbums: ["Arrival"],
             },
             {
                 title: "Dancing Queen",
                 artist: "ABBA",
                 firstReleaseYear: "",
-                albums: ["Gold", "Arrival"],
-                artistAlbums: ["Gold"],
             },
             {
                 title: "Dancing queen",
                 artist: "Abba",
                 firstReleaseYear: "1976",
-                albums: [],
-                artistAlbums: [],
             },
         ]),
         {
             ...canonical,
-            albums: ["Arrival", "Gold"],
-            artistAlbums: ["Arrival", "Gold"],
         }
     );
     assert.deepEqual(mergeCanonicalTracks([]), {
         title: "",
         artist: "",
         firstReleaseYear: "",
-        albums: [],
-        artistAlbums: [],
     });
-});
-
-test("isWrongAlbum flags an album the song is not on", () => {
-    assert.ok(isWrongAlbum("The Half of It: A Memoir", ["Arrival"]));
-    assert.equal(isWrongAlbum("", ["Arrival"]), false);
-    assert.equal(isWrongAlbum("Anything", []), false);
-});
-
-test("isWrongAlbum accepts either title without its subtitle or edition note", () => {
-    const pairs = [
-        ["Gold", "Gold: Greatest Hits"],
-        ["legend", "Legend (Deluxe)"],
-        ["Get Lucky - Single", "Get Lucky"],
-        ["Random Access Memories (Deluxe Edition)", "Random Access Memories"],
-        ["The Wall (Disc 1)", "The Wall"],
-        ["Album [Explicit]", "Album"],
-    ];
-
-    for (const [album, release] of pairs) {
-        assert.equal(isWrongAlbum(album, [release]), false, album);
-    }
-});
-
-test("isDisputedAlbum trusts an album its folder agrees with", () => {
-    const wrong = { ...info, album: "Indie Release" };
-
-    assert.ok(isDisputedAlbum(wrong, ["Arrival"], "Downloads"));
-    assert.equal(isDisputedAlbum(wrong, ["Arrival"], "indie release"), false);
-});
-
-test("findAlbumReplacement takes only an exact release, in its listed spelling", () => {
-    const releases = ["Arrival", "Live: At Wembley"];
-
-    assert.equal(findAlbumReplacement(releases, ["", "arrival"]), "Arrival");
-    assert.equal(findAlbumReplacement(releases, ["Live"]), "");
-    assert.equal(findAlbumReplacement([], ["Arrival"]), "");
-});
-
-test("getFolderCandidate ignores a folder named after the artist", () => {
-    assert.equal(getFolderCandidate("Arrival", "ABBA"), "Arrival");
-    assert.equal(getFolderCandidate("abba", "ABBA"), "");
-});
-
-test("isWrongAlbum still checks an album that starts with a bracket", () => {
-    assert.ok(isWrongAlbum("[Book]", ["Arrival"]));
-    assert.equal(
-        isWrongAlbum("(What's the Story) Morning Glory?", [
-            "(What's the Story) Morning Glory?",
-        ]),
-        false
-    );
 });

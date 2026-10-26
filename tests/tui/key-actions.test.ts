@@ -26,7 +26,9 @@ test("getKeyAction maps command keys", () => {
     assert.equal(getKeyAction("r", key()), "toggleSubfolders");
     assert.equal(getKeyAction("n", key()), "toggleRenaming");
     assert.equal(getKeyAction("f", key()), "toggleFixing");
-    assert.equal(getKeyAction("o", key()), "toggleOverwriting");
+    assert.equal(getKeyAction("c", key()), "toggleCoversOnly");
+    assert.equal(getKeyAction("c", key({ ctrl: true })), "quit");
+    assert.equal(getKeyAction("o", key()), "toggleCoverReplacing");
     assert.equal(getKeyAction("e", key()), "rename");
     assert.equal(getKeyAction("D", key({ shift: true })), "clearTags");
     assert.equal(getKeyAction("y", key()), "confirmClear");
@@ -39,5 +41,5 @@ test("getKeyAction maps command keys", () => {
 test("getKeyAction ignores other keys", () => {
     assert.equal(getKeyAction("x", key()), undefined);
     assert.equal(getKeyAction("d", key()), undefined);
-    assert.equal(getKeyAction("c", key()), undefined);
+    assert.equal(getKeyAction("z", key()), undefined);
 });

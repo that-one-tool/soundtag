@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
     isSameCredit,
     isSameName,
+    isSearchedAlbum,
     isSameRelease,
     isSameTrack,
     isSameWording,
@@ -286,4 +287,55 @@ test("hasNoteAfterName accepts a name followed by a note only", () => {
     assert.equal(hasNoteAfterName("Greatest Hits II", "Greatest Hits"), false);
     assert.equal(hasNoteAfterName("Song", "Song"), false);
     assert.equal(hasNoteAfterName("Love Song (Live)", "Song"), false);
+});
+
+const discovery = { artist: "Daft Punk", album: "Discovery" };
+
+test("isSearchedAlbum needs the same album by the same artist", () => {
+    assert.equal(
+        isSearchedAlbum({ album: "DISCOVERY", artist: "Daft Punk" }, discovery),
+        true
+    );
+    assert.equal(
+        isSearchedAlbum(
+            { album: "Discovery (Remastered)", artist: "Daft Punk" },
+            discovery
+        ),
+        true
+    );
+    assert.equal(
+        isSearchedAlbum(
+            { album: "Discovery (Deluxe)", artist: "Daft Punk" },
+            discovery
+        ),
+        false
+    );
+    assert.equal(
+        isSearchedAlbum({ album: "Discovery", artist: "Data Punk" }, discovery),
+        false
+    );
+    assert.equal(
+        isSearchedAlbum({ album: undefined, artist: "Daft Punk" }, discovery),
+        false
+    );
+});
+
+test("isSearchedAlbum takes Various and VA for various artists", () => {
+    const hits = { artist: "VA", album: "Hits 90" };
+
+    assert.equal(
+        isSearchedAlbum({ album: "Hits 90", artist: "Various Artists" }, hits),
+        true
+    );
+    assert.equal(
+        isSearchedAlbum(
+            { album: "Hits 90", artist: "Various" },
+            { ...hits, artist: "Various Artists" }
+        ),
+        true
+    );
+    assert.equal(
+        isSearchedAlbum({ album: "Hits 90", artist: "Haddaway" }, hits),
+        false
+    );
 });

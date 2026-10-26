@@ -32,8 +32,6 @@ const steppingOut: CanonicalTrack = {
     title: "Stepping Out",
     artist: "Eric Clapton & The Powerhouse",
     firstReleaseYear: "1966",
-    albums: [],
-    artistAlbums: [],
 };
 
 const variousInfo = {
@@ -77,7 +75,6 @@ function createRequest(
             },
         ],
         hasSuspectTags: true,
-        folderAlbum: "",
         ...overrides,
     };
 }
@@ -92,8 +89,6 @@ test("TrackCorrector asks every source and corrects from their findings", async 
             title: "Dancing Queen",
             artist: "ABBA",
             firstReleaseYear: "",
-            albums: [],
-            artistAlbums: [],
         },
     });
     const missing = createSource({});
@@ -102,8 +97,6 @@ test("TrackCorrector asks every source and corrects from their findings", async 
             title: "Dancing queen",
             artist: "Abba",
             firstReleaseYear: "1976",
-            albums: [],
-            artistAlbums: [],
         },
     });
     const witness = createSource({});
@@ -137,8 +130,6 @@ test("TrackCorrector replaces suspect tags when the witness agrees on an alterna
             title: "Stepping Out",
             artist: "Eric Clapton",
             firstReleaseYear: "",
-            albums: [],
-            artistAlbums: [],
         },
     });
     const corrector = new TrackCorrector([source], witness, lookups);
@@ -177,8 +168,6 @@ test("TrackCorrector keeps trusted tags the sources find", async () => {
             title: "Dancing Queen",
             artist: "ABBA",
             firstReleaseYear: "",
-            albums: [],
-            artistAlbums: [],
         },
         "Eric Clapton": steppingOut,
     });
@@ -200,8 +189,6 @@ test("TrackCorrector only respells when the witness finds another song", async (
             title: "Dancing Queen",
             artist: "ABBA",
             firstReleaseYear: "",
-            albums: [],
-            artistAlbums: [],
         },
         "Eric Clapton": steppingOut,
     });
@@ -210,8 +197,6 @@ test("TrackCorrector only respells when the witness finds another song", async (
             title: "Layla",
             artist: "Eric Clapton",
             firstReleaseYear: "",
-            albums: [],
-            artistAlbums: [],
         },
     });
     const corrector = new TrackCorrector([source], witness, lookups);
@@ -315,82 +300,4 @@ test("TrackCorrector logs one line per search with each service", async () => {
         '  check  split title "Stepping Out" · Eric Clapton: Fake no match 0.0s',
         '  check  file name "Stepping Out" · Eric Clapton & The Powerhouse: Fake ✓ 0.0s · Fake ✓ 0.0s',
     ]);
-});
-
-const dancingQueen: CanonicalTrack = {
-    title: "Dancing Queen",
-    artist: "ABBA",
-    firstReleaseYear: "",
-    albums: ["Arrival", "Gold: Greatest Hits", "Now 45"],
-    artistAlbums: ["Arrival", "Gold: Greatest Hits"],
-};
-
-const wrongAlbumInfo = {
-    title: "Dancing Queen",
-    artist: "ABBA",
-    album: "The Half of It: A Memoir",
-    year: "",
-};
-
-function correctAlbum(folderAlbum: string, witnessed: CanonicalTrack | null) {
-    const logger = createRecordingLogger();
-    const witness = createSource(witnessed ? { Abba: witnessed } : {});
-    const corrector = new TrackCorrector(
-        [createSource({ Abba: dancingQueen })],
-        witness,
-        createProviderServices({ logger }).lookups
-    );
-    const request = createRequest({ hasSuspectTags: false, folderAlbum });
-    const found = corrector.findCorrections(request, wrongAlbumInfo);
-    return { found, witness, logger };
-}
-
-test("TrackCorrector replaces a wrong album with the folder album the song is on", async () => {
-    const { found, witness } = correctAlbum("arrival", dancingQueen);
-
-    assert.deepEqual(await found, [
-        { field: "album", from: "The Half of It: A Memoir", to: "Arrival" },
-    ]);
-    assert.deepEqual(witness.searches, []);
-});
-
-test("TrackCorrector replaces a wrong album with Deezer's when the song is on it", async () => {
-    const deezer = { ...dancingQueen, albums: ["Gold - Greatest Hits"] };
-    const { found, witness, logger } = correctAlbum("Downloads", deezer);
-
-    assert.deepEqual(await found, [
-        {
-            field: "album",
-            from: "The Half of It: A Memoir",
-            to: "Gold: Greatest Hits",
-        },
-    ]);
-    assert.deepEqual(witness.searches, [search]);
-    assert.equal(
-        logger.infos.at(-1),
-        '  check  album "The Half of It: A Memoir": Fake ✓ 0.0s'
-    );
-});
-
-test("TrackCorrector keeps a wrong album nothing confirms", async () => {
-    const { found } = correctAlbum("Downloads", null);
-
-    assert.deepEqual(await found, []);
-});
-
-test("TrackCorrector keeps an album its folder agrees with", async () => {
-    const { found, witness } = correctAlbum(
-        "The Half of It: A Memoir",
-        dancingQueen
-    );
-
-    assert.deepEqual(await found, []);
-    assert.deepEqual(witness.searches, []);
-});
-
-test("TrackCorrector ignores a folder named after the artist and a compilation from Deezer", async () => {
-    const deezer = { ...dancingQueen, albums: ["Now 45"] };
-    const { found } = correctAlbum("ABBA", deezer);
-
-    assert.deepEqual(await found, []);
 });

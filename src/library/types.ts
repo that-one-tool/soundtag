@@ -12,3 +12,6 @@ export interface LibraryPathTerms {
     artist: string;
     album: string;
 }
+
+// From ".../<Artist> - <Album>/", whatever its files are named.
+export type AlbumFolderTerms = Pick<LibraryPathTerms, "artist" | "album">;

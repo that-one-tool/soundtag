@@ -42,7 +42,7 @@ const NUMBERED_POSITION = /^(?:(?:cd|disc)?\s*(\d+)\s*[-.]\s*)?(\d+)$/iu;
 // Discogs tells namesakes apart with "(2)".
 const ARTIST_NAME_MARKS = /\s*\(\d+\)$/gu;
 const DISCOGS_VARIOUS_ARTISTS = "Various";
-const ALBUM_KINDS: readonly DiscogsAlbumKind[] = ["master", "release"];
+export const ALBUM_KINDS: readonly DiscogsAlbumKind[] = ["master", "release"];
 
 function getArtistName({ name }: DiscogsArtist): string {
     return valueOrEmpty(name).replaceAll(ARTIST_NAME_MARKS, "");
@@ -61,7 +61,7 @@ function getCredit(artists: DiscogsArtist[] = []): string {
         .trim();
 }
 
-function getAlbumArtist({ artists }: DiscogsAlbum): string {
+export function getAlbumArtist({ artists }: DiscogsAlbum): string {
     const credit = getCredit(artists);
     return credit === DISCOGS_VARIOUS_ARTISTS ? "Various Artists" : credit;
 }
@@ -193,7 +193,7 @@ function getImages({
     return images ?? [];
 }
 
-function getCoverUrl(album: DiscogsAlbum): string | undefined {
+export function getCoverUrl(album: DiscogsAlbum): string | undefined {
     const images = getImages(album);
     const primary = images.find(({ type }) => type === "primary") ?? images[0];
     return primary?.uri;

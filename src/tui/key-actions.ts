@@ -13,7 +13,8 @@ export type KeyAction =
     | "toggleSubfolders"
     | "toggleRenaming"
     | "toggleFixing"
-    | "toggleOverwriting"
+    | "toggleCoverReplacing"
+    | "toggleCoversOnly"
     | "rename"
     | "clearTags"
     | "confirmClear"
@@ -35,7 +36,8 @@ const KEY_BINDINGS: [KeyMatcher, KeyAction][] = [
     [(input) => input === "r", "toggleSubfolders"],
     [(input) => input === "n", "toggleRenaming"],
     [(input) => input === "f", "toggleFixing"],
-    [(input) => input === "o", "toggleOverwriting"],
+    [(input) => input === "o", "toggleCoverReplacing"],
+    [(input, key) => input === "c" && !key.ctrl, "toggleCoversOnly"],
     [(input) => input === "e", "rename"],
     [(input) => input === "D", "clearTags"],
     [(input) => input.toLowerCase() === "y", "confirmClear"],

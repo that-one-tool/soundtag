@@ -146,8 +146,6 @@ function getCanonicalTrack(track: DeezerTrack): CanonicalTrack {
         title: valueOrEmpty(track.title),
         artist: valueOrEmpty(track.artist?.name),
         firstReleaseYear: "",
-        albums: [getAlbumTitle(track)].filter(Boolean),
-        artistAlbums: [],
     };
 }
 

@@ -217,8 +217,6 @@ test("MusicBrainzProvider gives the canonical spelling and first release year", 
         title: "Dancing Queen",
         artist: "ABBA",
         firstReleaseYear: "1976",
-        albums: ["Gold"],
-        artistAlbums: [],
     });
     assert.deepEqual(requested, ["musicbrainz.org"]);
 });
@@ -257,8 +255,6 @@ test("MusicBrainzProvider takes the earliest year among recordings of the song",
         title: "Is This Love",
         artist: "Bob Marley & The Wailers",
         firstReleaseYear: "1978",
-        albums: [],
-        artistAlbums: [],
     });
 });
 
@@ -315,8 +311,6 @@ test("MusicBrainzProvider prefers the recording credited like the search", async
         title: "Higher Love",
         artist: "Kygo & Whitney Houston",
         firstReleaseYear: "2019",
-        albums: [],
-        artistAlbums: [],
     });
 });
 
@@ -332,41 +326,6 @@ test("MusicBrainzProvider names the song from a lower result when the first is a
     const canonical = await createProvider().findCanonical(search);
 
     assert.equal(canonical?.title, searchedRecording.title);
-});
-
-test("MusicBrainzProvider lists every album of the song and the artist's own ones", async () => {
-    mockMusicBrainz([
-        {
-            ...searchedRecording,
-            releases: [
-                { title: "Album", "artist-credit": [{ name: "Artist" }] },
-                {
-                    title: "Hits",
-                    "artist-credit": [{ name: "Various Artists" }],
-                },
-                {
-                    title: "Covers",
-                    "artist-credit": [{ name: "Tribute Band" }],
-                },
-                { title: "Untitled" },
-            ],
-        },
-        {
-            ...searchedRecording,
-            "artist-credit": [
-                { name: "Artist", joinphrase: " & " },
-                { name: "Guest" },
-            ],
-            releases: [
-                { title: "Duets", "artist-credit": [{ name: "Artist" }] },
-            ],
-        },
-    ]);
-
-    const canonical = await createProvider().findCanonical(search);
-
-    assert.deepEqual(canonical?.albums, ["Album", "Hits", "Untitled", "Duets"]);
-    assert.deepEqual(canonical?.artistAlbums, ["Album", "Duets"]);
 });
 
 test("MusicBrainzProvider gives no release year as the first release year", async () => {

@@ -74,7 +74,7 @@ function hasTags(track: BatchTrack): track is TaggedTrack {
 }
 
 function isTrusted(track: BatchTrack): track is TaggedTrack {
-    return isRenamable(track.status, track.tags);
+    return isRenamable(track);
 }
 
 interface ActiveBatch extends BatchRun {
@@ -173,7 +173,12 @@ async function renameWithBorrowedCover(
     const withCover = { ...tags, hasCover: true };
     // Not found by any service, so it is trusted only once fully tagged.
     const destination = await renameProcessedFile(
-        { source: track.source, status: "SKIPPED", tags: withCover },
+        {
+            source: track.source,
+            status: "SKIPPED",
+            tags: withCover,
+            songFound: false,
+        },
         run
     );
     track.destination = destination ?? track.destination;

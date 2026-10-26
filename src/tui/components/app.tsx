@@ -65,7 +65,8 @@ function useSettingChoices(services: TuiServices) {
         subfoldersIncluded: useStore(services.subfolders),
         renamingEnabled: useStore(services.renaming),
         fixingEnabled: useStore(services.fixing),
-        overwritingEnabled: useStore(services.overwriting),
+        coverReplacingEnabled: useStore(services.coverReplacing),
+        coversOnlyEnabled: useStore(services.coversOnly),
     };
 }
 

@@ -88,7 +88,8 @@ test("describeTarget tells when a target renames files and folders", () => {
     const renameNames = {
         renameFiles: true,
         fixTags: false,
-        overwriteTags: false,
+        replaceCovers: false,
+        coversOnly: false,
     };
 
     assert.equal(
@@ -114,20 +115,32 @@ test("describeTarget tells when a target fixes existing tags", () => {
             settings: {
                 renameFiles: false,
                 fixTags: true,
-                overwriteTags: false,
+                replaceCovers: false,
+                coversOnly: false,
             },
         }),
         "a.mp3 (fixing on)"
     );
 });
 
-test("describeTarget tells when a target overwrites existing tags", () => {
+test("describeTarget tells when a target only tags covers", () => {
     assert.equal(
         describeTarget({
             kind: "file",
             path: "/a.mp3",
-            settings: { ...DEFAULT_JOB_SETTINGS, overwriteTags: true },
+            settings: { ...DEFAULT_JOB_SETTINGS, coversOnly: true },
         }),
-        "a.mp3 (overwriting on)"
+        "a.mp3 (covers only on)"
+    );
+});
+
+test("describeTarget tells when a target replaces existing covers", () => {
+    assert.equal(
+        describeTarget({
+            kind: "file",
+            path: "/a.mp3",
+            settings: { ...DEFAULT_JOB_SETTINGS, replaceCovers: true },
+        }),
+        "a.mp3 (replacing covers on)"
     );
 });

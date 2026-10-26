@@ -2,6 +2,9 @@ import { consoleLogger } from "../../src/shared/logger.js";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { createMetadataLookups } from "../../src/metadata/create-metadata-chain.js";
+import { DeezerAlbumSource } from "../../src/metadata/providers/deezer-album.js";
+import { DiscogsAlbumSource } from "../../src/metadata/providers/discogs-album.js";
+import { MusicBrainzAlbumSource } from "../../src/metadata/providers/musicbrainz-album.js";
 import { DeezerCoverProvider } from "../../src/metadata/providers/deezer-cover.js";
 import { DeezerProvider } from "../../src/metadata/providers/deezer.js";
 import {
@@ -25,7 +28,7 @@ afterEach(() => {
 });
 
 test("createMetadataLookups orders every configured provider", () => {
-    const { chain } = createMetadataLookups(
+    const { chain, albums } = createMetadataLookups(
         {
             lastFmApiKey: "key",
             verbose: false,
@@ -55,12 +58,16 @@ test("createMetadataLookups orders every configured provider", () => {
         chain.coverProviders.map((provider) => provider.constructor),
         [DeezerCoverProvider, YouTubeCoverProvider]
     );
+    assert.deepEqual(
+        albums.sources.map((source) => source.constructor),
+        [DeezerAlbumSource, MusicBrainzAlbumSource, DiscogsAlbumSource]
+    );
 });
 
 test("createMetadataLookups warns and skips unconfigured optional providers", () => {
     const logger = createRecordingLogger();
 
-    const { chain } = createMetadataLookups(
+    const { chain, albums } = createMetadataLookups(
         {
             lastFmApiKey: " ",
             verbose: false,
@@ -81,6 +88,10 @@ test("createMetadataLookups warns and skips unconfigured optional providers", ()
     assert.deepEqual(
         chain.coverProviders.map((provider) => provider.constructor),
         [DeezerCoverProvider]
+    );
+    assert.deepEqual(
+        albums.sources.map((source) => source.constructor),
+        [DeezerAlbumSource]
     );
     assert.deepEqual(logger.errors, [
         "MusicBrainz and ListenBrainz require MUSICBRAINZ_USER_AGENT.",

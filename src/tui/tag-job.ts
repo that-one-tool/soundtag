@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { findAudioFiles } from "../library/file.js";
+import type { AlbumFinder } from "../metadata/album-finder.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
 import type { TrackCorrector } from "../metadata/track-corrector.js";
 import {
@@ -19,6 +20,7 @@ import type { TagJobRunner, TagJobSettings, TagTarget } from "./types.js";
 export interface TagJobDependencies {
     metadataChain: MetadataChain;
     corrector: TrackCorrector;
+    albums: AlbumFinder;
     logger: Logger;
     libraryRoot: string;
     onTrackProcessed: (result: ProcessedTrack) => void;
@@ -73,16 +75,18 @@ interface TagRun {
 function buildContext(
     sourceRoot: string,
     settings: TagJobSettings,
-    { metadataChain, corrector, logger }: TagJobDependencies
+    { metadataChain, corrector, albums, logger }: TagJobDependencies
 ): ProcessingContext {
     const fixing = settings.fixTags ? corrector : undefined;
-    const { overwriteTags } = settings;
+    const { replaceCovers, coversOnly } = settings;
     return {
         sourceRoot,
         metadataChain,
         logger,
-        overwriteTags,
+        replaceCovers,
+        coversOnly,
         corrector: fixing,
+        albums,
     };
 }
 

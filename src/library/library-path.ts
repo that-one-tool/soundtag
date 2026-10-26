@@ -10,6 +10,7 @@ import {
     splitLabel,
 } from "./track-name-parser.js";
 import type {
+    AlbumFolderTerms,
     FolderSearchTerms,
     LibraryPathTerms,
     TrackSearchTerms,
@@ -97,6 +98,16 @@ function readPathTerms(
 // Folders above the scanned one count too: the file's artist vouches for them.
 export function parseLibraryPath(filename: string): LibraryPathTerms | null {
     return readPathTerms(filename, parseTrackFilename(path.basename(filename)));
+}
+
+// Its files need not name the artist: a service must confirm the album before it is used.
+export function parseAlbumFolder(filename: string): AlbumFolderTerms | null {
+    const [artist, album] = splitLabel(getNamedParent(filename));
+    const terms = {
+        artist: cleanFilenamePart(artist),
+        album: cleanFolderAlbum(album),
+    };
+    return terms.artist && terms.album ? terms : null;
 }
 
 export function inferLibraryFolderTerms(

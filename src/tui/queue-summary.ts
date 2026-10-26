@@ -25,8 +25,12 @@ export function describeFixingChoice(enabled: boolean): string {
     return `fixing ${enabled ? "on" : "off"}`;
 }
 
-export function describeOverwritingChoice(enabled: boolean): string {
-    return `overwriting ${enabled ? "on" : "off"}`;
+export function describeCoverReplacingChoice(enabled: boolean): string {
+    return `replacing covers ${enabled ? "on" : "off"}`;
+}
+
+export function describeCoversOnlyChoice(enabled: boolean): string {
+    return `covers only ${enabled ? "on" : "off"}`;
 }
 
 function listSubfolderChoice(target: TagTarget): string[] {
@@ -39,7 +43,8 @@ function listSubfolderChoice(target: TagTarget): string[] {
 const SETTING_CHOICES: [(settings: TagJobSettings) => boolean, string][] = [
     [(settings) => settings.renameFiles, describeRenamingChoice(true)],
     [(settings) => settings.fixTags, describeFixingChoice(true)],
-    [(settings) => settings.overwriteTags, describeOverwritingChoice(true)],
+    [(settings) => settings.replaceCovers, describeCoverReplacingChoice(true)],
+    [(settings) => settings.coversOnly, describeCoversOnlyChoice(true)],
 ];
 
 function listSettingChoices(settings: TagJobSettings): string[] {

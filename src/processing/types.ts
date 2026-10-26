@@ -21,6 +21,8 @@ export interface ProcessingReport {
 export interface TrackOutcome {
     status: TrackStatus;
     tags: StoredTags | null;
+    // A service matched the song, so its tags can name the file.
+    songFound: boolean;
 }
 
 export interface TrackResult extends TrackOutcome {

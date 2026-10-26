@@ -1,14 +1,5 @@
-import {
-    isSameCredit,
-    isSameRelease,
-    isSameTrack,
-    isVariousArtists,
-} from "../track-matching.js";
-import {
-    extractYear,
-    getEarliestYear,
-    valueOrEmpty,
-} from "../track-metadata.js";
+import { isSameCredit, isSameRelease, isSameTrack } from "../track-matching.js";
+import { extractYear, getEarliestYear } from "../track-metadata.js";
 import type {
     CanonicalSource,
     CanonicalTrack,
@@ -19,23 +10,12 @@ import type {
     TrackMetadata,
     TrackSearch,
 } from "../types.js";
-import type {
-    MusicBrainzArtistCredit,
-    MusicBrainzClient,
-    MusicBrainzRecording,
-    MusicBrainzRelease,
+import {
+    getMusicBrainzArtist,
+    type MusicBrainzClient,
+    type MusicBrainzRecording,
+    type MusicBrainzRelease,
 } from "./musicbrainz-client.js";
-
-function getCreditName({ name, artist }: MusicBrainzArtistCredit): string {
-    return name ?? valueOrEmpty(artist?.name);
-}
-
-function getMusicBrainzArtist(credits: MusicBrainzArtistCredit[] = []): string {
-    return credits
-        .map((credit) => `${getCreditName(credit)}${credit.joinphrase ?? ""}`)
-        .join("")
-        .trim();
-}
 
 function getCreditedReleases(
     recording: MusicBrainzRecording
@@ -115,27 +95,6 @@ function getFirstReleaseYear(recordings: MusicBrainzRecording[]): string {
     );
 }
 
-function getReleaseTitles(releases: MusicBrainzRelease[]): string[] {
-    const titles = releases.map(({ title }) => valueOrEmpty(title));
-    return [...new Set(titles.filter(Boolean))];
-}
-
-// Credited releases are the artist's own or compilations.
-function isArtistRelease(release: MusicBrainzRelease): boolean {
-    const albumArtist = getMusicBrainzArtist(release["artist-credit"]);
-    return Boolean(albumArtist) && !isVariousArtists(albumArtist);
-}
-
-function getAlbums(
-    recordings: MusicBrainzRecording[]
-): Pick<CanonicalTrack, "albums" | "artistAlbums"> {
-    const releases = recordings.flatMap(getCreditedReleases);
-    return {
-        albums: getReleaseTitles(releases),
-        artistAlbums: getReleaseTitles(releases.filter(isArtistRelease)),
-    };
-}
-
 // A shared artist also matches the original of a remix, which ranks first at times.
 function pickNamedRecording(
     recordings: MusicBrainzRecording[],
@@ -159,7 +118,6 @@ function getCanonicalTrack(
         title: named.title ?? "",
         artist,
         firstReleaseYear: getFirstReleaseYear(sameCredit),
-        ...getAlbums(recordings),
     };
 }
 

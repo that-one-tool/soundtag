@@ -12,7 +12,7 @@ import { EntryRenamer } from "./entry-renamer.js";
 import { LogBuffer } from "./log-buffer.js";
 import { PathMoves } from "./path-moves.js";
 import { RedoneFiles } from "./redone-files.js";
-import { createTagJobRunner } from "./tag-job.js";
+import { createTagJobRunner, type TagJobDependencies } from "./tag-job.js";
 import { TagClearer } from "./tag-clearer.js";
 import { TaggingQueue } from "./tagging-queue.js";
 import { ToggleSetting } from "./toggle-setting.js";
@@ -25,6 +25,8 @@ export interface TaggingOptions extends MetadataChainConfig {
     recursive: boolean;
     renameFiles: boolean;
     fixTags: boolean;
+    replaceCovers: boolean;
+    coversOnly: boolean;
     startDirectory: string;
 }
 
@@ -37,7 +39,8 @@ export interface TuiServices {
     subfolders: ToggleSetting;
     renaming: ToggleSetting;
     fixing: ToggleSetting;
-    overwriting: ToggleSetting;
+    coverReplacing: ToggleSetting;
+    coversOnly: ToggleSetting;
     detailsCache: VersionedCache<EntryDetails>;
     coverCache: VersionedCache<CoverLookup>;
     renamer: EntryRenamer;
@@ -71,16 +74,23 @@ function clearRedoneFilesAfterJob(
     };
 }
 
+function createLookupDependencies(
+    options: TaggingOptions,
+    logBuffer: LogBuffer
+): Pick<TagJobDependencies, "metadataChain" | "corrector" | "albums"> {
+    const lookups = createMetadataLookups(options, systemClock, logBuffer);
+    const { chain, corrector, albums } = lookups;
+    return { metadataChain: chain, corrector, albums };
+}
+
 function createJobRunner(
     options: TaggingOptions,
     logBuffer: LogBuffer,
     services: Pick<TuiServices, "statusStore" | "redoneFiles" | "pathMoves">
 ) {
     const { statusStore, redoneFiles, pathMoves } = services;
-    const lookups = createMetadataLookups(options, systemClock, logBuffer);
     const runJob = createTagJobRunner({
-        metadataChain: lookups.chain,
-        corrector: lookups.corrector,
+        ...createLookupDependencies(options, logBuffer),
         logger: logBuffer,
         libraryRoot: options.startDirectory,
         onTrackProcessed: (result) => {
@@ -133,7 +143,8 @@ export function createTuiServices(
         subfolders: new ToggleSetting(options.recursive),
         renaming: new ToggleSetting(options.renameFiles),
         fixing: new ToggleSetting(options.fixTags),
-        overwriting: new ToggleSetting(false),
+        coverReplacing: new ToggleSetting(options.replaceCovers),
+        coversOnly: new ToggleSetting(options.coversOnly),
         detailsCache: createDetailsCache(),
         coverCache: createCoverCache(display.mode),
         coverOverlay: new CoverOverlay(display.writeToTerminal),

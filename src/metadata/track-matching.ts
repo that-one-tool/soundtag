@@ -1,8 +1,13 @@
 import { valueOrEmpty } from "./track-metadata.js";
-import type { TrackSearch } from "./types.js";
+import type { AlbumSearch, TrackSearch } from "./types.js";
 
 export interface FoundTrack {
     title?: string;
+    artist?: string;
+}
+
+export interface FoundAlbumName {
+    album?: string;
     artist?: string;
 }
 
@@ -237,6 +242,29 @@ const VARIOUS_ARTISTS = "variousartists";
 
 export function isVariousArtists(artist: string): boolean {
     return getWords(artist).join("") === VARIOUS_ARTISTS;
+}
+
+// Folders and Discogs shorten it.
+const VARIOUS_CREDITS = new Set([VARIOUS_ARTISTS, "various", "va"]);
+
+function isVariousCredit(artist: string | undefined): boolean {
+    return VARIOUS_CREDITS.has(getWords(artist).join(""));
+}
+
+function isSameAlbumArtist(found: string | undefined, searched: string) {
+    const isVarious = isVariousCredit(found) && isVariousCredit(searched);
+    return isVarious || isSameArtist(found, searched);
+}
+
+// The album must be by the searched artist, so another artist's namesake is not taken.
+export function isSearchedAlbum(
+    found: FoundAlbumName,
+    { artist, album }: AlbumSearch
+): boolean {
+    return (
+        isSameAlbum(found.album, album) &&
+        isSameAlbumArtist(found.artist, artist)
+    );
 }
 
 function isAlbumArtistOf(albumArtist: string, trackArtist: string): boolean {

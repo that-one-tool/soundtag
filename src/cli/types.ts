@@ -6,6 +6,8 @@ export interface TaggingSettings {
     verbose: boolean;
     renameFiles: boolean;
     fixTags: boolean;
+    replaceCovers: boolean;
+    coversOnly: boolean;
     musicBrainzUserAgent?: string;
     youtubeApiKey?: string;
     listenBrainzToken?: string;
@@ -29,4 +31,6 @@ export interface CommandLineOptions {
     verbose: boolean;
     renameFiles: boolean;
     fixTags: boolean;
+    replaceCovers: boolean;
+    coversOnly: boolean;
 }

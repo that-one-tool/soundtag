@@ -9,6 +9,8 @@ test("parseArguments keeps the recursive default and reads a source path", () =>
         verbose: false,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
     });
 });
 
@@ -21,6 +23,8 @@ test("parseArguments supports scan and verbose options", () => {
             verbose: true,
             renameFiles: false,
             fixTags: false,
+            replaceCovers: false,
+            coversOnly: false,
         }
     );
     assert.equal(
@@ -48,6 +52,8 @@ test("parseArguments accepts the long and short option aliases", () => {
         verbose: true,
         renameFiles: false,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
     });
 });
 
@@ -61,4 +67,11 @@ test("parseArguments turns renaming on with --rename, and off again with --no-re
 
 test("parseArguments turns fix mode on with --fix", () => {
     assert.equal(parseArguments(["./music", "--fix"]).fixTags, true);
+});
+
+test("parseArguments turns cover replacing and covers-only mode on", () => {
+    const options = parseArguments(["--replace-covers", "--covers-only"]);
+
+    assert.equal(options.replaceCovers, true);
+    assert.equal(options.coversOnly, true);
 });

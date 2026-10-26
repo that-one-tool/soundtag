@@ -31,6 +31,8 @@ function createOptions(startDirectory: string): TuiOptions {
         recursive: true,
         renameFiles: true,
         fixTags: false,
+        replaceCovers: false,
+        coversOnly: false,
         musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
     };
 }

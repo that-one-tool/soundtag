@@ -9,10 +9,14 @@ import {
     sleepAndReport,
     type RateLimiter,
 } from "../../shared/rate-limiter.js";
-import type { ProviderServices, TrackSearch } from "../types.js";
+import { valueOrEmpty } from "../track-metadata.js";
+import type { AlbumSearch, ProviderServices, TrackSearch } from "../types.js";
 
 const MUSICBRAINZ_BASE = "https://musicbrainz.org/ws/2/";
 const COVER_ART_ARCHIVE_BASE = "https://coverartarchive.org/release/";
+const COVER_ART_ARCHIVE_GROUP_BASE =
+    "https://coverartarchive.org/release-group/";
+const RELEASE_GROUP_SEARCH_LIMIT = 5;
 const MUSICBRAINZ_REQUEST_INTERVAL = 3_000;
 const SERVICE_UNAVAILABLE = 503;
 const DEFAULT_RETRY_DELAY = 3_000;
@@ -56,8 +60,32 @@ export interface MusicBrainzReleaseDetails extends MusicBrainzRelease {
     media?: MusicBrainzMedium[];
 }
 
+// Groups every edition of an album.
+export interface MusicBrainzReleaseGroup {
+    id?: string;
+    title?: string;
+    "artist-credit"?: MusicBrainzArtistCredit[];
+}
+
 interface MusicBrainzSearchResponse {
     recordings?: MusicBrainzRecording[];
+}
+
+interface MusicBrainzReleaseGroupResponse {
+    "release-groups"?: MusicBrainzReleaseGroup[];
+}
+
+function getCreditName({ name, artist }: MusicBrainzArtistCredit): string {
+    return name ?? valueOrEmpty(artist?.name);
+}
+
+export function getMusicBrainzArtist(
+    credits: MusicBrainzArtistCredit[] = []
+): string {
+    return credits
+        .map((credit) => `${getCreditName(credit)}${credit.joinphrase ?? ""}`)
+        .join("")
+        .trim();
 }
 
 function buildSearchTerm(field: string, value: string): string {
@@ -77,6 +105,18 @@ function buildRecordingSearchUrl(
     url.searchParams.set("query", terms.join(" AND "));
     url.searchParams.set("fmt", "json");
     url.searchParams.set("limit", String(limit));
+    return url;
+}
+
+function buildReleaseGroupSearchUrl({ artist, album }: AlbumSearch): URL {
+    const terms = [
+        buildSearchTerm("releasegroup", album),
+        buildSearchTerm("artist", artist),
+    ];
+    const url = new URL("release-group", MUSICBRAINZ_BASE);
+    url.searchParams.set("query", terms.join(" AND "));
+    url.searchParams.set("fmt", "json");
+    url.searchParams.set("limit", String(RELEASE_GROUP_SEARCH_LIMIT));
     return url;
 }
 
@@ -125,6 +165,15 @@ export class MusicBrainzClient {
         return data.recordings ?? [];
     }
 
+    async searchReleaseGroups(
+        search: AlbumSearch
+    ): Promise<MusicBrainzReleaseGroup[]> {
+        const url = buildReleaseGroupSearchUrl(search);
+        const data =
+            await this.requestJson<MusicBrainzReleaseGroupResponse>(url);
+        return data["release-groups"] ?? [];
+    }
+
     getRelease(releaseId: string): Promise<MusicBrainzReleaseDetails> {
         return this.services.cache.getOrLoad(
             `musicbrainz:release:${releaseId}`,
@@ -137,6 +186,16 @@ export class MusicBrainzClient {
             url: new URL(
                 `${encodeURIComponent(releaseId)}/${image}-500`,
                 COVER_ART_ARCHIVE_BASE
+            ),
+            headers: { "User-Agent": this.userAgent },
+        };
+    }
+
+    getReleaseGroupCoverRequest(groupId: string): ImageRequest {
+        return {
+            url: new URL(
+                `${encodeURIComponent(groupId)}/front-500`,
+                COVER_ART_ARCHIVE_GROUP_BASE
             ),
             headers: { "User-Agent": this.userAgent },
         };
