@@ -64,7 +64,7 @@ test("runApp tags a library and prints a summary", async () => {
     const source = path.join(workingDirectory, "tagged.mp3");
     await writeFullyTaggedMp3(source);
 
-    assert.equal(await runAppIn(workingDirectory, ["."]), 0);
+    assert.equal(await runAppIn(workingDirectory, [".", "--rename"]), 0);
     assert.equal(output.logs[1], "                SOUNDTAG");
     assert.ok(output.logs.includes("Skipped:    1"));
     assert.ok(output.logs.includes("PROCESSING COMPLETE"));
@@ -109,12 +109,12 @@ test("runApp corrects existing tags with --fix and lists the corrections", async
     ]);
 });
 
-test("runApp keeps file names with --no-rename", async () => {
+test("runApp keeps file names by default", async () => {
     const workingDirectory = await createTemporaryDirectory();
     const source = path.join(workingDirectory, "tagged.mp3");
     await writeFullyTaggedMp3(source);
 
-    assert.equal(await runAppIn(workingDirectory, [".", "--no-rename"]), 0);
+    assert.equal(await runAppIn(workingDirectory, ["."]), 0);
     await fs.access(source);
     assert.ok(!output.logs.includes("Renamed:"));
 });
@@ -125,7 +125,7 @@ test("runApp lists failed files, then renames, relative to the source", async ()
     await writeFullyTaggedMp3(path.join(disc, "tagged.mp3"));
     await fs.writeFile(path.join(disc, "broken.flac"), "bytes");
 
-    assert.equal(await runAppIn(workingDirectory, ["."]), 0);
+    assert.equal(await runAppIn(workingDirectory, [".", "--rename"]), 0);
     assert.ok(output.logs.includes("Errors:     1"));
     assert.deepEqual(output.logs.slice(-6), [
         "Failed:",
@@ -219,6 +219,8 @@ test("runApp opens the folder browser in the working directory", async () => {
             youtubeApiKey: undefined,
             listenBrainzToken: "test-token",
             coverMode: undefined,
+            discogsConsumerKey: undefined,
+            discogsConsumerSecret: undefined,
         },
     ]);
     assert.deepEqual(output.errors, []);

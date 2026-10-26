@@ -37,7 +37,7 @@ function listSubfolderChoice(target: TagTarget): string[] {
 
 // Only choices that differ from the defaults are worth naming.
 const SETTING_CHOICES: [(settings: TagJobSettings) => boolean, string][] = [
-    [(settings) => !settings.renameFiles, describeRenamingChoice(false)],
+    [(settings) => settings.renameFiles, describeRenamingChoice(true)],
     [(settings) => settings.fixTags, describeFixingChoice(true)],
     [(settings) => settings.overwriteTags, describeOverwritingChoice(true)],
 ];

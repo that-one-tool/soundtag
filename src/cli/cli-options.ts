@@ -14,6 +14,10 @@ const enableVerboseOutput: OptionHandler = (options) => {
     options.verbose = true;
 };
 
+const enableRenaming: OptionHandler = (options) => {
+    options.renameFiles = true;
+};
+
 const disableRenaming: OptionHandler = (options) => {
     options.renameFiles = false;
 };
@@ -28,6 +32,7 @@ const OPTION_HANDLERS = new Map<string, OptionHandler>([
     ["--no-recursive", disableRecursion],
     ["--verbose", enableVerboseOutput],
     ["-v", enableVerboseOutput],
+    ["--rename", enableRenaming],
     ["--no-rename", disableRenaming],
     ["--fix", enableTagFixing],
 ]);
@@ -58,7 +63,7 @@ export function parseArguments(args: string[]): CommandLineOptions {
     const options: CommandLineOptions = {
         recursive: true,
         verbose: false,
-        renameFiles: true,
+        renameFiles: false,
         fixTags: false,
     };
 

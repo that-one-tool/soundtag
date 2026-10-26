@@ -8,7 +8,7 @@ import type { PathMove } from "../../src/shared/paths.js";
 import type { BrowserEntry } from "../../src/tui/types.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
 import { useTemporaryDirectories } from "../helpers/temporary-directories.js";
-import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
+import { DEFAULT_JOB_SETTINGS, RENAMING_JOB_SETTINGS } from "../helpers/tui.js";
 
 restoreFetchAfterEach();
 const createTemporaryDirectory = useTemporaryDirectories(
@@ -183,12 +183,12 @@ test("createTuiServices moves statuses and queued targets of a renamed album fol
         kind: "folder",
         path: album,
         recursive: false,
-        settings: DEFAULT_JOB_SETTINGS,
+        settings: RENAMING_JOB_SETTINGS,
     });
     services.queue.enqueue({
         kind: "file",
         path: source,
-        settings: DEFAULT_JOB_SETTINGS,
+        settings: RENAMING_JOB_SETTINGS,
     });
     await services.queue.whenIdle();
 

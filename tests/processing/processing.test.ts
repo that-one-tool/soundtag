@@ -1394,3 +1394,244 @@ test("processTrack counts the kept tags as found when overwriting", async () => 
 
     assert.ok(output.logs.includes('  write  title "New Title"'));
 });
+
+async function createLibraryTrack(
+    folders: string[],
+    filename: string,
+    tags: NodeID3.Tags
+): Promise<string> {
+    const directory = path.join(await createTemporaryDirectory(), ...folders);
+    const source = path.join(directory, filename);
+    await fs.mkdir(directory, { recursive: true });
+    await fs.writeFile(source, "audio bytes");
+    NodeID3.write(tags, source);
+    return source;
+}
+
+test("buildTrackSearch takes the artist and album from a library path", () => {
+    const root = path.resolve("library");
+
+    assert.deepEqual(
+        buildTrackSearch(
+            path.join(
+                root,
+                "Queen",
+                "Queen - Greatest Hits",
+                "Queen - Bicycle.mp3"
+            ),
+            root,
+            emptyInfo
+        ),
+        { title: "Bicycle", artist: "Queen", album: "Greatest Hits" }
+    );
+    assert.deepEqual(
+        buildTrackSearch(
+            path.join(root, "Music", "Queen", "Queen - Bicycle.mp3"),
+            root,
+            emptyInfo
+        ),
+        { title: "Bicycle", artist: "Queen", album: "" }
+    );
+});
+
+test("processTrack searches with the library path first and keeps its folder album", async () => {
+    const source = await createLibraryTrack(
+        ["Alfa Rococo", "Alfa Rococo - Best Of"],
+        "Alfa Rococo - Lever l'ancre.mp3",
+        { title: "Alfa Rococo - Lever", artist: "Alfa Rococo" }
+    );
+    const searches: TrackSearch[] = [];
+
+    const { status, tags } = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Lever l'ancre", searches),
+    });
+
+    assert.equal(status, "TAGGED");
+    assert.deepEqual(searches, [
+        { title: "Lever l'ancre", artist: "Alfa Rococo", album: "Best Of" },
+    ]);
+    assert.deepEqual(tags?.info, {
+        title: "Lever l'ancre",
+        artist: "Alfa Rococo",
+        album: "Best Of",
+        year: "2007",
+    });
+    assert.ok(
+        output.logs.some((line) =>
+            line.startsWith(
+                `  search path "Lever l'ancre" · Alfa Rococo · Best Of: `
+            )
+        )
+    );
+});
+
+test("processTrack searches with the tags when the library path finds nothing", async () => {
+    const source = await createLibraryTrack(
+        ["Alfa Rococo"],
+        "Alfa Rococo - Lever.mp3",
+        { title: "Lever l'ancre", artist: "Alfa Rococo" }
+    );
+    const searches: TrackSearch[] = [];
+
+    const { status, tags } = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Lever l'ancre", searches),
+    });
+
+    assert.equal(status, "TAGGED");
+    assert.deepEqual(
+        searches.map(({ title }) => title),
+        ["Lever", "Lever l'ancre"]
+    );
+    assert.equal(tags?.info.album, "Lever l'ancre");
+});
+
+test("processTrack does not repeat the library path search from the file name", async () => {
+    const source = await createLibraryTrack(
+        ["Alfa Rococo"],
+        "Alfa Rococo - Missing.mp3",
+        { title: "Alfa Rococo - Missing" }
+    );
+    const searches: TrackSearch[] = [];
+
+    const { status } = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Lever l'ancre", searches),
+    });
+
+    assert.equal(status, "SKIPPED");
+    assert.equal(searches.length, 2);
+});
+
+test("processTrack corrects the tags from the library path in fix mode", async () => {
+    const source = await createLibraryTrack(
+        ["ABBA", "ABBA - Gold"],
+        "ABBA - Dancing queen.mp3",
+        {
+            title: "Fernando",
+            artist: "Abba",
+            album: "Arrival",
+            year: "1976",
+            genre: "Pop",
+        }
+    );
+    const { corrector, searches } = createFakeCorrector(dancingQueen);
+    const nothingChain = new MetadataChain(
+        [{ name: "Fake", findMetadata: async () => null }],
+        [],
+        createProviderServices()
+    );
+
+    const result = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: nothingChain,
+        corrector,
+    });
+
+    assert.equal(result.status, "TAGGED");
+    assert.deepEqual(searches[0], {
+        title: "Dancing queen",
+        artist: "Abba",
+        album: "",
+    });
+    assert.deepEqual(result.corrections, [
+        { field: "title", from: "Fernando", to: "Dancing Queen" },
+        { field: "album", from: "Arrival", to: "Gold" },
+        { field: "artist", from: "Abba", to: "ABBA" },
+    ]);
+    assert.equal(result.tags?.info.album, "Gold");
+});
+
+test("processTrack searches with the tags when they name another version than the path", async () => {
+    const source = await createLibraryTrack(
+        ["Alfa Rococo"],
+        "Alfa Rococo - Lever l'ancre.mp3",
+        { title: "Lever l'ancre (Live)", artist: "Alfa Rococo" }
+    );
+    const searches: TrackSearch[] = [];
+
+    const { status } = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Lever l'ancre", searches),
+    });
+
+    assert.equal(status, "SKIPPED");
+    assert.deepEqual(
+        searches.map(({ title }) => title),
+        ["Lever l'ancre", "Lever l'ancre (Live)"]
+    );
+});
+
+test("processTrack searches once when the path only spells the tags differently", async () => {
+    const source = await createLibraryTrack(
+        ["AC_DC"],
+        "AC_DC - Back in Black.mp3",
+        { title: "Back in Black", artist: "AC/DC" }
+    );
+    const searches: TrackSearch[] = [];
+
+    await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Lever l'ancre", searches),
+    });
+
+    assert.equal(searches.length, 1);
+});
+
+test("processTrack does not pin the folder album over a stored one when overwriting", async () => {
+    const source = await createLibraryTrack(
+        ["Old Artist", "Old Artist - Best Of"],
+        "Old Artist - Old Title.mp3",
+        { title: "Old Title", artist: "Old Artist", album: "Old Album" }
+    );
+    const calls: ProviderCall[] = [];
+
+    const result = await overwriteTrack(
+        source,
+        createRecordingChain(newMetadata, calls)
+    );
+
+    assert.equal(result.tags?.info.album, newMetadata.info.album);
+});
+
+test("processTrack takes the path song over a placeholder tag title", async () => {
+    const source = await createLibraryTrack(
+        ["Alfa Rococo"],
+        "Alfa Rococo - Lever l'ancre.mp3",
+        { title: "Track 01", artist: "Alfa Rococo" }
+    );
+    const searches: TrackSearch[] = [];
+
+    const { status } = await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Lever l'ancre", searches),
+    });
+
+    assert.equal(status, "TAGGED");
+    assert.equal(searches.length, 1);
+});
+
+test("processTrack does not search a messier file name after the path", async () => {
+    const source = await createLibraryTrack(
+        ["Alfa Rococo - Chinatown"],
+        "Alfa Rococo - Chinatown - 01 - Missing.mp3",
+        { title: "Alfa Rococo - Missing" }
+    );
+    const searches: TrackSearch[] = [];
+
+    await processTrack(source, {
+        sourceRoot: path.dirname(source),
+        logger: consoleLogger,
+        metadataChain: createChainFindingTitle("Lever l'ancre", searches),
+    });
+
+    assert.equal(searches.length, 2);
+});

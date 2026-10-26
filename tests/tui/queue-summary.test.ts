@@ -84,25 +84,25 @@ test("describeTarget names a file, or a folder with its subfolder choice", () =>
     );
 });
 
-test("describeTarget tells when a target keeps its names", () => {
-    const keepNames = {
-        renameFiles: false,
+test("describeTarget tells when a target renames files and folders", () => {
+    const renameNames = {
+        renameFiles: true,
         fixTags: false,
         overwriteTags: false,
     };
 
     assert.equal(
-        describeTarget({ kind: "file", path: "/a.mp3", settings: keepNames }),
-        "a.mp3 (renaming off)"
+        describeTarget({ kind: "file", path: "/a.mp3", settings: renameNames }),
+        "a.mp3 (renaming on)"
     );
     assert.equal(
         describeTarget({
             kind: "folder",
             path: "/Rock",
             recursive: true,
-            settings: keepNames,
+            settings: renameNames,
         }),
-        "Rock (subfolders on, renaming off)"
+        "Rock (subfolders on, renaming on)"
     );
 });
 
@@ -112,7 +112,7 @@ test("describeTarget tells when a target fixes existing tags", () => {
             kind: "file",
             path: "/a.mp3",
             settings: {
-                renameFiles: true,
+                renameFiles: false,
                 fixTags: true,
                 overwriteTags: false,
             },

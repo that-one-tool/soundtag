@@ -1,3 +1,4 @@
+import type { LibraryPathTerms } from "../library/types.js";
 import { applyCorrections } from "../metadata/track-corrections.js";
 import type { TrackCorrector } from "../metadata/track-corrector.js";
 import { EMPTY_TRACK_INFO } from "../metadata/track-metadata.js";
@@ -5,15 +6,23 @@ import type {
     CorrectionRequest,
     TagCorrection,
     TrackExtras,
+    TrackInfo,
     TrackMetadata,
 } from "../metadata/types.js";
 import type { Logger } from "../shared/logger.js";
 import type { StoredTags } from "../tags/types.js";
+import { chainCorrections, getPathCorrections } from "./path-corrections.js";
 import { formatCorrectionsLine } from "./track-log.js";
 
 export interface CorrectedTags {
     tags: StoredTags;
     corrections: TagCorrection[];
+}
+
+// The request is built from the tags the path corrected, so services check those.
+export interface CorrectionPlan {
+    pathTerms: LibraryPathTerms | null;
+    buildRequest(info: TrackInfo): CorrectionRequest;
 }
 
 export interface CorrectionTools {
@@ -50,16 +59,28 @@ function forgetOldRelease(
     return { ...stored, extras: Object.fromEntries(kept), hasCover: false };
 }
 
+async function findCorrections(
+    info: TrackInfo,
+    plan: CorrectionPlan,
+    corrector: TrackCorrector
+): Promise<TagCorrection[]> {
+    const fromPath = getPathCorrections(info, plan.pathTerms);
+    const pathInfo = applyCorrections(info, fromPath);
+    const request = plan.buildRequest(pathInfo);
+    const found = await corrector.findCorrections(request, pathInfo);
+    return chainCorrections(fromPath, found);
+}
+
 export async function correctTags(
     stored: StoredTags,
-    request: CorrectionRequest,
+    plan: CorrectionPlan,
     { corrector, logger }: CorrectionTools
 ): Promise<CorrectedTags> {
     if (!corrector) {
         return { tags: stored, corrections: [] };
     }
 
-    const corrections = await corrector.findCorrections(request, stored.info);
+    const corrections = await findCorrections(stored.info, plan, corrector);
     logCorrections(corrections, logger);
     const info = applyCorrections(stored.info, corrections);
     const tags = { ...forgetOldRelease(stored, corrections), info };

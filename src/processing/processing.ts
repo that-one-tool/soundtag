@@ -2,7 +2,11 @@ import * as path from "node:path";
 import { getTagStore, isProperlyTagged } from "../tags/audio-tags.js";
 import { getErrorMessage } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
-import { inferFolderSearchTerms } from "../library/folder-context.js";
+import {
+    inferLibraryFolderTerms,
+    parseLibraryPath,
+} from "../library/library-path.js";
+import type { LibraryPathTerms } from "../library/types.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
 import type { TrackCorrector } from "../metadata/track-corrector.js";
 import {
@@ -31,6 +35,12 @@ import {
     hasSuspectTags,
     hasSuspectTitle,
 } from "./suspect-tags.js";
+import {
+    isSameAlbum,
+    isSameArtist,
+    isSameName,
+    hasNoteAfterName,
+} from "../metadata/track-matching.js";
 import {
     correctTags,
     getCorrectedMetadata,
@@ -101,8 +111,9 @@ export function buildTrackSearch(
     sourceRoot: string,
     existingInfo: TrackInfo
 ): TrackSearch {
-    const filenameTerms = parseTrackFilename(path.basename(source));
-    const folderTerms = inferFolderSearchTerms(source, sourceRoot);
+    const filenameTerms =
+        parseLibraryPath(source) ?? parseTrackFilename(path.basename(source));
+    const folderTerms = inferLibraryFolderTerms(source, sourceRoot);
 
     return {
         title: getFirstFilled(existingInfo.title, filenameTerms.title),
@@ -157,23 +168,27 @@ function keepExistingInfo(
     return { ...metadata, info: merged };
 }
 
+function isTried(search: TrackSearch, tried: TrackSearch[]): boolean {
+    return tried.some((triedSearch) => isSameSongSearch(search, triedSearch));
+}
+
 function shouldSearchFileName(
     fileSearch: TrackSearch,
-    tagSearch: TrackSearch,
+    tried: TrackSearch[],
     hints: TrackInfo
 ): boolean {
-    return hasSuspectTags(hints) && !isSameSearch(fileSearch, tagSearch);
+    return hasSuspectTags(hints) && !isTried(fileSearch, tried);
 }
 
 // Wrong tags (an artist inside the title) also spoil the search they lead.
 async function findFromFileName(
     { source, existing, hints, replaceCover }: TrackLookup,
-    tagSearch: TrackSearch,
+    tried: TrackSearch[],
     { sourceRoot, metadataChain }: ProcessingContext
 ): Promise<TrackMetadata | null> {
     const search = buildTrackSearch(source, sourceRoot, EMPTY_TRACK_INFO);
 
-    if (!shouldSearchFileName(search, tagSearch, hints)) {
+    if (!shouldSearchFileName(search, tried, hints)) {
         return null;
     }
 
@@ -187,20 +202,126 @@ async function findFromFileName(
     return found && keepExistingInfo(found, existing);
 }
 
+interface LookupSearches {
+    pathSearch: LibraryPathTerms | null;
+    tagSearch: TrackSearch;
+}
+
+function forgetIdentity(existing: ExistingTags): ExistingTags {
+    return { ...existing, info: { ...existing.info, title: "", artist: "" } };
+}
+
+const SAME_SONG_CHECKS: ((
+    first: TrackSearch,
+    second: TrackSearch
+) => boolean)[] = [
+    (first, second) => isSameName(first.title, second.title),
+    (first, second) => isSameArtist(first.artist, second.artist),
+    (first, second) => isSameAlbum(first.album, second.album),
+    (first, second) => isSameAlbum(second.album, first.album),
+];
+
+// Spelled differently ("AC DC", "AC/DC"), both would run the same rate-limited searches.
+function isSameSongSearch(first: TrackSearch, second: TrackSearch): boolean {
+    return SAME_SONG_CHECKS.every((isSame) => isSame(first, second));
+}
+
+function getNewPathSearch({
+    pathSearch,
+    tagSearch,
+}: LookupSearches): TrackSearch | null {
+    return pathSearch && !isSameSongSearch(pathSearch, tagSearch)
+        ? pathSearch
+        : null;
+}
+
+// Tags naming another version ("Song (Live)") must not get its details.
+function namesTaggedSong({ info }: TrackMetadata, hints: TrackInfo): boolean {
+    return (
+        hasSuspectIdentity(hints) || !isOtherVersion(hints.title, info.title)
+    );
+}
+
+function isOtherVersion(taggedTitle: string, foundTitle: string): boolean {
+    return (
+        hasNoteAfterName(taggedTitle, foundTitle) &&
+        !isSameName(taggedTitle, foundTitle)
+    );
+}
+
+function acceptPathResult(
+    found: TrackMetadata | null,
+    { existing, hints }: TrackLookup
+): TrackMetadata | null {
+    return found && namesTaggedSong(found, hints)
+        ? keepExistingInfo(found, existing)
+        : null;
+}
+
+// The path names the song better than tags do; its terms must lead the search.
+async function findFromPath(
+    lookup: TrackLookup,
+    searches: LookupSearches,
+    { metadataChain }: ProcessingContext
+): Promise<TrackMetadata | null> {
+    const search = getNewPathSearch(searches);
+    if (!search) {
+        return null;
+    }
+
+    const subject = `path ${formatSearchSubject(search)}`;
+    const run = { metadataChain, subject, replaceCover: lookup.replaceCover };
+    const withoutIdentity = forgetIdentity(lookup.existing);
+    const found = await searchServices(search, withoutIdentity, run);
+    return acceptPathResult(found, lookup);
+}
+
+function findFromTags(
+    { existing, hints, replaceCover }: TrackLookup,
+    tagSearch: TrackSearch,
+    { metadataChain }: ProcessingContext
+): Promise<TrackMetadata | null> {
+    const subject = getSearchSubject(tagSearch, hints);
+    const run = { metadataChain, subject, replaceCover };
+    return searchServices(tagSearch, existing, run);
+}
+
+// Overwriting would otherwise replace a stored album with the folder's.
+function getPinnedAlbum(
+    { existing, hints }: TrackLookup,
+    pathSearch: LibraryPathTerms | null
+): string {
+    const pathAlbum = hints.album.trim() ? "" : pathSearch?.album;
+    return getFirstFilled(existing.info.album, pathAlbum);
+}
+
+// Best-ofs and compilations keep the album of their folder.
+function pinFolderAlbum(
+    lookup: TrackLookup,
+    pathSearch: LibraryPathTerms | null
+): TrackLookup {
+    const { info } = lookup.existing;
+    const album = getPinnedAlbum(lookup, pathSearch);
+    return {
+        ...lookup,
+        existing: { ...lookup.existing, info: { ...info, album } },
+    };
+}
+
 async function findTrackMetadata(
     lookup: TrackLookup,
     context: ProcessingContext
 ): Promise<TrackMetadata | null> {
-    const { source, existing, hints, replaceCover } = lookup;
-    const search = buildTrackSearch(source, context.sourceRoot, hints);
-    const { metadataChain } = context;
-    const subject = getSearchSubject(search, hints);
-    const found = await searchServices(search, existing, {
-        metadataChain,
-        subject,
-        replaceCover,
-    });
-    return found ?? findFromFileName(lookup, search, context);
+    const { source, hints } = lookup;
+    const pathSearch = parseLibraryPath(source);
+    const pinned = pinFolderAlbum(lookup, pathSearch);
+    const tagSearch = buildTrackSearch(source, context.sourceRoot, hints);
+    const searches = { pathSearch, tagSearch };
+    const found =
+        (await findFromPath(pinned, searches, context)) ??
+        (await findFromTags(pinned, tagSearch, context));
+    const tried = [tagSearch, pathSearch].filter((search) => search !== null);
+    return found ?? findFromFileName(pinned, tried, context);
 }
 
 function keepWritableMetadata(
@@ -442,9 +563,12 @@ function readCorrectedTags(
     stored: StoredTags,
     context: ProcessingContext
 ): Promise<CorrectedTags> {
-    const { sourceRoot } = context;
-    const request = buildCorrectionRequest(source, sourceRoot, stored.info);
-    return correctTags(stored, request, context);
+    const plan = {
+        pathTerms: parseLibraryPath(source),
+        buildRequest: (info: TrackInfo) =>
+            buildCorrectionRequest(source, context.sourceRoot, info),
+    };
+    return correctTags(stored, plan, context);
 }
 
 async function writeNewMetadata(

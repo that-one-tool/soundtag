@@ -13,9 +13,14 @@ import type { TuiServices } from "../../src/tui/tui-services.js";
 import type { TagJobSettings, TagTarget } from "../../src/tui/types.js";
 
 export const DEFAULT_JOB_SETTINGS: TagJobSettings = {
-    renameFiles: true,
+    renameFiles: false,
     fixTags: false,
     overwriteTags: false,
+};
+
+export const RENAMING_JOB_SETTINGS: TagJobSettings = {
+    ...DEFAULT_JOB_SETTINGS,
+    renameFiles: true,
 };
 
 export interface ControlledJob {
@@ -47,7 +52,7 @@ export function createControlledServices(): {
             redoneFiles: new RedoneFiles(),
             pathMoves,
             subfolders: new ToggleSetting(true),
-            renaming: new ToggleSetting(true),
+            renaming: new ToggleSetting(false),
             fixing: new ToggleSetting(false),
             overwriting: new ToggleSetting(false),
             detailsCache: createDetailsCache(),

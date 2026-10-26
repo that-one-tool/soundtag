@@ -10,6 +10,8 @@ export interface TaggingSettings {
     youtubeApiKey?: string;
     listenBrainzToken?: string;
     coverMode?: CoverMode;
+    discogsConsumerKey?: string;
+    discogsConsumerSecret?: string;
 }
 
 export interface AppConfig extends TaggingSettings {

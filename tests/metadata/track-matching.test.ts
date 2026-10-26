@@ -7,6 +7,7 @@ import {
     isSameTrack,
     isSameWording,
     isVariousArtists,
+    hasNoteAfterName,
 } from "../../src/metadata/track-matching.js";
 
 test("isSameName ignores case, accents, punctuation and noise brackets", () => {
@@ -275,4 +276,14 @@ test("isVariousArtists spots the compilation credit however it is written", () =
     assert.ok(isVariousArtists("VARIOUS-ARTISTS"));
     assert.equal(isVariousArtists("Various"), false);
     assert.equal(isVariousArtists(""), false);
+});
+
+test("hasNoteAfterName accepts a name followed by a note only", () => {
+    assert.equal(hasNoteAfterName("Song (Live)", "song"), true);
+    assert.equal(hasNoteAfterName("Café - Radio Edit", "Cafe"), true);
+    assert.equal(hasNoteAfterName("Album [Deluxe]", "Album"), true);
+    assert.equal(hasNoteAfterName("Bicycle Race", "Bicycle"), false);
+    assert.equal(hasNoteAfterName("Greatest Hits II", "Greatest Hits"), false);
+    assert.equal(hasNoteAfterName("Song", "Song"), false);
+    assert.equal(hasNoteAfterName("Love Song (Live)", "Song"), false);
 });

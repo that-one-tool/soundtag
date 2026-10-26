@@ -44,6 +44,8 @@ export function loadSessionConfig(sources: ConfigSources): SessionConfig {
             youtubeApiKey: sources.env.YOUTUBE_API_KEY,
             listenBrainzToken: sources.env.LISTENBRAINZ_TOKEN,
             coverMode: parseCoverMode(sources.env.SOUNDTAG_COVER),
+            discogsConsumerKey: sources.env.DISCOGS_CONSUMER_KEY,
+            discogsConsumerSecret: sources.env.DISCOGS_CONSUMER_SECRET,
         },
     };
 }

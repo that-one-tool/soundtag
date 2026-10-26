@@ -1,8 +1,9 @@
 # AGENTS.md
 
 SoundTag is a Node.js CLI and terminal UI that scans a music folder, looks up
-missing track metadata (ListenBrainz, then MusicBrainz, Deezer, iTunes and
-Last.fm, with Deezer album search and YouTube as cover-only fallbacks), and
+missing track metadata (Discogs for known albums, ListenBrainz, MusicBrainz,
+Deezer, Discogs for songs without an album, iTunes and Last.fm, with Deezer
+album search and YouTube as cover-only fallbacks), and
 rewrites tags and cover art in place. User-facing behaviour is documented in
 [README.md](README.md).
 
@@ -30,7 +31,7 @@ npm run build      # compile to dist/
 | `src/cli/`                | Run lifecycle: argument parsing, config loading and validation, Ctrl+C handling, banner, summary, exit codes, and the lazy launch of the TUI.                                                                                                                                                                                                   |
 | `src/tui/`                | Ink terminal UI: folder browser reducer, metadata panel, log pane, background `TaggingQueue`, session status dots. React components live in `components/` and hooks in `hooks/`.                                                                                                                                                                |
 | `src/processing/`         | `processBatch` walks the files and records statuses in the report; `processTrack` handles one file (correcting its tags first in fix mode) and returns its status, tags and corrections; `renameTrack` then renames it from those tags; `renameAlbumFolder` renames single-album folders at the end; `track-log` formats each file's log lines. |
-| `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, renames with a per-batch folder name cache, track filenames, and search terms derived from filenames and folders.                                                                                                                                                                      |
+| `src/library/`            | Filesystem: audio-file discovery, temporary-copy writes, renames with a per-batch folder name cache, track filenames, search terms derived from filenames and folders, and the `<Artist> - <Album>/<Artist> - <Title>` layout (`parseLibraryPath`).                                                                                             |
 | `src/tags/`               | `TagStore` implementations per format (`Id3TagStore` for MP3, `TagLibTagStore` for OGG/FLAC/WAV), chosen by `getTagStore`.                                                                                                                                                                                                                      |
 | `src/metadata/`           | `MetadataChain` runs providers in order and fills only missing fields; `TrackCorrector` finds fix-mode corrections from `CanonicalSource`s; `create-metadata-chain.ts` is the composition root (`createMetadataLookups`); pure merge and correction helpers.                                                                                    |
 | `src/metadata/providers/` | One class per external service, implementing `MetadataProvider` or `CoverProvider`.                                                                                                                                                                                                                                                             |
@@ -53,6 +54,8 @@ graph free of cycles.
   - `MUSICBRAINZ_USER_AGENT` enables MusicBrainz, and ListenBrainz with
     `LISTENBRAINZ_TOKEN` (a ListenBrainz user token).
   - `YOUTUBE_API_KEY` enables the YouTube cover fallback.
+  - `DISCOGS_CONSUMER_KEY` and `DISCOGS_CONSUMER_SECRET` enable Discogs
+    (consumer key authentication, no user OAuth).
   - `SOUNDTAG_COVER` (`kitty`, `blocks` or `none`) overrides how the TUI draws
     covers; otherwise `src/tui/cover-mode.ts` detects it from the terminal.
 - Runs write no report file: headless runs print failed files and renames in
@@ -181,4 +184,5 @@ Not enforced by tooling, but expected:
   spaced 2 s apart, Deezer 500 ms apart (no key or OAuth needed for its public
   read endpoints; it allows 50 requests per 5 s) and iTunes 4 s apart.
   Deezer reports errors as HTTP 200 with an `error` object.
+  Discogs allows 60 authenticated requests per minute and is spaced 1 s apart.
   Cover image downloads are not rate-limited.

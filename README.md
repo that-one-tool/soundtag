@@ -1,7 +1,7 @@
 # SoundTag
 
 SoundTag scans a folder of MP3, OGG, FLAC, and WAV files, looks up track
-metadata with ListenBrainz, MusicBrainz, Deezer, iTunes and Last.fm, and
+metadata with Discogs, ListenBrainz, MusicBrainz, Deezer, iTunes and Last.fm, and
 updates files in place with audio tags and cover art when a match is found.
 
 ## Requirements
@@ -10,6 +10,7 @@ updates files in place with audio tags and cover art when a match is found.
 - A MusicBrainz User-Agent string to enable the MusicBrainz lookups
 - A ListenBrainz user token, recommended for the most accurate matches
 - Optionally, a Last.fm API key for the last-resort lookup
+- Optionally, a Discogs consumer key and secret for the Discogs lookups
 
 ## Setup
 
@@ -31,7 +32,7 @@ Provide your API keys in a `.env` file. SoundTag reads `.env` from the folder
 you run it in and from `~/.config/soundtag/.env` (or
 `$XDG_CONFIG_HOME/soundtag/.env`). A key in the local file wins over the same
 key in the config file, and variables already set in your shell win over both.
-Only the five keys below are read from these files; other variables are
+Only the seven keys below are read from these files; other variables are
 ignored:
 
 ```env
@@ -39,6 +40,8 @@ LASTFM_API_KEY=your_lastfm_api_key
 MUSICBRAINZ_USER_AGENT=SoundTag/1.0.0 (your-contact-information)
 LISTENBRAINZ_TOKEN=your_listenbrainz_user_token
 YOUTUBE_API_KEY=your_youtube_data_api_key
+DISCOGS_CONSUMER_KEY=your_discogs_consumer_key
+DISCOGS_CONSUMER_SECRET=your_discogs_consumer_secret
 # Optional: kitty, blocks or none (detected from the terminal by default)
 # SOUNDTAG_COVER=kitty
 ```
@@ -61,7 +64,21 @@ various artists; so is the year from ListenBrainz. A cover band's
 record that credits the original artist is therefore not taken as the track's
 album.
 
-1. **ListenBrainz** maps the artist and title to a MusicBrainz recording, and
+1. **Discogs**, when the album is known (from the path or the tags), searches
+   its masters (every edition of an album) by artist and album, then
+   its releases when no master has the song, and only keeps the album whose
+   tracklist holds the song. It gives the album, the genre, the album artist,
+   the track and disc numbers and counts (not for vinyl sides such as `A1`),
+   the cover and, from a master only, the album's original year. It needs a
+   consumer key and secret: register an application in
+   [your Discogs developer settings](https://www.discogs.com/settings/developers)
+   and copy them into `DISCOGS_CONSUMER_KEY` and `DISCOGS_CONSUMER_SECRET`.
+   Discogs allows 60 requests per minute, so its requests are spaced one
+   second apart. When no album is known, Discogs searches the song after
+   Deezer instead. With a known album, the search leaves out the title, so
+   an album costs two requests per batch (search and album), shared by all its
+   tracks; an album Discogs does not have costs two searches, also once.
+2. **ListenBrainz** maps the artist and title to a MusicBrainz recording, and
    corrects typos in fields the file does not have yet. It needs a known artist, a user token (copy it from
    [your ListenBrainz settings](https://listenbrainz.org/settings/) into
    `LISTENBRAINZ_TOKEN`) and `MUSICBRAINZ_USER_AGENT`. It gives the album, the
@@ -70,23 +87,23 @@ album.
    the year the song was first released and the track and disc numbers and
    counts.
    ListenBrainz requests are spaced one second apart.
-2. **MusicBrainz** search finds the recording, its year of first release and
+3. **MusicBrainz** search finds the recording, its year of first release and
    the Cover Art Archive cover, including for tracks with no known artist. It
    needs no API key, but a meaningful User-Agent: set `MUSICBRAINZ_USER_AGENT`
    to identify your SoundTag installation and provide contact information.
    MusicBrainz allows one request per second; SoundTag spaces its requests,
    release lookups included, three seconds apart.
-3. **Deezer** needs no key or account. Among its results, it prefers the
+4. **Deezer** needs no key or account. Among its results, it prefers the
    searched song on the track's album, and gives the genre, the track and disc
    numbers and counts, the album artist and the 1000×1000 artwork. Its release
    dates are often those of a reissue, so SoundTag takes no year from Deezer.
    Its album requests are made once per album and batch, only while details are
    missing, and its requests are spaced half a second apart.
-4. **iTunes**, through
+5. **iTunes**, through
    [Apple's Search API](https://performance-partners.apple.com/search-api),
    gives the year and the same details and artwork. Its searches are spaced at
    least four seconds apart to stay within the 20-requests-per-minute limit.
-5. **Last.fm** is the last resort for the title, artist, album, year and cover.
+6. **Last.fm** is the last resort for the title, artist, album, year and cover.
    It makes up to two requests per track (a search, then the track details),
    spaced two seconds apart.
 
@@ -161,8 +178,8 @@ presses are queued and run one after another, and are ignored once you quit.
 Once processed in this session, files get a colored dot: green for `TAGGED`,
 yellow for `SKIPPED`, red for `FAILED`. A folder shows the worst status of the
 files inside it. Folder runs include subfolders unless `--no-recursive` was
-passed; `r` switches this for the folders queued next. Likewise, runs rename
-files and folders unless `--no-rename` was passed; `n` switches this for the
+passed; `r` switches this for the folders queued next. Likewise, runs keep
+file and folder names unless `--rename` was passed; `n` switches this for the
 files and folders queued next. The status bar shows these choices and whether
 fix mode or overwriting is on. With overwriting on (`o`), even fully tagged
 files are searched with their existing tags, and what the services find
@@ -210,8 +227,8 @@ file failed), otherwise 0. Stopped runs do not count as failures. Without an
 interactive terminal and without a source folder, SoundTag exits with code 1
 before asking for anything.
 
-After a file is tagged, or skipped because it was already fully tagged,
-SoundTag renames it to `<Artist> - <Title>.<extension>` from its tags when the
+Renaming is off by default. With `--rename`, after a file is tagged, or
+skipped because it was already fully tagged, SoundTag renames it to `<Artist> - <Title>.<extension>` from its tags when the
 name differs (letter case is ignored). Files skipped because no service found
 them keep their name, since their tags are unverified. Characters that
 filenames cannot hold, such as `/` or `?`, become `_`, a leading `.` becomes
@@ -234,11 +251,12 @@ distinct disc for each, they all keep their names and the log says so. A lone
 folder of a multi-disc album also gets its disc number. The source folder and
 its parents keep their names; in the browser, this is the folder it started
 in. Runs of spaces in generated names are collapsed, so files whose tags hold
-such spaces are renamed once. Use `--no-rename` to keep
-file and folder names (in the browser, `n` switches this):
+such spaces are renamed once. Pass `--rename` to rename files and folders
+(in the browser, `n` switches this); `--no-rename` keeps the names, as by
+default:
 
 ```sh
-soundtag /path/to/music --no-rename
+soundtag /path/to/music --rename
 ```
 
 Pass `--fix` to also correct existing tags, not only fill empty ones (in the
@@ -323,6 +341,27 @@ the nearest meaningful folder and artist context from the folder above it.
 Single ambiguous folders are treated as album context, not assumed to be an
 artist. Structural folders such as disc numbers, cover-art folders, and
 unknown placeholders are ignored.
+
+Files filed as `<Artist>/<Artist> - <Title>.<extension>` or
+`<Artist> - <Album>/<Artist> - <Title>.<extension>` (disc folders such as
+`CD1` in between are skipped) are searched first by the artist, title and album
+of their path, and only then by their tags. The folder must name the file's
+artist (ignoring case), and folders above the scanned one count too. An album
+or track number repeated in the file name (`Artist - Album - 01 - Title`) is
+left out of the title, and rip notes after the folder album (`(1991)`,
+`[FLAC]`, `(Disc 1)`) are left out of the album; `Discography`, `Singles` and
+similar folders give no album. When the tags name another version of the path's song (`Song (Live)` for
+`Song`), what the path search finds is not used, so a live version never gets
+the studio song's details.
+The folder album fills an empty album tag and is never replaced by a service,
+so a best-of or a compilation keeps all its tracks on one album; release
+details (track and disc numbers, album artist, cover) are only taken from that
+album. When overwriting, it does not replace a stored album. With `--fix`, a
+title, artist or album that names something else than the path is replaced by
+the path's. A tag that only adds a note to it (`Song (Live)`,
+`Album (Deluxe Edition)`) or a featured artist is kept, empty tags are left to
+the search (file names lose characters such as `?`), and the services then
+check the corrected tags.
 
 When the tags look wrong (no artist, or a title holding " - " or the artist's
 name) and lead to nothing, SoundTag searches again from the file and folder

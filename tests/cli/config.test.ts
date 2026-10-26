@@ -20,6 +20,8 @@ test("loadSessionConfig reads arguments and environment", async () => {
             YOUTUBE_API_KEY: "youtube-key",
             LISTENBRAINZ_TOKEN: "listenbrainz-token",
             SOUNDTAG_COVER: "blocks",
+            DISCOGS_CONSUMER_KEY: "discogs-key",
+            DISCOGS_CONSUMER_SECRET: "discogs-secret",
         },
         workingDirectory,
     });
@@ -36,6 +38,8 @@ test("loadSessionConfig reads arguments and environment", async () => {
             youtubeApiKey: "youtube-key",
             listenBrainzToken: "listenbrainz-token",
             coverMode: "blocks",
+            discogsConsumerKey: "discogs-key",
+            discogsConsumerSecret: "discogs-secret",
         },
     });
 });

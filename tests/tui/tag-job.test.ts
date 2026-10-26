@@ -15,7 +15,7 @@ import {
     createProviderServices,
     silentWitness,
 } from "../helpers/metadata-chain.js";
-import { DEFAULT_JOB_SETTINGS } from "../helpers/tui.js";
+import { RENAMING_JOB_SETTINGS } from "../helpers/tui.js";
 
 const createTemporaryDirectory = useTemporaryDirectories(
     "soundtag-tag-job-test-"
@@ -132,7 +132,7 @@ test("a folder job tags subfolders when recursive", async () => {
             kind: "folder",
             path: directory,
             recursive: true,
-            settings: DEFAULT_JOB_SETTINGS,
+            settings: RENAMING_JOB_SETTINGS,
         },
         new AbortController().signal
     );
@@ -307,7 +307,7 @@ test("a folder job renames the album folder below the library root", async () =>
             kind: "folder",
             path: album,
             recursive: false,
-            settings: DEFAULT_JOB_SETTINGS,
+            settings: RENAMING_JOB_SETTINGS,
         },
         new AbortController().signal
     );

@@ -20,6 +20,7 @@ const request = {
     hasSuspectTags: false,
     folderAlbum: "",
 };
+const plan = { pathTerms: null, buildRequest: () => request };
 const corrector = new TrackCorrector(
     [
         {
@@ -40,7 +41,7 @@ const corrector = new TrackCorrector(
 test("correctTags keeps the stored tags outside fix mode", async () => {
     const logger = createRecordingLogger();
 
-    const track = await correctTags(stored, request, { logger });
+    const track = await correctTags(stored, plan, { logger });
 
     assert.deepEqual(track, { tags: stored, corrections: [] });
     assert.deepEqual(logger.infos, []);
@@ -49,7 +50,7 @@ test("correctTags keeps the stored tags outside fix mode", async () => {
 test("correctTags applies and logs the corrections", async () => {
     const logger = createRecordingLogger();
 
-    const track = await correctTags(stored, request, { corrector, logger });
+    const track = await correctTags(stored, plan, { corrector, logger });
 
     assert.equal(track.tags.info.title, "All");
     assert.deepEqual(logger.infos, ['  fix    title: "all" → "All"']);
@@ -57,7 +58,7 @@ test("correctTags applies and logs the corrections", async () => {
 
 // Rewriting untouched fields would flatten multi-value tags and full dates.
 test("getCorrectedMetadata holds only the corrected fields", async () => {
-    const track = await correctTags(stored, request, {
+    const track = await correctTags(stored, plan, {
         corrector,
         logger: createRecordingLogger(),
     });
@@ -94,11 +95,56 @@ test("correctTags drops the release fields of a corrected album so they are look
 
     const track = await correctTags(
         withPosition,
-        { ...request, folderAlbum: "Real Album" },
+        {
+            pathTerms: null,
+            buildRequest: () => ({ ...request, folderAlbum: "Real Album" }),
+        },
         { corrector: albumCorrector, logger: createRecordingLogger() }
     );
 
     assert.equal(track.tags.info.album, "Real Album");
     assert.deepEqual(track.tags.extras, { genre: "Rock" });
     assert.equal(track.tags.hasCover, false);
+});
+
+test("correctTags corrects from the path first, then asks with the path tags", async () => {
+    const logger = createRecordingLogger();
+    const requested: string[] = [];
+    const pathPlan = {
+        pathTerms: { title: "all", artist: "Artist", album: "Best Of" },
+        buildRequest: (info: StoredTags["info"]) => {
+            requested.push(info.album);
+            return request;
+        },
+    };
+
+    const track = await correctTags(
+        { ...stored, info: { ...stored.info, title: "Other" } },
+        pathPlan,
+        { corrector, logger }
+    );
+
+    assert.deepEqual(requested, ["Best Of"]);
+    assert.deepEqual(track.corrections, [
+        { field: "title", from: "Other", to: "All" },
+        { field: "album", from: "Album", to: "Best Of" },
+    ]);
+    assert.equal(track.tags.info.title, "All");
+    assert.equal(track.tags.hasCover, false);
+    assert.deepEqual(logger.infos, [
+        '  fix    title: "Other" → "All" · album: "Album" → "Best Of"',
+    ]);
+});
+
+test("correctTags ignores the path outside fix mode", async () => {
+    const pathPlan = {
+        pathTerms: { title: "Other", artist: "Other", album: "Other" },
+        buildRequest: () => request,
+    };
+
+    const track = await correctTags(stored, pathPlan, {
+        logger: createRecordingLogger(),
+    });
+
+    assert.deepEqual(track, { tags: stored, corrections: [] });
 });

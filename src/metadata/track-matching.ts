@@ -146,6 +146,19 @@ export function isSameName(found: string | undefined, searched: string) {
     return isEqual || isTypo(foundWords, searchedWords);
 }
 
+const NOTE_START = /\s*[([]|\s[-–—]\s/u;
+
+function foldWords(text: string): string {
+    return splitWords(foldText(text)).join("");
+}
+
+// A name followed by a note: "Song (Live)", "Album (Deluxe Edition)", "Song - Live".
+export function hasNoteAfterName(name: string, start: string): boolean {
+    const note = NOTE_START.exec(name);
+    const head = note ? name.slice(0, note.index) : "";
+    return Boolean(foldWords(head)) && foldWords(head) === foldWords(start);
+}
+
 // Unlike isSameName, notes such as "(feat. X)" count, so a correction keeps them.
 export function isSameWording(found: string | undefined, searched: string) {
     const foundWords = splitWords(foldText(found));
@@ -202,7 +215,10 @@ export function isSameCredit(found: string | undefined, searched: string) {
     );
 }
 
-function isSameArtist(found: string | undefined, searched: string): boolean {
+export function isSameArtist(
+    found: string | undefined,
+    searched: string
+): boolean {
     return (
         isSameArtistName(found, searched) || hasSharedArtist(found, searched)
     );

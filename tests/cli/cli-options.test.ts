@@ -7,7 +7,7 @@ test("parseArguments keeps the recursive default and reads a source path", () =>
         sourcePath: "./music",
         recursive: true,
         verbose: false,
-        renameFiles: true,
+        renameFiles: false,
         fixTags: false,
     });
 });
@@ -46,9 +46,17 @@ test("parseArguments accepts the long and short option aliases", () => {
     assert.deepEqual(parseArguments(["--no-recursive", "-r", "--verbose"]), {
         recursive: true,
         verbose: true,
-        renameFiles: true,
+        renameFiles: false,
         fixTags: false,
     });
+});
+
+test("parseArguments turns renaming on with --rename, and off again with --no-rename", () => {
+    assert.equal(parseArguments(["--rename"]).renameFiles, true);
+    assert.equal(
+        parseArguments(["--rename", "--no-rename"]).renameFiles,
+        false
+    );
 });
 
 test("parseArguments turns fix mode on with --fix", () => {

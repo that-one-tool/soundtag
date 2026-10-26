@@ -1,6 +1,12 @@
 import { DeezerClient } from "./providers/deezer-client.js";
 import { DeezerCoverProvider } from "./providers/deezer-cover.js";
 import { DeezerProvider } from "./providers/deezer.js";
+import { DiscogsClient } from "./providers/discogs-client.js";
+import {
+    DiscogsAlbumProvider,
+    DiscogsProvider,
+    DiscogsTrackFinder,
+} from "./providers/discogs.js";
 import { ItunesProvider } from "./providers/itunes.js";
 import { LastFmProvider } from "./providers/lastfm.js";
 import { ListenBrainzClient } from "./providers/listenbrainz-client.js";
@@ -29,6 +35,8 @@ export interface MetadataChainConfig {
     musicBrainzUserAgent?: string;
     listenBrainzToken?: string;
     youtubeApiKey?: string;
+    discogsConsumerKey?: string;
+    discogsConsumerSecret?: string;
 }
 
 export interface MetadataLookups {
@@ -42,6 +50,13 @@ interface ProviderKeys {
     lastFmApiKey: string;
     musicBrainzUserAgent: string;
     listenBrainzToken: string;
+    discogsConsumerKey: string;
+    discogsConsumerSecret: string;
+}
+
+interface DiscogsProviders {
+    album: MetadataProvider[];
+    song: MetadataProvider[];
 }
 
 interface MissingKeyWarning {
@@ -66,13 +81,25 @@ const MISSING_KEY_WARNINGS: MissingKeyWarning[] = [
         level: "info",
         message: "Last.fm lookup requires LASTFM_API_KEY.",
     },
+    {
+        isMissing: (keys) => !hasDiscogsKeys(keys),
+        level: "info",
+        message:
+            "Discogs lookup requires DISCOGS_CONSUMER_KEY and DISCOGS_CONSUMER_SECRET.",
+    },
 ];
+
+function hasDiscogsKeys(keys: ProviderKeys): boolean {
+    return Boolean(keys.discogsConsumerKey && keys.discogsConsumerSecret);
+}
 
 function getProviderKeys(config: MetadataChainConfig): ProviderKeys {
     return {
         lastFmApiKey: trimOrEmpty(config.lastFmApiKey),
         musicBrainzUserAgent: trimOrEmpty(config.musicBrainzUserAgent),
         listenBrainzToken: trimOrEmpty(config.listenBrainzToken),
+        discogsConsumerKey: trimOrEmpty(config.discogsConsumerKey),
+        discogsConsumerSecret: trimOrEmpty(config.discogsConsumerSecret),
     };
 }
 
@@ -140,14 +167,32 @@ function createBrainzProviders(
     ];
 }
 
+// One client, so both share the rate limit and the cached albums.
+function createDiscogsProviders(
+    keys: ProviderKeys,
+    services: ProviderServices
+): DiscogsProviders {
+    if (!hasDiscogsKeys(keys)) {
+        return { album: [], song: [] };
+    }
+
+    const credentials = {
+        key: keys.discogsConsumerKey,
+        secret: keys.discogsConsumerSecret,
+    };
+    const client = new DiscogsClient(credentials, services);
+    const finder = new DiscogsTrackFinder(client, services);
+    return {
+        album: [new DiscogsAlbumProvider(finder)],
+        song: [new DiscogsProvider(finder)],
+    };
+}
+
 function createOtherProviders(
-    config: MetadataChainConfig,
-    deezer: DeezerProvider,
+    keys: ProviderKeys,
     services: ProviderServices
 ): MetadataProvider[] {
-    const keys = getProviderKeys(config);
     return [
-        deezer,
         new ItunesProvider(services),
         ...createLastFmProviders(keys, services),
     ];
@@ -178,6 +223,22 @@ function createServices(
     };
 }
 
+interface ChainProviders {
+    brainz: BrainzProvider[];
+    deezer: DeezerProvider;
+}
+
+// Discogs checks the album first, and searches songs with no album after Deezer.
+function orderProviders(
+    keys: ProviderKeys,
+    { brainz, deezer }: ChainProviders,
+    services: ProviderServices
+): MetadataProvider[] {
+    const discogs = createDiscogsProviders(keys, services);
+    const others = createOtherProviders(keys, services);
+    return [...discogs.album, ...brainz, deezer, ...discogs.song, ...others];
+}
+
 function createChain(
     config: MetadataChainConfig,
     brainz: BrainzProvider[],
@@ -185,8 +246,9 @@ function createChain(
 ): { chain: MetadataChain; deezer: DeezerProvider } {
     const deezerClient = new DeezerClient(services);
     const deezer = new DeezerProvider(deezerClient, services);
+    const keys = getProviderKeys(config);
     const chain = new MetadataChain(
-        [...brainz, ...createOtherProviders(config, deezer, services)],
+        orderProviders(keys, { brainz, deezer }, services),
         createCoverProviders(config, deezerClient, services),
         services
     );

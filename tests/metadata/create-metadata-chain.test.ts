@@ -4,6 +4,10 @@ import { afterEach, test } from "node:test";
 import { createMetadataLookups } from "../../src/metadata/create-metadata-chain.js";
 import { DeezerCoverProvider } from "../../src/metadata/providers/deezer-cover.js";
 import { DeezerProvider } from "../../src/metadata/providers/deezer.js";
+import {
+    DiscogsAlbumProvider,
+    DiscogsProvider,
+} from "../../src/metadata/providers/discogs.js";
 import { ListenBrainzProvider } from "../../src/metadata/providers/listenbrainz.js";
 import { ItunesProvider } from "../../src/metadata/providers/itunes.js";
 import { LastFmProvider } from "../../src/metadata/providers/lastfm.js";
@@ -28,6 +32,8 @@ test("createMetadataLookups orders every configured provider", () => {
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
             youtubeApiKey: "youtube-key",
             listenBrainzToken: "token",
+            discogsConsumerKey: "discogs-key",
+            discogsConsumerSecret: "discogs-secret",
         },
         instantClock,
         consoleLogger
@@ -36,9 +42,11 @@ test("createMetadataLookups orders every configured provider", () => {
     assert.deepEqual(
         chain.providers.map((provider) => provider.constructor),
         [
+            DiscogsAlbumProvider,
             ListenBrainzProvider,
             MusicBrainzProvider,
             DeezerProvider,
+            DiscogsProvider,
             ItunesProvider,
             LastFmProvider,
         ]
@@ -59,6 +67,8 @@ test("createMetadataLookups warns and skips unconfigured optional providers", ()
             musicBrainzUserAgent: " ",
             youtubeApiKey: " ",
             listenBrainzToken: " ",
+            discogsConsumerKey: "key",
+            discogsConsumerSecret: " ",
         },
         instantClock,
         logger
@@ -78,6 +88,7 @@ test("createMetadataLookups warns and skips unconfigured optional providers", ()
     assert.deepEqual(logger.infos, [
         "ListenBrainz lookup requires LISTENBRAINZ_TOKEN.",
         "Last.fm lookup requires LASTFM_API_KEY.",
+        "Discogs lookup requires DISCOGS_CONSUMER_KEY and DISCOGS_CONSUMER_SECRET.",
     ]);
 });
 

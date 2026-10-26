@@ -59,7 +59,7 @@ function printBanner(): void {
     console.log("                SOUNDTAG");
     console.log(`${SEPARATOR}\n`);
     console.log(
-        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--no-rename] [--fix]"
+        "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--rename | --no-rename] [--fix]"
     );
 }
 

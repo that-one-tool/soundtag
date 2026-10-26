@@ -437,7 +437,7 @@ test("App takes n as a no to a pending clear, not a renaming switch", async () =
     stdin.write("y");
     await delay(50);
 
-    assert.equal(services.renaming.getSnapshot(), true);
+    assert.equal(services.renaming.getSnapshot(), false);
     const tags = await getTagStore(song).read(song);
     assert.equal(tags.info.artist, "Black Sabbath");
 });
@@ -602,7 +602,7 @@ test("App keeps the renaming choice of each queued target", async () => {
     await waitFor(() => jobs.length === 1);
 
     stdin.write("n");
-    await waitForFrame(lastFrame, "renaming off");
+    await waitForFrame(lastFrame, "renaming on");
     stdin.write(KEYS.down);
     stdin.write(KEYS.down);
     await waitForFrame(lastFrame, "Black Sabbath");
@@ -613,7 +613,7 @@ test("App keeps the renaming choice of each queued target", async () => {
 
     assert.deepEqual(
         jobs.map(({ target }) => target.settings.renameFiles),
-        [true, false]
+        [false, true]
     );
 });
 

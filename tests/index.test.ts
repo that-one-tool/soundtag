@@ -41,6 +41,8 @@ function runCli(
                     LISTENBRAINZ_TOKEN: "test-token",
                     MUSICBRAINZ_USER_AGENT: undefined,
                     YOUTUBE_API_KEY: undefined,
+                    DISCOGS_CONSUMER_KEY: undefined,
+                    DISCOGS_CONSUMER_SECRET: undefined,
                     XDG_CONFIG_HOME: workingDirectory,
                     ...environment,
                 },
@@ -112,6 +114,7 @@ test("CLI skips and renames a properly tagged file", async () => {
     const { exitCode, stdout, stderr } = await runCli(workingDirectory, [
         sourceDirectory,
         "--no-recursive",
+        "--rename",
     ]);
 
     assert.equal(exitCode, 0);

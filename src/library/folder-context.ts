@@ -12,7 +12,7 @@ const STRUCTURAL_DIRECTORY_PATTERNS = [
 const ALBUM_MARKER =
     /\b(?:ost|soundtrack|compilation|best of|greatest hits)\b/i;
 
-function isStructuralDirectory(name: string): boolean {
+export function isStructuralDirectory(name: string): boolean {
     const normalized = name.trim().toLowerCase();
     return (
         !normalized ||
@@ -22,7 +22,7 @@ function isStructuralDirectory(name: string): boolean {
     );
 }
 
-function cleanAlbumDirectory(name: string): string {
+export function cleanAlbumDirectory(name: string): string {
     return name
         .replace(/^\s*\d{4}\s*[-._]\s*/, "")
         .replace(/\s+/g, " ")
