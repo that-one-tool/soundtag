@@ -27,4 +27,6 @@ export interface ProcessingContext {
     logger: Logger;
     // Found values replace the stored ones instead of only filling the gaps.
     overwrite?: boolean;
+    // Folders above a file's own source would otherwise turn into search terms.
+    findSearchRoot?: (file: string) => string;
 }

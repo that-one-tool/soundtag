@@ -74,7 +74,13 @@ const completeInfo: TrackInfo = {
 test("getTagStore picks the store for each supported format", () => {
     assert.ok(getTagStore("song.MP3") instanceof Id3TagStore);
 
-    for (const filename of ["song.ogg", "song.FLAC", "song.wav"]) {
+    for (const filename of [
+        "song.ogg",
+        "song.FLAC",
+        "song.wav",
+        "song.opus",
+        "song.m4a",
+    ]) {
         assert.ok(getTagStore(filename) instanceof TagLibTagStore, filename);
     }
 
@@ -128,7 +134,9 @@ test("tag stores report whether cover art is embedded", async () => {
     const mp3 = path.join(directory, "cover.mp3");
     await fs.writeFile(mp3, "audio bytes");
     const taglibFiles = await Promise.all(
-        ["flac", "ogg", "wav"].map((format) => copyFixture(format))
+        ["flac", "ogg", "wav", "opus", "m4a"].map((format) =>
+            copyFixture(format)
+        )
     );
 
     for (const source of [mp3, ...taglibFiles]) {
@@ -144,6 +152,8 @@ test("clearAllTags removes every tag and the cover", async () => {
         await copyFixture("flac"),
         await copyFixture("ogg"),
         await copyFixture("wav"),
+        await copyFixture("opus"),
+        await copyFixture("m4a"),
     ];
 
     for (const source of sources) {
@@ -375,7 +385,7 @@ test("tag stores preserve existing OGG fields when metadata is unavailable", asy
     }
 });
 
-for (const format of ["flac", "wav"] as const) {
+for (const format of ["flac", "wav", "opus", "m4a"] as const) {
     test(`tag stores write ${format.toUpperCase()} tags and preserve unavailable fields`, async () => {
         const directory = await createTemporaryDirectory();
         const source = path.join(directory, `source.${format}`);
@@ -539,7 +549,7 @@ test("tag stores ignore unreadable MP3 positions", async () => {
     assert.deepEqual(await readExtras(source), { discNumber: 1 });
 });
 
-for (const format of ["ogg", "flac", "wav"] as const) {
+for (const format of ["ogg", "flac", "wav", "opus", "m4a"] as const) {
     test(`tag stores write and read back ${format.toUpperCase()} extras`, async () => {
         const source = await copyFixture(format);
 

@@ -211,3 +211,40 @@ test("CLI runs without a Last.fm key", async () => {
     assert.equal(exitCode, 0);
     assert.match(stdout, /Last\.fm lookup requires LASTFM_API_KEY\./);
 });
+
+test("CLI --json keeps stdout for JSON events and logs on stderr", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const source = path.join(workingDirectory, "song.mp3");
+    await fs.writeFile(source, "audio bytes");
+    NodeID3.write(
+        {
+            title: "Title",
+            artist: "Artist",
+            year: "2024",
+            genre: "Rock",
+            image: {
+                mime: "image/jpeg",
+                type: { id: 3, name: "front cover" },
+                description: "Cover",
+                imageBuffer: Buffer.from("cover image"),
+            },
+        },
+        source
+    );
+
+    const { exitCode, stdout, stderr } = await runCli(workingDirectory, [
+        source,
+        "--json",
+    ]);
+
+    const events = stdout
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    assert.equal(exitCode, 0);
+    assert.deepEqual(
+        events.map(({ type }) => type),
+        ["start", "file", "summary"]
+    );
+    assert.match(stderr, /PROCESSING COMPLETE/);
+});

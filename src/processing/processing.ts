@@ -204,6 +204,13 @@ function pinFolderAlbum(
     };
 }
 
+export function getSearchRoot(
+    context: ProcessingContext,
+    source: string
+): string {
+    return context.findSearchRoot?.(source) ?? context.sourceRoot;
+}
+
 async function findTrackMetadata(
     lookup: TrackLookup,
     context: ProcessingContext
@@ -211,7 +218,11 @@ async function findTrackMetadata(
     const { source, hints } = lookup;
     const pathSearch = parseLibraryPath(source);
     const pinned = pinFolderAlbum(lookup, pathSearch);
-    const tagSearch = buildTrackSearch(source, context.sourceRoot, hints);
+    const tagSearch = buildTrackSearch(
+        source,
+        getSearchRoot(context, source),
+        hints
+    );
     const searches = { pathSearch, tagSearch };
     return (
         (await findFromPath(pinned, searches, context)) ??

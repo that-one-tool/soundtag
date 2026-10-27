@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { getTagStore, isProperlyTagged } from "../../src/tags/audio-tags.js";
 import {
     buildTrackSearch,
+    getSearchRoot,
     processTrack,
 } from "../../src/processing/processing.js";
 import { restoreFetchAfterEach } from "../helpers/fetch.js";
@@ -985,5 +986,22 @@ test("processTrack names only what neither the file nor the services have", asyn
 
     assert.ok(
         output.logs.includes('  write  title "New Title" · artist "New Artist"')
+    );
+});
+
+test("getSearchRoot uses the context's search root finder when given", () => {
+    const context = {
+        sourceRoot: "/music",
+        logger: consoleLogger,
+        metadataChain: createTestChain(),
+    };
+
+    assert.equal(getSearchRoot(context, "/music/a/b.mp3"), "/music");
+    assert.equal(
+        getSearchRoot(
+            { ...context, findSearchRoot: () => "/music/a" },
+            "/music/a/b.mp3"
+        ),
+        "/music/a"
     );
 });

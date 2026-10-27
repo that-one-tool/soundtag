@@ -4,19 +4,21 @@ import { parseArguments } from "../../src/cli/cli-options.js";
 
 test("parseArguments keeps the recursive default and reads a source path", () => {
     assert.deepEqual(parseArguments(["./music"]), {
-        sourcePath: "./music",
+        sourcePaths: ["./music"],
         recursive: true,
         verbose: false,
         overwrite: false,
+        json: false,
     });
 });
 
 test("parseArguments supports scan and verbose options", () => {
     assert.deepEqual(parseArguments(["./music", "--no-recursive", "-v"]), {
-        sourcePath: "./music",
+        sourcePaths: ["./music"],
         recursive: false,
         verbose: true,
         overwrite: false,
+        json: false,
     });
     assert.equal(
         parseArguments(["--no-recursive", "--recursive"]).recursive,
@@ -24,24 +26,31 @@ test("parseArguments supports scan and verbose options", () => {
     );
 });
 
-test("parseArguments rejects unknown flags and multiple source paths", () => {
+test("parseArguments rejects unknown flags", () => {
     assert.throws(() => parseArguments(["--unknown"]), /Unknown option/);
-    assert.throws(
-        () => parseArguments(["./music", "./other"]),
-        /Only one source folder path/
+});
+
+test("parseArguments reads several source paths in order", () => {
+    assert.deepEqual(
+        parseArguments(["a.mp3", "-v", "music", "b.flac"]).sourcePaths,
+        ["a.mp3", "music", "b.flac"]
     );
 });
 
 test("parseArguments treats names of object properties as source paths", () => {
-    assert.equal(parseArguments(["constructor"]).sourcePath, "constructor");
-    assert.equal(parseArguments(["toString"]).sourcePath, "toString");
+    assert.deepEqual(parseArguments(["constructor"]).sourcePaths, [
+        "constructor",
+    ]);
+    assert.deepEqual(parseArguments(["toString"]).sourcePaths, ["toString"]);
 });
 
 test("parseArguments accepts the long and short option aliases", () => {
     assert.deepEqual(parseArguments(["--no-recursive", "-r", "--verbose"]), {
+        sourcePaths: [],
         recursive: true,
         verbose: true,
         overwrite: false,
+        json: false,
     });
 });
 
@@ -59,4 +68,8 @@ test("parseArguments rejects the removed renaming, fix and cover options", () =>
 
 test("parseArguments turns overwriting on with --overwrite", () => {
     assert.equal(parseArguments(["./music", "--overwrite"]).overwrite, true);
+});
+
+test("parseArguments turns JSON events on with --json", () => {
+    assert.equal(parseArguments(["./music", "--json"]).json, true);
 });

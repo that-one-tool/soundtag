@@ -1,6 +1,5 @@
-import * as path from "node:path";
 import * as fs from "node:fs/promises";
-import { findFolderAlbum } from "../library/album-plan.js";
+import { getFileRoot } from "../library/album-plan.js";
 import { findAudioFiles } from "../library/file.js";
 import type { MetadataChain } from "../metadata/metadata-chain.js";
 import type { AlbumFinder } from "../metadata/types.js";
@@ -25,12 +24,6 @@ export interface TagJobDependencies {
 interface TargetFiles {
     sourceRoot: string;
     files: string[];
-}
-
-// The file may bring in its whole album, so paths are shown from there.
-function getFileRoot(file: string): string {
-    const folder = path.dirname(file);
-    return findFolderAlbum(folder) ?? folder;
 }
 
 // A queued file may have been moved or deleted outside SoundTag in the meantime.

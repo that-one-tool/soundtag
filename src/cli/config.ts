@@ -1,8 +1,15 @@
 import * as path from "node:path";
 import { parseArguments } from "./cli-options.js";
-import { isDirectory } from "../library/file.js";
+import {
+    getAudioFormat,
+    isDirectory,
+    isFile,
+    type AudioSources,
+} from "../library/file.js";
+import { getFileRoot } from "../library/album-plan.js";
+import { findCommonFolder, isInsideFolder } from "../shared/paths.js";
 import { parseCoverMode } from "../tui/cover-mode.js";
-import type { SessionConfig } from "./types.js";
+import type { ResolvedSources, SessionConfig } from "./types.js";
 
 export interface ConfigSources {
     argv: string[];
@@ -10,30 +17,72 @@ export interface ConfigSources {
     workingDirectory: string;
 }
 
-export async function resolveSourceRoot(
-    sourceInput: string,
-    workingDirectory: string
-): Promise<string> {
-    const trimmedInput = sourceInput.trim();
+function resolveInput(input: string, workingDirectory: string): string {
+    const trimmedInput = input.trim();
 
     if (!trimmedInput) {
         throw new Error("A source folder is required.");
     }
 
-    const sourceRoot = path.resolve(workingDirectory, trimmedInput);
+    return path.resolve(workingDirectory, trimmedInput);
+}
 
-    if (!(await isDirectory(sourceRoot))) {
-        throw new Error("The source folder does not exist.");
+async function checkAudioFile(file: string, input: string): Promise<void> {
+    if (!(await isFile(file))) {
+        throw new Error(`Source not found: ${input.trim()}`);
     }
 
-    return sourceRoot;
+    if (!getAudioFormat(file)) {
+        throw new Error(`Not a supported audio file: ${input.trim()}`);
+    }
+}
+
+async function addSource(
+    sources: AudioSources,
+    input: string,
+    workingDirectory: string
+): Promise<void> {
+    const source = resolveInput(input, workingDirectory);
+
+    if (await isDirectory(source)) {
+        sources.folders.push(source);
+        return;
+    }
+
+    await checkAudioFile(source, input);
+    sources.files.push(source);
+}
+
+export async function resolveSources(
+    inputs: string[],
+    workingDirectory: string
+): Promise<ResolvedSources> {
+    const sources: AudioSources = { folders: [], files: [] };
+
+    for (const input of inputs) {
+        await addSource(sources, input, workingDirectory);
+    }
+
+    const folders = [...sources.folders, ...sources.files.map(path.dirname)];
+    return { root: findCommonFolder(folders), ...sources };
+}
+
+export function findSearchRoot(
+    { folders }: AudioSources,
+    file: string
+): string {
+    const containing = folders.filter((source) => isInsideFolder(file, source));
+    const deepest = containing.toSorted(
+        (first, second) => second.length - first.length
+    );
+    return deepest[0] ?? getFileRoot(file);
 }
 
 export function loadSessionConfig(sources: ConfigSources): SessionConfig {
-    const { sourcePath, ...options } = parseArguments(sources.argv);
+    const { sourcePaths, ...options } = parseArguments(sources.argv);
 
     return {
-        sourcePath,
+        sourcePaths,
         settings: {
             lastFmApiKey: sources.env.LASTFM_API_KEY,
             ...options,

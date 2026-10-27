@@ -65,6 +65,12 @@ export function findFolderAlbum(folder: string): string | null {
     return findAlbumFolder(path.join(folder, "track"))?.folder ?? null;
 }
 
+// A file may bring in its whole album, so it is searched and shown from there.
+export function getFileRoot(file: string): string {
+    const folder = path.dirname(file);
+    return findFolderAlbum(folder) ?? folder;
+}
+
 function isInAlbum(file: string, folder: string): boolean {
     return findAlbumFolder(file)?.folder === folder;
 }

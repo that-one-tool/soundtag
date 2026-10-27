@@ -33,6 +33,7 @@ export interface BatchRun {
     albums: AlbumFinder;
     report: ProcessingReport;
     stopSignal: AbortSignal;
+    onPlanned?: (total: number) => void;
     onTrackProcessed?: (result: ProcessedTrack) => void;
 }
 
@@ -153,6 +154,7 @@ async function processPlan(files: string[], run: BatchRun): Promise<void> {
     const { albums, singles } = await planTracks(files, listAlbumFiles);
     reportAlbumFiles(albums, run);
     const batch = { ...run, done: 0, total: countTracks(albums, singles) };
+    run.onPlanned?.(batch.total);
     const tracks = singles.map((source) => ({ path: source, disc: null }));
     const tagSingle = (track: AlbumTrack) =>
         processTrack(track.path, run.context);

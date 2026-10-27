@@ -1,6 +1,6 @@
 # SoundTag
 
-SoundTag scans a folder of MP3, OGG, FLAC, and WAV files, looks up track
+SoundTag scans a folder of MP3, OGG, Opus, FLAC, M4A, and WAV files, looks up track
 metadata with Discogs, ListenBrainz, MusicBrainz, Deezer, iTunes and Last.fm, and
 updates files in place with audio tags and cover art when a match is found.
 
@@ -158,6 +158,17 @@ soundtag /path/to/music
 
 From the project folder, `npm start -- /path/to/music` works too.
 
+Several folders and audio files can be given at once; they are tagged as one
+run, and an album track still brings in its whole album folder:
+
+```sh
+soundtag "/music/Queen/Queen - Mustapha.mp3" /music/ABBA
+```
+
+Each file is searched from its own source: the folder it was found in, or for
+a file given alone, its album folder or its own folder. The paths in the log
+and summary start from the deepest folder holding every source.
+
 Paths containing spaces should be quoted.
 
 If no source folder is supplied, SoundTag opens a full-screen browser in the
@@ -232,10 +243,10 @@ soundtag /path/to/music --recursive
 soundtag /path/to/music -r
 ```
 
-Each run processes at most 3,000 MP3, OGG, FLAC, or WAV files. Hidden files and
-folders (names starting with a dot) are ignored. OGG files use Vorbis comments,
-FLAC files use their supported native tags and picture metadata, and MP3 files
-use ID3 tags. WAV metadata is written through TagLib's RIFF/ID3 support;
+Each run processes at most 3,000 MP3, OGG, Opus, FLAC, M4A, or WAV files. Hidden
+files and folders (names starting with a dot) are ignored. OGG and Opus files use
+Vorbis comments, FLAC files use their supported native tags and picture metadata,
+M4A files use MP4 atoms, and MP3 files use ID3 tags. WAV metadata is written through TagLib's RIFF/ID3 support;
 embedded artwork compatibility can vary between players.
 
 With a source folder argument, press Ctrl+C to stop a run: SoundTag finishes
@@ -287,6 +298,26 @@ and tokens hidden:
 ```sh
 soundtag /path/to/music -v
 ```
+
+Pass `--json` when another program drives SoundTag: stdout then only carries
+one JSON object per line, and every human log line goes to stderr. Paths are
+absolute and statuses are `tagged`, `skipped` or `failed`; a failure's reason
+stays in the stderr log. Exit codes do not change.
+
+```json
+{"type":"start","total":2}
+{"type":"file","path":"/music/Queen/Queen - Mustapha.mp3","status":"tagged"}
+{"type":"file","path":"/music/ABBA/ABBA - SOS.opus","status":"skipped"}
+{"type":"summary","tagged":1,"skipped":1,"failed":0,"unprocessed":0,"stopped":false}
+```
+
+`start` comes once the run is planned. A track given alone still brings in its
+whole album folder, so `total` and the `file` events include those tracks too.
+A run that cannot start (an unknown option, a missing source, or `--json`
+without any source) writes `{"type":"error","message":"…"}` instead. The exit
+code stays 0 when files fail, so read `failed` from the summary. A second
+Ctrl+C quits at once, without a summary. The progress line only reaches
+stdout when stdout is a terminal, never through a pipe.
 
 For filenames in the common `Artist - Title.<extension>` format, SoundTag
 searches with the title and artist separately. It also removes

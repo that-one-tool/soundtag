@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import {
     findAudioFiles,
+    findSourceAudioFiles,
     getAudioFormat,
     isDirectory,
     listSubfolders,
@@ -105,6 +106,8 @@ test("getAudioFormat recognizes supported extensions case-insensitively", () => 
     assert.equal(getAudioFormat("song.ogg"), "ogg");
     assert.equal(getAudioFormat("song.FLAC"), "flac");
     assert.equal(getAudioFormat("song.wav"), "wav");
+    assert.equal(getAudioFormat("song.opus"), "opus");
+    assert.equal(getAudioFormat("song.M4A"), "m4a");
     assert.equal(getAudioFormat("song"), null);
 });
 
@@ -221,4 +224,50 @@ test("writeTemporaryCopy removes the temporary copy when its update fails", asyn
 
     assert.equal(await fs.stat(destination).catch(() => null), null);
     assert.deepEqual(await fs.readdir(temporaryDirectory), ["source.mp3"]);
+});
+
+test("findSourceAudioFiles merges folders and files without duplicates up to the limit", async () => {
+    const folder = path.join(temporaryDirectory, "album");
+    await fs.mkdir(folder);
+    await fs.writeFile(path.join(folder, "a.mp3"), "");
+    await fs.writeFile(path.join(folder, "b.mp3"), "");
+    const single = path.join(temporaryDirectory, "single.flac");
+    await fs.writeFile(single, "");
+    const sources = {
+        folders: [folder],
+        files: [single, path.join(folder, "a.mp3")],
+    };
+
+    assert.deepEqual(await findSourceAudioFiles(sources, true, 10), [
+        single,
+        path.join(folder, "a.mp3"),
+        path.join(folder, "b.mp3"),
+    ]);
+    assert.equal((await findSourceAudioFiles(sources, true, 2)).length, 2);
+});
+
+test("findSourceAudioFiles puts given files first and drops symlinked duplicates", async () => {
+    const folder = path.join(temporaryDirectory, "real");
+    await fs.mkdir(folder);
+    await fs.writeFile(path.join(folder, "a.mp3"), "");
+    const link = path.join(temporaryDirectory, "link");
+    await fs.symlink(folder, link);
+    const single = path.join(temporaryDirectory, "single.flac");
+    await fs.writeFile(single, "");
+    const sources = { folders: [folder, link], files: [single] };
+
+    assert.deepEqual(await findSourceAudioFiles(sources, true, 10), [
+        single,
+        path.join(folder, "a.mp3"),
+    ]);
+    assert.deepEqual(await findSourceAudioFiles(sources, true, 1), [single]);
+});
+
+test("findSourceAudioFiles keeps a given file that vanished before the scan", async () => {
+    const missing = path.join(temporaryDirectory, "gone.mp3");
+
+    assert.deepEqual(
+        await findSourceAudioFiles({ folders: [], files: [missing] }, true, 10),
+        [missing]
+    );
 });

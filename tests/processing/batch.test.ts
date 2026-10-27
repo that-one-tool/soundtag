@@ -461,3 +461,30 @@ test("processBatch fits no tracklist to a sibling disc folder", async () => {
         [{ artist: "Queen", album: "Live Killers" }, undefined],
     ]);
 });
+
+test("processBatch announces the planned track count, album files included", async () => {
+    const directory = await createTemporaryDirectory();
+    const album = path.join(directory, "Queen", "Queen - Jazz");
+    await fs.mkdir(album, { recursive: true });
+    const tracks = ["Queen - Mustapha.mp3", "Queen - Jealousy.mp3"].map(
+        (name) => path.join(album, name)
+    );
+    for (const track of tracks) {
+        await fs.writeFile(track, "audio bytes");
+    }
+    const totals: number[] = [];
+
+    await processBatch([tracks[0]], {
+        context: {
+            sourceRoot: directory,
+            metadataChain: createTestChain(),
+            logger: createRecordingLogger(),
+        },
+        report: createReport([tracks[0]], directory),
+        stopSignal: AbortSignal.abort(),
+        albums: unusedAlbums,
+        onPlanned: (total) => totals.push(total),
+    });
+
+    assert.deepEqual(totals, [2]);
+});

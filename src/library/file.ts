@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { isSameFilename } from "./folder-names.js";
 
-const AUDIO_FORMATS = ["mp3", "ogg", "flac", "wav"] as const;
+const AUDIO_FORMATS = ["mp3", "ogg", "flac", "wav", "opus", "m4a"] as const;
 
 export type AudioFormat = (typeof AUDIO_FORMATS)[number];
 
@@ -21,6 +21,16 @@ function isAudioFormat(extension: string): extension is AudioFormat {
 export function getAudioFormat(filename: string): AudioFormat | null {
     const extension = path.extname(filename).slice(1).toLowerCase();
     return isAudioFormat(extension) ? extension : null;
+}
+
+export interface AudioSources {
+    folders: string[];
+    files: string[];
+}
+
+export async function isFile(file: string): Promise<boolean> {
+    const stats = await fs.stat(file).catch(() => null);
+    return Boolean(stats?.isFile());
 }
 
 export async function isDirectory(directory: string): Promise<boolean> {
@@ -91,6 +101,32 @@ export async function findAudioFiles(
     return search.files.toSorted((first, second) =>
         first.localeCompare(second)
     );
+}
+
+export async function findSourceAudioFiles(
+    { folders, files }: AudioSources,
+    recursive: boolean,
+    maxFiles: number
+): Promise<string[]> {
+    const folderFiles = await Promise.all(
+        folders.map((folder) => findAudioFiles(folder, recursive, maxFiles))
+    );
+    const unique = await removeSameFiles([...files, ...folderFiles.flat()]);
+    return unique.slice(0, maxFiles);
+}
+
+// A folder given twice, once through a symlink, must not tag its files twice.
+async function removeSameFiles(files: string[]): Promise<string[]> {
+    const realPaths = await Promise.all(
+        files.map((file) => fs.realpath(file).catch(() => file))
+    );
+    const firstIndexes = new Map<string, number>();
+    realPaths.forEach((realPath, index) => {
+        if (!firstIndexes.has(realPath)) {
+            firstIndexes.set(realPath, index);
+        }
+    });
+    return [...firstIndexes.values()].map((index) => files[index]);
 }
 
 async function isVisibleFolderOrLink(

@@ -12,6 +12,8 @@ const TAG_STORES: Record<AudioFormat, TagStore> = {
     ogg: tagLibTagStore,
     flac: tagLibTagStore,
     wav: tagLibTagStore,
+    opus: tagLibTagStore,
+    m4a: tagLibTagStore,
 };
 
 export function getTagStore(source: string): TagStore {

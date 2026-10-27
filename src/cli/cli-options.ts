@@ -18,6 +18,10 @@ const enableOverwriting: OptionHandler = (options) => {
     options.overwrite = true;
 };
 
+const enableJsonEvents: OptionHandler = (options) => {
+    options.json = true;
+};
+
 const OPTION_HANDLERS = new Map<string, OptionHandler>([
     ["--recursive", enableRecursion],
     ["-r", enableRecursion],
@@ -25,15 +29,8 @@ const OPTION_HANDLERS = new Map<string, OptionHandler>([
     ["--verbose", enableVerboseOutput],
     ["-v", enableVerboseOutput],
     ["--overwrite", enableOverwriting],
+    ["--json", enableJsonEvents],
 ]);
-
-function setSourcePath(options: CommandLineOptions, sourcePath: string): void {
-    if (options.sourcePath) {
-        throw new Error("Only one source folder path can be provided.");
-    }
-
-    options.sourcePath = sourcePath;
-}
 
 function applyArgument(options: CommandLineOptions, arg: string): void {
     const handleOption = OPTION_HANDLERS.get(arg);
@@ -46,14 +43,16 @@ function applyArgument(options: CommandLineOptions, arg: string): void {
         throw new Error(`Unknown option: ${arg}`);
     }
 
-    setSourcePath(options, arg);
+    options.sourcePaths.push(arg);
 }
 
 export function parseArguments(args: string[]): CommandLineOptions {
     const options: CommandLineOptions = {
+        sourcePaths: [],
         recursive: true,
         verbose: false,
         overwrite: false,
+        json: false,
     };
 
     for (const arg of args) {

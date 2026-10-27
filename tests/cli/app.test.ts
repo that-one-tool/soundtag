@@ -15,6 +15,7 @@ restoreFetchAfterEach();
 const output = captureConsole();
 const createTemporaryDirectory = useTemporaryDirectories("soundtag-app-test-");
 const withoutBrowser = {
+    writeOutput: (): void => assert.fail("No JSON output."),
     canBrowse: false,
     openBrowser: async (): Promise<TuiOutcome> =>
         assert.fail("The browser should not open."),
@@ -45,10 +46,18 @@ async function writeFullyTaggedMp3(source: string): Promise<void> {
     );
 }
 
+interface RunOptions {
+    stopSignal?: AbortSignal;
+    writeOutput?: (text: string) => void;
+}
+
 function runAppIn(
     workingDirectory: string,
     argv: string[],
-    stopSignal = new AbortController().signal
+    {
+        stopSignal = new AbortController().signal,
+        writeOutput = withoutBrowser.writeOutput,
+    }: RunOptions = {}
 ): Promise<number> {
     return runApp({
         argv,
@@ -56,7 +65,19 @@ function runAppIn(
         workingDirectory,
         renewStopSignal: () => stopSignal,
         ...withoutBrowser,
+        writeOutput,
     });
+}
+
+async function runAppWithJson(
+    workingDirectory: string,
+    argv: string[]
+): Promise<{ exitCode: number; events: unknown[] }> {
+    const lines: string[] = [];
+    const exitCode = await runAppIn(workingDirectory, [...argv, "--json"], {
+        writeOutput: (text) => lines.push(text),
+    });
+    return { exitCode, events: lines.map((line) => JSON.parse(line)) };
 }
 
 test("runApp tags a library and prints a summary", async () => {
@@ -68,7 +89,7 @@ test("runApp tags a library and prints a summary", async () => {
     assert.equal(output.logs[1], "                SOUNDTAG");
     assert.ok(
         output.logs.includes(
-            "Usage: soundtag [source-folder] [--recursive | --no-recursive] [-v | --verbose] [--overwrite]"
+            "Usage: soundtag [source-folder | audio-file ...] [--recursive | --no-recursive] [-v | --verbose] [--overwrite] [--json]"
         )
     );
     assert.ok(output.logs.includes("Existing tags: kept"));
@@ -133,6 +154,104 @@ test("runApp lists failed files relative to the source", async () => {
     ]);
 });
 
+test("runApp tags only the given files", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const first = path.join(workingDirectory, "Queen", "first.mp3");
+    const second = path.join(workingDirectory, "ABBA", "second.mp3");
+    await writeFullyTaggedMp3(first);
+    await writeFullyTaggedMp3(second);
+    await fs.writeFile(path.join(workingDirectory, "Queen", "other.mp3"), "");
+
+    assert.equal(await runAppIn(workingDirectory, [first, second]), 0);
+
+    assert.ok(output.logs.includes(`\nSource: ${workingDirectory}`));
+    assert.ok(output.logs.includes("Skipped:    2"));
+    assert.ok(output.logs.includes("Errors:     0"));
+});
+
+test("runApp writes JSON events with --json", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const source = path.join(workingDirectory, "tagged.mp3");
+    await writeFullyTaggedMp3(source);
+
+    const { exitCode, events } = await runAppWithJson(workingDirectory, [
+        source,
+    ]);
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(events, [
+        { type: "start", total: 1 },
+        { type: "file", path: source, status: "skipped" },
+        {
+            type: "summary",
+            tagged: 0,
+            skipped: 1,
+            failed: 0,
+            unprocessed: 0,
+            stopped: false,
+        },
+    ]);
+});
+
+test("runApp writes a JSON summary for an empty run and an error event on failure", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+
+    const empty = await runAppWithJson(workingDirectory, ["."]);
+    const missing = await runAppWithJson(workingDirectory, ["missing"]);
+
+    assert.deepEqual(empty.events, [
+        { type: "start", total: 0 },
+        {
+            type: "summary",
+            tagged: 0,
+            skipped: 0,
+            failed: 0,
+            unprocessed: 0,
+            stopped: false,
+        },
+    ]);
+    assert.equal(missing.exitCode, 1);
+    assert.deepEqual(missing.events, [
+        { type: "error", message: "Source not found: missing" },
+    ]);
+});
+
+test("runApp searches each file from its own folder, not the shared root", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+    const first = path.join(workingDirectory, "Downloads", "first song.mp3");
+    const second = path.join(workingDirectory, "Other", "second song.mp3");
+    for (const source of [first, second]) {
+        await fs.mkdir(path.dirname(source), { recursive: true });
+        await fs.writeFile(source, "audio bytes");
+    }
+    const requests: string[] = [];
+    globalThis.fetch = async (input) => {
+        requests.push(decodeURIComponent(input.toString()));
+        return new Response(null, { status: 404 });
+    };
+
+    assert.equal(await runAppIn(workingDirectory, [first, second]), 0);
+
+    assert.ok(requests.length > 0);
+    assert.ok(!requests.some((url) => /Downloads|Other/.test(url)));
+});
+
+test("runApp writes a JSON error event for configuration errors", async () => {
+    const workingDirectory = await createTemporaryDirectory();
+
+    const unknown = await runAppWithJson(workingDirectory, [".", "--bogus"]);
+    const noSource = await runAppWithJson(workingDirectory, []);
+
+    assert.equal(unknown.exitCode, 1);
+    assert.deepEqual(unknown.events, [
+        { type: "error", message: "Unknown option: --bogus" },
+    ]);
+    assert.equal(noSource.exitCode, 1);
+    assert.deepEqual(noSource.events, [
+        { type: "error", message: "--json needs a source folder or file." },
+    ]);
+});
+
 test("runApp reports an empty library without a summary", async () => {
     const workingDirectory = await createTemporaryDirectory();
 
@@ -158,7 +277,9 @@ test("runApp exits with 130 when stopped", async () => {
     await fs.writeFile(path.join(workingDirectory, "song.mp3"), "audio bytes");
 
     assert.equal(
-        await runAppIn(workingDirectory, ["."], AbortSignal.abort()),
+        await runAppIn(workingDirectory, ["."], {
+            stopSignal: AbortSignal.abort(),
+        }),
         130
     );
     assert.ok(output.logs.includes("PROCESSING STOPPED"));
@@ -170,12 +291,12 @@ test("runApp still reports real errors after a stop was requested", async () => 
     const workingDirectory = await createTemporaryDirectory();
 
     assert.equal(
-        await runAppIn(workingDirectory, ["missing"], AbortSignal.abort()),
+        await runAppIn(workingDirectory, ["missing"], {
+            stopSignal: AbortSignal.abort(),
+        }),
         1
     );
-    assert.deepEqual(output.errors, [
-        "Error: The source folder does not exist.",
-    ]);
+    assert.deepEqual(output.errors, ["Error: Source not found: missing"]);
     assert.equal(output.logs.at(-1), "Done!");
 });
 
@@ -190,6 +311,7 @@ function browseWith(
         renewStopSignal: () => new AbortController().signal,
         canBrowse: true,
         openBrowser,
+        writeOutput: () => assert.fail("No JSON output."),
     });
 }
 
@@ -210,6 +332,7 @@ test("runApp opens the folder browser in the working directory", async () => {
             recursive: false,
             verbose: false,
             overwrite: false,
+            json: false,
             musicBrainzUserAgent: "SoundTag/1.0 (test@example.com)",
             youtubeApiKey: undefined,
             listenBrainzToken: "test-token",

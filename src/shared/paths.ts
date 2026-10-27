@@ -29,3 +29,19 @@ export function movePath(
     const relative = getPathInside(file, source);
     return relative === null ? file : path.join(destination, relative);
 }
+
+function getCommonAncestor(first: string, second: string): string {
+    let ancestor = first;
+    while (!isInsideFolder(second, ancestor) && !isRoot(ancestor)) {
+        ancestor = path.dirname(ancestor);
+    }
+    return ancestor;
+}
+
+function isRoot(folder: string): boolean {
+    return path.dirname(folder) === folder;
+}
+
+export function findCommonFolder(folders: string[]): string {
+    return folders.reduce(getCommonAncestor);
+}

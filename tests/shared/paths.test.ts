@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import * as path from "node:path";
 import { test } from "node:test";
-import { isInsideFolder, movePath } from "../../src/shared/paths.js";
+import {
+    findCommonFolder,
+    isInsideFolder,
+    movePath,
+} from "../../src/shared/paths.js";
 
 const root = path.resolve("library");
 const album = path.join(root, "Album");
@@ -30,4 +34,19 @@ test("movePath keeps paths outside the moved folder", () => {
     const sibling = path.join(root, "Album 2", "a.mp3");
 
     assert.equal(movePath(sibling, move), sibling);
+});
+
+test("findCommonFolder returns the deepest folder holding every folder", () => {
+    const music = path.resolve("/music");
+    const queen = path.join(music, "Queen");
+    assert.equal(
+        findCommonFolder([queen, path.join(music, "Queen Live")]),
+        music
+    );
+    assert.equal(findCommonFolder([queen]), queen);
+    assert.equal(findCommonFolder([path.join(queen, "CD1"), queen]), queen);
+    assert.equal(
+        findCommonFolder([queen, path.resolve("/")]),
+        path.resolve("/")
+    );
 });
