@@ -248,6 +248,20 @@ test("MusicBrainzClient searches release groups by album and artist", async () =
     assert.equal(urls[0].searchParams.get("limit"), "5");
 });
 
+test("MusicBrainzClient escapes backslashes before quotes in search terms", async () => {
+    const { urls } = mockMusicBrainzResponses([() => Response.json({})]);
+
+    await createClient().searchReleaseGroups({
+        artist: "Daft Punk",
+        album: 'a\\b"c\\',
+    });
+
+    assert.equal(
+        urls[0].searchParams.get("query"),
+        'releasegroup:"a\\\\b\\"c\\\\" AND artist:"Daft Punk"'
+    );
+});
+
 test("MusicBrainzClient builds release group cover requests", () => {
     const request = createClient().getReleaseGroupCoverRequest(
         "group id",

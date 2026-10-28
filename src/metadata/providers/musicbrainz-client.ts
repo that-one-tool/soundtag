@@ -91,7 +91,8 @@ export function getMusicBrainzArtist(
 }
 
 function buildSearchTerm(field: string, value: string): string {
-    return `${field}:"${value.replaceAll('"', '\\"')}"`;
+    const escaped = value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+    return `${field}:"${escaped}"`;
 }
 
 function buildRecordingSearchUrl({ title, artist, album }: TrackSearch): URL {
